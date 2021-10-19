@@ -1,0 +1,9 @@
+*~
+*.c
+*.pyc
+
+*.fits
+*.txt
+*.dat
+
+*.DS_store
