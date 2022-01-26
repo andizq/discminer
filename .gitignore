@@ -3,7 +3,9 @@
 *.pyc
 
 *.fits
-*.txt
 *.dat
 
+build/
+dist/
+*.egg-info
 *.DS_store
