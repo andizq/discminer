@@ -19,28 +19,30 @@ Classes: Rosenfeld2d, General2d, Velocity, Intensity, Cube, Tools
 #TODO in make_model(): Save/load bestfit/input parameters in json files. These should store relevant info in separate dicts (e.g. nwalkers, attribute functions). 
 #TODO in run_mcmc(): Implement other minimisation kernels (i.e. Delta_v). Only one kernel currently: difference of intensities on each pixel, on each channel.
 from __future__ import print_function
-from sf3dmodels.utils import constants as sfc
-from sf3dmodels.utils import units as sfu
-from astropy.convolution import Gaussian2DKernel, convolve
-from scipy.interpolate import griddata, interp1d
-from scipy.special import ellipk, ellipe
-from scipy.optimize import curve_fit
-from scipy.integrate import quad
+
+import copy
+import itertools
+import numbers
+import os
+import pprint
+import sys
+import time
+import warnings
+from multiprocessing import Pool
+
+import matplotlib
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
-from matplotlib import ticker
 import numpy as np
-import matplotlib
-import itertools
-import warnings
-import numbers
-import pprint
-import copy
-import time
-import sys
-import os
+from astropy.convolution import Gaussian2DKernel, convolve
+from matplotlib import ticker
+from scipy.integrate import quad
+from scipy.interpolate import griddata, interp1d
+from scipy.optimize import curve_fit
+from scipy.special import ellipe, ellipk
+from sf3dmodels.utils import constants as sfc
+from sf3dmodels.utils import units as sfu
 
-from multiprocessing import Pool
 os.environ["OMP_NUM_THREADS"] = "1"
 
 try: 
@@ -181,9 +183,9 @@ class Tools:
         If radio_beam Beam instance is provided, pixel size (in SI units) will be extracted from grid obj. Distance (in pc) must be provided.
         #frac_pixels: number of averaged pixels on the data (useful to reduce computing time)
         """
-        from radio_beam import Beam
-        from astropy.io import fits
         from astropy import units as u
+        from astropy.io import fits
+        from radio_beam import Beam
         sigma2fwhm = np.sqrt(8*np.log(2))
         if isinstance(beam, str):
             header = fits.getheader(beam)
@@ -1014,7 +1016,7 @@ class Cube(object):
     def show(self, extent=None, chan_init=0, compare_cubes=[], cursor_grid=True, cmap='gnuplot2_r',
              int_unit=r'Intensity [mJy beam$^{-1}$]', pos_unit='Offset [au]', vel_unit=r'km s$^{-1}$',
              show_beam=False, surface={'args': (), 'kwargs': {}}, **kwargs):
-        from matplotlib.widgets import Slider, Cursor, Button
+        from matplotlib.widgets import Button, Cursor, Slider
         v0, v1 = self.channels[0], self.channels[-1]
         dv = v1-v0
         fig, ax = plt.subplots(ncols=2, figsize=(12,5))
@@ -1141,7 +1143,7 @@ class Cube(object):
     def show_side_by_side(self, cube1, extent=None, chan_init=0, cursor_grid=True, cmap='gnuplot2_r',
                           int_unit=r'Intensity [mJy beam$^{-1}$]', pos_unit='Offset [au]', vel_unit=r'km s$^{-1}$',
                           show_beam=False, surface={'args': (), 'kwargs': {}}, **kwargs):
-        from matplotlib.widgets import Slider, Cursor, Button
+        from matplotlib.widgets import Button, Cursor, Slider
         compare_cubes = [cube1]
         v0, v1 = self.channels[0], self.channels[-1]
         dv = v1-v0
@@ -1328,7 +1330,7 @@ class Cube(object):
     def show_path(self, x, y, extent=None, chan_init=20, compare_cubes=[], cursor_grid=True,
                   int_unit=r'Intensity [mJy beam$^{-1}$]', pos_unit='au', vel_unit=r'km s$^{-1}$',
                   show_beam=False, **kwargs):
-        from matplotlib.widgets import Slider, Cursor, Button
+        from matplotlib.widgets import Button, Cursor, Slider
         v0, v1 = self.channels[0], self.channels[-1]
         dv = v1-v0
         fig, ax = plt.subplots(ncols=2, figsize=(12,5))
@@ -2378,7 +2380,7 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
 
     def plot_quick_attributes(self, R_in=10, R_out=300, surface='upper', fig_width=80, fig_height=25,
                               height=True, velocity=True, linewidth=True, peakintensity=True, **kwargs_plot):                              
-        import termplotlib as tpl #pip install termplotlib. Requires gnuplot: brew install gnuplot (for OSX users)
+        import termplotlib as tpl  # pip install termplotlib. Requires gnuplot: brew install gnuplot (for OSX users)
         kwargs = dict(plot_command="plot '-' w steps", xlabel='Offset [au]', label=None, xlim=None, ylim=None) #plot_command: lines, steps, dots, points, boxes
         kwargs.update(kwargs_plot)
         R = np.linspace(R_in, R_out, 100)
