@@ -85,11 +85,11 @@ BIGGER_SIZE = 22
 hypot_func = lambda x,y: np.sqrt(x**2 + y**2) #Slightly faster than np.hypot<np.linalg.norm<scipydistance. Checked precision up to au**2 orders and seemed ok.
 
 class InputError(Exception):
-    """Exception raised for errors in the input.
+    """Exception raised for input errors.
 
     Attributes:
-        expression -- input expression in which the error occurred
-        message -- explanation of the error
+        expression -- input expression where error occurred
+        message -- description of the error
     """
     def __init__(self, expression, message):
         self.expression = expression
@@ -2281,7 +2281,7 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
         self._beam_kernel = False
         self._beam_area = False 
         if beam is not None: 
-            self.beam_info, self.beam_kernel = Tools._get_beam_from(beam, dpix=grid.step[0], **kwargs_beam)
+            self.beam_info, self.beam_kernel = Tools._get_beam_from(beam, dpix=grid['step'], **kwargs_beam)
 
         self._z_upper_func = General2d.z_cone
         self._z_lower_func = General2d.z_cone_neg
@@ -2293,17 +2293,17 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
         self._use_temperature = False
         self._use_full_channel = False
  
-        x_true, y_true = grid.XYZ[:2] 
-        self.phi_true = np.arctan2(y_true, x_true) #grid.rRTP[3] 
-        self.R_true = hypot_func(x_true, y_true) #grid.rRTP[1] #Slightly different as in the grid object the pixels R=0 actually take the closest-neighbour value. Current approach masks r,R=0
+        x_true, y_true = grid['x'], grid['y']
         self.x_true, self.y_true = x_true, y_true
-        self.mesh = np.meshgrid(skygrid.XYZgrid[0], skygrid.XYZgrid[1]) #disc grid will be interpolated onto this sky grid in make_model(). Must match data dims for mcmc. 
+        self.phi_true = grid['phi']
+        self.R_true = grid['R']         
+        self.mesh = skygrid['meshgrid'] #disc grid will be interpolated onto this sky grid in make_model(). Must match data dims for mcmc. 
         
         self.R_1d = None #will be modified if selfgravity is considered
 
         if subpixels and isinstance(subpixels, int):
             if subpixels%2 == 0: subpixels+=1 #If input even becomes odd to contain pxl centre
-            pix_size = grid.step[0]
+            pix_size = grid['step']
             dx = dy = pix_size / subpixels
             centre = int(round((subpixels-1)/2.))
             centre_sq = int(round((subpixels**2-1)/2.))
@@ -2685,14 +2685,6 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
                     if not isinstance(prop[side], numbers.Number): prop[side] = griddata((x_pro, y_pro), prop[side], (self.mesh[0], self.mesh[1]), method='linear')
                     if R_disc is not None: prop[side] = np.where(np.logical_and(R_grid<R_disc, R_grid>R_inner), prop[side], np.nan)
             
-        """
-        grid_axes_3d = np.meshgrid(self.grid.XYZgrid[0], self.grid.XYZgrid[1], self.grid.XYZgrid[0])
-        from functools import reduce  
-        x_full = np.array(reduce(np.append, list(x_pro_dict.values())))
-        y_full = np.array(reduce(np.append, list(y_pro_dict.values())))
-        z_full = np.array(reduce(np.append, list(z_pro_dict.values())))
-        z_grid = griddata((x_full, y_full, z_full), z_full, (grid_axes_3d[0], grid_axes_3d[1], grid_axes_3d[2]), method='linear') 
-        """
         #*************************************                
         return props
 
@@ -2729,7 +2721,7 @@ class Rosenfeld2d(Velocity, Intensity, Linewidth, Tools):
 
     def _get_t(self, A, B, C):
         t = []
-        for i in range(self.grid.NPoints):
+        for i in range(self.grid['ncells']):
             p = [A, B[i], C[i]]
             t.append(np.sort(np.roots(p)))
         return np.array(t)
@@ -2760,8 +2752,8 @@ class Rosenfeld2d(Velocity, Intensity, Linewidth, Tools):
         velocity2d : array_like, size (nx, ny)
            If set get_2d=True: Velocity field computed using the Rosenfeld+2013 model, reshaped to 2D to facilitate plotting.
         """
-        if PA: x_plane, y_plane = Rosenfeld2d._rotate_sky_plane(self.grid.XYZ[0], self.grid.XYZ[1], -PA)
-        else: x_plane, y_plane = self.grid.XYZ[:2]
+        if PA: x_plane, y_plane = Rosenfeld2d._rotate_sky_plane(self.x_true, self.y_true, -PA)
+        else: x_plane, y_plane = self.x_true, self.y_true
 
         cos_incl = np.cos(incl)
         sin_incl = np.sin(incl)
@@ -2815,4 +2807,4 @@ class Rosenfeld2d(Velocity, Intensity, Linewidth, Tools):
                 
         #*************************************
 
-        return [{side: prop[side].reshape(self.grid.Nodes[:2]) for side in ['upper', 'lower']} for prop in props]
+        return [{side: prop[side].reshape([self.grid['nx']]*2) for side in ['upper', 'lower']} for prop in props]
