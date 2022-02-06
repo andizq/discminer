@@ -36,6 +36,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy.convolution import Gaussian2DKernel, convolve
 from matplotlib import ticker
+from radio_beam import Beam
 from scipy.integrate import quad
 from scipy.interpolate import griddata, interp1d
 from scipy.optimize import curve_fit
@@ -185,7 +186,6 @@ class Tools:
         """
         from astropy import units as u
         from astropy.io import fits
-        from radio_beam import Beam
         sigma2fwhm = np.sqrt(8*np.log(2))
         if isinstance(beam, str):
             header = fits.getheader(beam)
@@ -837,7 +837,7 @@ class Cube(object):
         self.point = self.cursor
         self._interactive = self.cursor
         self._interactive_path = self.curve
-        if beam: self.beam = beam
+        if isinstance(beam, Beam): self.beam_info = beam
         if beam_kernel: self.beam_kernel = beam_kernel
         if isinstance(tb, dict):
             if tb['nu'] and tb['beam']: self.data = Tools.get_tb(self.data, tb['nu'], tb['beam'], full=tb['full'])
@@ -1006,7 +1006,7 @@ class Cube(object):
         x_fwhm = self.beam_kernel.model.x_fwhm
         y_fwhm = self.beam_kernel.model.y_fwhm
         ny_pix, nx_pix = np.shape(self.data[0])
-        ellipse = patches.Ellipse(xy = (0.05,0.05), angle = 90+self.beam.pa.value,
+        ellipse = patches.Ellipse(xy = (0.05,0.05), angle = 90+self.beam_info.pa.value,
                                   width=x_fwhm/nx_pix, height=y_fwhm/ny_pix, lw=1, fill=True, 
                                   fc='gray', ec='k', transform=ax.transAxes)
         ax.add_artist(ellipse)
@@ -1038,7 +1038,7 @@ class Cube(object):
         vmin, vmax = -1*max_data/100, 0.7*max_data#0.8*max_data#
         ax[1].set_ylim(vmin, vmax)
         #ax[1].grid(lw=1.5, ls=':')
-        cmap = plt.get_cmap(cmap)
+        cmap = copy.copy(plt.get_cmap(cmap))
         cmap.set_bad(color=(0.9,0.9,0.9))
 
         if show_beam and self.beam_kernel: self._plot_beam(ax[0])
@@ -1115,7 +1115,7 @@ class Cube(object):
             chan = int(slider_chan.val)
             self.show(extent=extent, chan_init=chan, compare_cubes=compare_cubes, 
                       cursor_grid=cursor_grid, int_unit=int_unit, pos_unit=pos_unit, 
-                      vel_unit=vel_unit, surface=surface, **kwargs)
+                      vel_unit=vel_unit, surface=surface, show_beam=show_beam, **kwargs)
         def go2surface(event):
             self.surface(ax[0], *surface['args'], **surface['kwargs'])
             fig.canvas.draw()
@@ -1165,7 +1165,7 @@ class Cube(object):
         ax[2].set_xlim(v0-0.1, v1+0.1)
         vmin, vmax = -1*max_data/100, 0.7*max_data#0.8*max_data#
         ax[2].set_ylim(vmin, vmax)
-        cmap = plt.get_cmap(cmap)
+        cmap = copy.copy(plt.get_cmap(cmap))
         cmap.set_bad(color=(0.9,0.9,0.9))
 
         if show_beam and self.beam_kernel: self._plot_beam(ax[0])
@@ -1224,7 +1224,7 @@ class Cube(object):
             chan = int(slider_chan.val)
             self.show_side_by_side(cube1, extent=extent, chan_init=chan,
                                    cursor_grid=cursor_grid, int_unit=int_unit, pos_unit=pos_unit, 
-                                   vel_unit=vel_unit, surface=surface, **kwargs)
+                                   vel_unit=vel_unit, surface=surface, show_beam=show_beam, **kwargs)
         def go2surface(event):
             self.surface(ax[0], *surface['args'], **surface['kwargs'])
             self.surface(ax[1], *surface['args'], **surface['kwargs'])
@@ -2276,9 +2276,9 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
         self.prototype = prototype
         if skygrid is None: skygrid = grid
 
-        self._beam_info = False
+        self._beam_info = False #Should be None; on if statements use isinstance(beam, Beam) instead
         self._beam_from = False #Should be deprecated
-        self._beam_kernel = False
+        self._beam_kernel = False #Should be None
         self._beam_area = False 
         if beam is not None: 
             self.beam_info, self.beam_kernel = Tools._get_beam_from(beam, dpix=grid['step'], **kwargs_beam)
