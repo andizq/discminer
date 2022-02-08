@@ -57,6 +57,8 @@ Store model attributes and their default prescriptions.
 
 Discminer began life as the model.disc2d.py library of [sf3dmodels](https://github.com/andizq/sf3dmodels). This repository is dedicated for versions >1.0 of the code. 
 
+See changes in `CHANGES.md`.
+
 #### v1.0
 
 - Use astropy units wherever possible. All physical parameters provided by the user must be astropy.units instances.

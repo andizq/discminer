@@ -2,6 +2,7 @@ import numpy as np
 from .disc2d import Cube, Tools
 import discminer.utils as utils
 from astropy import units as u
+from astropy import constants as apc
 from astropy.io import fits
 from astropy.wcs import utils as aputils, WCS
 from astropy.convolution import Gaussian2DKernel
@@ -19,7 +20,7 @@ Will be deprecated when astropy units come into play.
 
 
 class Data(Cube):
-    def __init__(self, filename):
+    def __init__(self, filename, convert_to_tb=True):
         """
         Initialise Data object. Inherits `~discminer.disc2d.Cube` properties and methods.
         
@@ -36,10 +37,8 @@ class Data(Cube):
             velocity_convention="radio",
             rest_value=cube_spe.header["RESTFRQ"] * u.Hz,
         )
-        self.vchannels = (
-            cube_vel.spectral_axis.value
-        )  # in km/s, remove .value to keep astropy units
-
+        # in km/s, remove .value to keep astropy units
+        self.vchannels = cube_vel.spectral_axis.value
         self.header = cube_vel.header
         self.data = cube_vel.hdu.data.squeeze()
         self.wcs = WCS(self.header)
@@ -105,6 +104,60 @@ class Data(Cube):
 
         self.fileroot += ktag + tag
         fits.writeto(self.fileroot + ".fits", self.data, header=self.header, **kwargs)
+
+    def convert_to_tb(self, planck=True, tag="", writefits=True, **kwargs):
+        """
+        nu in GHz
+        Intensity in mJy/beam
+        beam object from radio_beam
+        if full: use full Planck law, else use rayleigh-jeans approximation
+        """
+        hdrkey = "CONVTB"
+        hdrcard = "Converted to Tb by DISCMINER"
+        kwargs_io = dict(overwrite=True)  # Default kwargs
+        kwargs_io.update(kwargs)
+
+        I = self.data * u.Unit(self.header["BUNIT"]).to("beam-1 Jy")
+        nu = self.header["RESTFRQ"]  # in Hz
+        bmaj = self.beam.major.to(u.arcsecond).value
+        bmin = self.beam.minor.to(u.arcsecond).value
+        # area of gaussian beam
+        beam_area = u.au.to("m") ** 2 * np.pi * (bmaj * bmin) / (4 * np.log(2))
+        # beam solid angle: beam_area/(dist*pc)**2.
+        #  dist**2 cancels out with beamarea's dist**2 from conversion or bmaj, bmin to mks units.
+        beam_solid = beam_area / u.pc.to("m") ** 2
+        Jy_to_SI = 1e-26
+        c_h = apc.h.value
+        c_c = apc.c.value
+        c_k_B = apc.k_B.value
+
+        if planck:
+            Tb = (
+                np.sign(I)
+                * (
+                    np.log(
+                        (2 * c_h * nu ** 3)
+                        / (c_c ** 2 * np.abs(I) * Jy_to_SI / beam_solid)
+                        + 1
+                    )
+                )
+                ** -1
+                * c_h
+                * nu
+                / (c_k_B)
+            )
+        else:
+            wl = c_c / nu
+            Tb = 0.5 * wl ** 2 * I * Jy_to_SI / (beam_solid * c_k_B)
+
+        self.data = Tb
+        self.header["BUNIT"] = "K"
+
+        self.wcs = WCS(self.header)
+        self.header[hdrkey] = (True, hdrcard)
+        if writefits:
+            self._writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)
+        self._init_cube()  # Redo Cube
 
     def downsample(
         self, npix, method=np.median, kwargs_method={}, tag="", writefits=True, **kwargs
