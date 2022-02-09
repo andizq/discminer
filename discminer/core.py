@@ -11,16 +11,12 @@ from radio_beam import Beam
 import warnings
 import os
 
-"""
-intensity_norm : float, optional
-Factor to normalise intensity. 
-Default is 1e3, i.e. to convert to mJy/beam assuming input in Jy/beam
-Will be deprecated when astropy units come into play.
-"""
+
+#The functions below should be in Cube instead so that they can be used by the Model class without redundance. The Cube class should inherit a PlotTools class which can be used to make 2D plots (e.g. moment maps).
 
 
 class Data(Cube):
-    def __init__(self, filename, convert_to_tb=True):
+    def __init__(self, filename):
         """
         Initialise Data object. Inherits `~discminer.disc2d.Cube` properties and methods.
         
@@ -48,13 +44,6 @@ class Data(Cube):
         self.beam = Beam.from_fits_header(self.header)  # radio_beam object
         self.beam_info = self.beam  # backwards compatibility
         self._init_beam_kernel()  # Get 2D Gaussian kernel from beam
-        """
-        if isinstance(tb, dict):
-            if tb["nu"] and tb["beam"]:
-                self.data = Tools.get_tb(
-                    self.data, tb["nu"], tb["beam"], full=tb["full"]
-                )
-        """
         self._init_cube()
 
     def _init_cube(self):
@@ -105,12 +94,24 @@ class Data(Cube):
         self.fileroot += ktag + tag
         fits.writeto(self.fileroot + ".fits", self.data, header=self.header, **kwargs)
 
-    def convert_to_tb(self, planck=True, tag="", writefits=True, **kwargs):
+    def convert_to_tb(self, planck=True, writefits=True, tag="", **kwargs):
         """
-        nu in GHz
-        Intensity in mJy/beam
-        beam object from radio_beam
-        if full: use full Planck law, else use rayleigh-jeans approximation
+        Convert intensity to brightness temperature in units of Kelvin.
+
+        Parameters
+        ----------
+        planck : bool, optional
+            If True, it uses the full Planck law to make the conversion, else it uses the Rayleigh-Jeans approximation. 
+
+        writefits : bool, optional
+            If True it creates a FITS file with the new intensity data and header.
+        
+        tag : str, optional
+            String to add at the end of the output filename.
+
+        kwargs : keyword arguments
+            Additional keyword arguments to pass to `~astropy.io.fits.writeto` function.
+           
         """
         hdrkey = "CONVTB"
         hdrcard = "Converted to Tb by DISCMINER"
@@ -160,7 +161,7 @@ class Data(Cube):
         self._init_cube()  # Redo Cube
 
     def downsample(
-        self, npix, method=np.median, kwargs_method={}, tag="", writefits=True, **kwargs
+        self, npix, method=np.median, kwargs_method={}, writefits=True, tag="", **kwargs
     ):
         """
         Downsample data cube to reduce spatial correlations between pixels and/or to save computational costs in the modelling. 
@@ -175,6 +176,9 @@ class Data(Cube):
 
         kwargs_method : keyword arguments
             Additional keyword arguments to pass to the input ``method``.
+
+        writefits : bool, optional
+            If True it creates a FITS file with the new intensity data and header.
         
         tag : str, optional
             String to add at the end of the output filename.
@@ -216,7 +220,8 @@ class Data(Cube):
             else:
                 nf = 0.5 + (npix / 2 - 1)
 
-            refpix = 1.0  # will be the new CRPIX1 and CRPIX2 (origin is 1,1, not 0,0)
+            # will be the new CRPIX1 and CRPIX2 (origin is 1,1, not 0,0)                
+            refpix = 1.0  
             # coords of reference pixel, using old pixels info
             refpixval = aputils.pixel_to_skycoord(nf, nf, self.wcs)
 
@@ -248,8 +253,8 @@ class Data(Cube):
         icenter=None,
         jcenter=None,
         channels={"interval": None, "indices": None},
-        tag="",
         writefits=True,
+        tag="",            
         **kwargs
     ):
         """
@@ -275,6 +280,9 @@ class Data(Cube):
             * If 'indices' is defined, only velocity channels corresponding to the input indices will be considered.            
             * If both entries are set, only 'interval' will be taken into account.
         
+        writefits : bool, optional
+            If True it creates a FITS file with the new intensity data and header.
+
         tag : str, optional
             String to add at the end of the output filename.
 

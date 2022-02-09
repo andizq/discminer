@@ -24,8 +24,8 @@ def grid(xmax, nx, indexing="xy", verbose=True):
     
     Examples
     --------        
-    """
 
+    """
     Tools._break_line()
     xymax = np.array([xmax, xmax])
     nx = np.int32(nx)
