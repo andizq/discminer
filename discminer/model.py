@@ -23,7 +23,7 @@ Will be deprecated when astropy units come into play.
 # the prototype method would then recieve grid parameters.
 #  the run_mcmc method would receive a Data object from which the model grid will be created.
 
-class Model(Cube, Data):
+class Model(Cube):
     def __init__(self, dpc, prototype=True, subpixels=False, discgrid=None):
         """
         Initialise Model object. Inherits `~discminer.disc2d.Cube` properties and methods.
@@ -54,7 +54,8 @@ class Model(Cube, Data):
         self.skygrid = grid
         self.prototype = prototype
         if discgrid is None: discgrid = grid
-
+        #discgrid should always exists, in general npix_disc != npix_sky, if npix_disc<npix_sky it's useful to use discgrid to save computing time, if npix_disc>npix_sky discgrid is needed for the emission to appear smooth instead of having sharp square boundaries.
+        
         self._beam_info = False #Should be None; on if statements use isinstance(beam, Beam) instead
         self._beam_from = False #Should be deprecated
         self._beam_kernel = False #Should be None

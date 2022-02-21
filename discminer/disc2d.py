@@ -55,7 +55,7 @@ except ImportError:
 
 #warnings.filterwarnings("error")
 __all__ = ['Cube', 'Tools', 'Intensity', 'Velocity', 'General2d', 'Rosenfeld2d']
-path_file = os.path.dirname(os.path.realpath(__file__))+'/icons/'
+path_icons = os.path.dirname(os.path.realpath(__file__))+'/icons/'
 
 """
 matplotlib.rcParams['font.family'] = 'monospace'
@@ -172,7 +172,7 @@ class Tools:
         print('\r', init, border, middle * width, border, sep='', end=end)
 
     @staticmethod
-    def _print_logo(filename=path_file+'logo.txt'):
+    def _print_logo(filename=path_icons+'logo.txt'):
         logo = open(filename, 'r')
         print(logo.read())
         logo.close()
@@ -839,7 +839,7 @@ class Cube(object):
         self._interactive_path = self.curve
         if isinstance(beam, Beam): self.beam_info = beam
         if beam_kernel: self.beam_kernel = beam_kernel
-        if isinstance(tb, dict):
+        if isinstance(tb, dict): #Should be deprecated and removed from __init__
             if tb['nu'] and tb['beam']: self.data = Tools.get_tb(self.data, tb['nu'], tb['beam'], full=tb['full'])
 
     @property
@@ -1121,10 +1121,10 @@ class Cube(object):
             fig.canvas.draw()
             fig.canvas.flush_events()
             
-        box_img = plt.imread(path_file+'button_box.png')
-        cursor_img = plt.imread(path_file+'button_cursor.jpeg')
-        trash_img = plt.imread(path_file+'button_trash.jpg') 
-        surface_img = plt.imread(path_file+'button_surface.png') 
+        box_img = plt.imread(path_icons+'button_box.png')
+        cursor_img = plt.imread(path_icons+'button_cursor.jpeg')
+        trash_img = plt.imread(path_icons+'button_trash.jpg') 
+        surface_img = plt.imread(path_icons+'button_surface.png') 
         axbcursor = plt.axes([0.05, 0.779, 0.05, 0.05])
         axbbox = plt.axes([0.05, 0.72, 0.05, 0.05])
         axbtrash = plt.axes([0.05, 0.661, 0.05, 0.05], frameon=True, aspect='equal')
@@ -1231,10 +1231,10 @@ class Cube(object):
             fig.canvas.draw()
             fig.canvas.flush_events()
             
-        box_img = plt.imread(path_file+'button_box.png')
-        cursor_img = plt.imread(path_file+'button_cursor.jpeg')
-        trash_img = plt.imread(path_file+'button_trash.jpg') 
-        surface_img = plt.imread(path_file+'button_surface.png') 
+        box_img = plt.imread(path_icons+'button_box.png')
+        cursor_img = plt.imread(path_icons+'button_cursor.jpeg')
+        trash_img = plt.imread(path_icons+'button_trash.jpg') 
+        surface_img = plt.imread(path_icons+'button_surface.png') 
         axbcursor = plt.axes([0.05, 0.779, 0.05, 0.05])
         axbbox = plt.axes([0.05, 0.72, 0.05, 0.05])
         axbtrash = plt.axes([0.05, 0.661, 0.05, 0.05], frameon=True, aspect='equal')
@@ -1363,8 +1363,8 @@ class Cube(object):
                                color='black', transform=ax[1].transAxes)
 
         if cursor_grid: cg = Cursor(ax[0], useblit=True, color='lime', linewidth=1.5)
-        box_img = plt.imread(path_file+'button_box.png')
-        cursor_img = plt.imread(path_file+'button_cursor.jpeg')
+        box_img = plt.imread(path_icons+'button_box.png')
+        cursor_img = plt.imread(path_icons+'button_cursor.jpeg')
 
         def get_interactive(func, chan=chan_init, color=False, show_path=True):
             return func(ax, x, y, chan, color=color, show_path=show_path, extent=extent, compare_cubes=compare_cubes, **kwargs)
@@ -2070,7 +2070,7 @@ class Intensity:
             inf_mask = np.isinf(int2d_full)
             """
             inf_mask = np.isnan(int2d_full)
-            int2d_full = np.where(inf_mask, 0.0, int2d_full) 
+            int2d_full = np.where(inf_mask, 0.0, int2d_full) # Use np.nan_to_num instead
             int2d_full = self._beam_area*convolve(int2d_full, self.beam_kernel, preserve_nan=False)
 
         return int2d_full
@@ -2119,7 +2119,7 @@ class Intensity:
                 """
                 inf_mask = np.isinf(int2d_full)
                 """
-                inf_mask = np.isnan(int2d_full)
+                inf_mask = np.isnan(int2d_full) # Use np.nan_to_num instead
                 int2d_full = np.where(inf_mask, 0.0, int2d_full)                
                 int2d_full = self._beam_area*convolve(int2d_full, self.beam_kernel, preserve_nan=False)
 
@@ -2576,7 +2576,7 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
                 for prop in [R, phi, z]: prop[side] = np.where(np.logical_and(R[side]<R_disc, R[side]>R_inner), prop[side], np.nan)
             
         R_nonan, phi_nonan, z_nonan = None, None, None
-        if R_nan_val is not None: R_nonan = {side: np.where(np.isnan(R[side]), R_nan_val, R[side]) for side in ['upper', 'lower']}
+        if R_nan_val is not None: R_nonan = {side: np.where(np.isnan(R[side]), R_nan_val, R[side]) for side in ['upper', 'lower']} #Use np.nan_to_num instead
         if phi_nan_val is not None: phi_nonan = {side: np.where(np.isnan(phi[side]), phi_nan_val, phi[side]) for side in ['upper', 'lower']}
         if z_nan_val is not None: z_nonan = {side: np.where(np.isnan(z[side]), z_nan_val, z[side]) for side in ['upper', 'lower']}
 

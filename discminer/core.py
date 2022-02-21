@@ -1,6 +1,7 @@
 import numpy as np
-from .disc2d import Cube, Tools
-import discminer.utils as utils
+from .disc2d import Tools
+from .cube import Cube
+from .utils import FITSUtils
 from astropy import units as u
 from astropy import constants as apc
 from astropy.io import fits
@@ -8,14 +9,67 @@ from astropy.wcs import utils as aputils, WCS
 from astropy.convolution import Gaussian2DKernel
 from spectral_cube import SpectralCube
 from radio_beam import Beam
+from radio_beam.beam import NoBeamException
 import warnings
 import os
 
 
-#The functions below should be in Cube instead so that they can be used by the Model class without redundance. The Cube class should inherit a PlotTools class which can be used to make 2D plots (e.g. moment maps).
+#The functions below _writefits()[inclusive] should be in the Cube class instead so that they can be used by the Model class without redundance. The Cube class should inherit a PlotTools class which can be used to make 2D plots (e.g. moment maps). Another advantage of doing that is that the Cube object would not have to be initialised over and over whenever a Cube-linked variable is modified. (DONE, except the PlotTools part)
 
 
 class Data(Cube):
+    def __init__(self, filename):
+        """
+        Initialise Data object. Inherits `~discminer.disc2d.Cube` properties and methods.
+        
+        Parameters
+        ----------
+        filename : path-like 
+            Path to FITS datacube
+
+        """
+        self.fileroot = os.path.expanduser(filename).split(".fits")[0]
+        cube_spe = SpectralCube.read(filename)
+        cube_vel = cube_spe.with_spectral_unit(
+            u.km / u.s,
+            velocity_convention="radio",
+            rest_value=cube_spe.header["RESTFRQ"] * u.Hz,
+        )
+        # in km/s, remove .value to keep astropy units
+        self.vchannels = cube_vel.spectral_axis.value
+        self.header = cube_vel.header
+        self.data = cube_vel.hdu.data.squeeze()
+        self.wcs = WCS(self.header)
+        # Assuming (nchan, nx, nx), nchan should be equal to cube_vel.spectral_axis.size
+        self.nchan, self.nx, _ = np.shape(self.data)
+
+        try:
+            self.beam = Beam.from_fits_header(self.header)  # radio_beam object
+        except NoBeamException:
+            self.beam = None
+            warnings.warn('No beam was found in the header of the input FITS file.')
+        self._init_cube()
+
+    def _init_cube(self):
+        super().__init__(
+            self.data,
+            self.header,
+            self.vchannels,
+            self.wcs,
+            self.beam
+        )
+
+
+#class Model(Cube, FITSUtils, Mcmc):
+"""
+beam : None or `~radio_beam.Beam`, optional
+            - If None, the beam information is extracted from the header of the input FITS file.
+            - If `~radio_beam.Beam` object, it uses this 
+"""
+
+
+#from .disc2d import Cube
+class OldData(Cube, FITSUtils):
     def __init__(self, filename):
         """
         Initialise Data object. Inherits `~discminer.disc2d.Cube` properties and methods.
@@ -68,6 +122,7 @@ class Data(Cube):
         beam_angle = (90 * u.deg + self.beam.pa).to(u.radian).value
         self.beam_kernel = Gaussian2DKernel(x_stddev, y_stddev, beam_angle)
 
+
     def _writefits(self, logkeys=None, tag="", **kwargs):
         """
         Write fits file
@@ -94,7 +149,7 @@ class Data(Cube):
         self.fileroot += ktag + tag
         fits.writeto(self.fileroot + ".fits", self.data, header=self.header, **kwargs)
 
-    def convert_to_tb(self, planck=True, writefits=True, tag="", **kwargs):
+    def convert_to_tb(self, planck=True, writefits=True, tag="", **kwargs): #Should be in FitsUtils class, useful for Model too.
         """
         Convert intensity to brightness temperature in units of Kelvin.
 
@@ -110,7 +165,7 @@ class Data(Cube):
             String to add at the end of the output filename.
 
         kwargs : keyword arguments
-            Additional keyword arguments to pass to `~astropy.io.fits.writeto` function.
+            Additional keyword arguments for `~astropy.io.fits.writeto` function.
            
         """
         hdrkey = "CONVTB"
@@ -118,39 +173,13 @@ class Data(Cube):
         kwargs_io = dict(overwrite=True)  # Default kwargs
         kwargs_io.update(kwargs)
 
-        I = self.data * u.Unit(self.header["BUNIT"]).to("beam-1 Jy")
-        nu = self.header["RESTFRQ"]  # in Hz
-        bmaj = self.beam.major.to(u.arcsecond).value
-        bmin = self.beam.minor.to(u.arcsecond).value
-        # area of gaussian beam
-        beam_area = u.au.to("m") ** 2 * np.pi * (bmaj * bmin) / (4 * np.log(2))
-        # beam solid angle: beam_area/(dist*pc)**2.
-        #  dist**2 cancels out with beamarea's dist**2 from conversion or bmaj, bmin to mks units.
-        beam_solid = beam_area / u.pc.to("m") ** 2
-        Jy_to_SI = 1e-26
-        c_h = apc.h.value
-        c_c = apc.c.value
-        c_k_B = apc.k_B.value
-
-        if planck:
-            Tb = (
-                np.sign(I)
-                * (
-                    np.log(
-                        (2 * c_h * nu ** 3)
-                        / (c_c ** 2 * np.abs(I) * Jy_to_SI / beam_solid)
-                        + 1
-                    )
-                )
-                ** -1
-                * c_h
-                * nu
-                / (c_k_B)
-            )
-        else:
-            wl = c_c / nu
-            Tb = 0.5 * wl ** 2 * I * Jy_to_SI / (beam_solid * c_k_B)
-
+        Tb = self._convert_to_tb(self.data,
+                                 self.header,
+                                 self.beam,
+                                 planck=planck,
+                                 writefits=writefits,
+                                 tag=tag)                                 
+        
         self.data = Tb
         self.header["BUNIT"] = "K"
 
@@ -160,6 +189,7 @@ class Data(Cube):
             self._writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)
         self._init_cube()  # Redo Cube
 
+        
     def downsample(
         self, npix, method=np.median, kwargs_method={}, writefits=True, tag="", **kwargs
     ):
@@ -353,3 +383,5 @@ class Data(Cube):
         if writefits:
             self._writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)
         self._init_cube()  # Redo Cube
+
+        
