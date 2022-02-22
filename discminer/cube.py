@@ -13,14 +13,14 @@ import matplotlib
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, Cursor, Slider, RectangleSelector
-        
+
 SMALL_SIZE = 10
 MEDIUM_SIZE = 15
 BIGGER_SIZE = 22
 
 
 class Cube(object):
-    def __init__(self, data, header, vchannels, beam=None, filename='./cube.fits'):
+    def __init__(self, data, header, vchannels, beam=None, filename="./cube.fits"):
         """
         Initialise Cube object.
         
@@ -45,14 +45,14 @@ class Cube(object):
         self.data = data
         self.header = header
         self.vchannels = vchannels
-        self.beam = beam        
-        self.wcs = WCS(self.header) 
-        self.fileroot = os.path.expanduser(filename).split(".fits")[0]       
+        self.beam = beam
+        self.wcs = WCS(self.header)
+        self.fileroot = os.path.expanduser(filename).split(".fits")[0]
         # Assuming (nchan, nx, nx); nchan should be equal to cube_vel.spectral_axis.size
         self.nchan, self.nx, _ = np.shape(data)
 
         if isinstance(beam, Beam):
-            self._init_beam_kernel() # Get 2D Gaussian kernel from beam
+            self._init_beam_kernel()  # Get 2D Gaussian kernel from beam
         elif beam is None:
             pass
         else:
@@ -100,8 +100,7 @@ class Cube(object):
         self.fileroot += ktag + tag
         fits.writeto(self.fileroot + ".fits", self.data, header=self.header, **kwargs)
 
-    def convert_to_tb(self, planck=True, writefits=True, tag="", **kwargs
-    ):  
+    def convert_to_tb(self, planck=True, writefits=True, tag="", **kwargs):
         """
         Convert intensity to brightness temperature in units of Kelvin.
 
@@ -379,7 +378,7 @@ class Cube(object):
 
     def _surface(self, ax, *args, **kwargs):
         return Contours.emission_surface(ax, *args, **kwargs)
-        
+
     def _plot_beam(self, ax):
         x_fwhm = self.beam_kernel.model.x_fwhm
         y_fwhm = self.beam_kernel.model.y_fwhm
@@ -400,11 +399,13 @@ class Cube(object):
     def _check_cubes_shape(self, compare_cubes):
         for cube in compare_cubes:
             if cube.data.shape != self.data.shape:
-                raise InputError(compare_cubes, "Input cubes for comparison must have the same shape")
+                raise InputError(
+                    compare_cubes, "Input cubes for comparison must have the same shape"
+                )
 
     # *************************************
     # SHOW SPECTRUM ON PIXEL and WITHIN BOX
-    # *************************************    
+    # *************************************
     def _plot_spectrum_box(
         self,
         x0,
@@ -471,9 +472,7 @@ class Cube(object):
                 )
             return plot_spec
 
-        
     def _box(self, fig, ax, extent=None, compare_cubes=[], stat_func=np.mean, **kwargs):
-
         def onselect(eclick, erelease):
             if eclick.inaxes is ax[0]:
                 plot_spec = self._plot_spectrum_box(
@@ -523,11 +522,15 @@ class Cube(object):
         lineprops = dict(color="white", linestyle="-", linewidth=3, alpha=0.8)
 
         toggle_selector.RS = RectangleSelector(
-            ax[0], onselect, drawtype="box", rectprops=rectprops, lineprops=lineprops, button=[1]
+            ax[0],
+            onselect,
+            drawtype="box",
+            rectprops=rectprops,
+            lineprops=lineprops,
+            button=[1],
         )
         cid = fig.canvas.mpl_connect("key_press_event", toggle_selector)
         return toggle_selector.RS
-
 
     def _plot_spectrum_cursor(self, x, y, ax, extent=None, compare_cubes=[], **kwargs):
 
@@ -574,9 +577,7 @@ class Cube(object):
                 )
             return plot_spec
 
-        
     def _cursor(self, fig, ax, extent=None, compare_cubes=[], **kwargs):
-
         def onclick(event):
             if event.button == 3:
                 print("Right click. Disconnecting click event...")
@@ -617,7 +618,6 @@ class Cube(object):
         cid = fig.canvas.mpl_connect("button_press_event", onclick)
         return cid
 
-    
     def show(
         self,
         extent=None,
@@ -634,13 +634,13 @@ class Cube(object):
         **kwargs
     ):
 
-        self._check_cubes_shape(compare_cubes)        
+        self._check_cubes_shape(compare_cubes)
         v0, v1 = self.vchannels[0], self.vchannels[-1]
         dv = v1 - v0
         fig, ax = plt.subplots(ncols=2, figsize=(12, 5))
         plt.subplots_adjust(wspace=0.25)
         ncubes = len(compare_cubes)
-        
+
         y0, y1 = ax[1].get_position().y0, ax[1].get_position().y1
         axcbar = plt.axes([0.47, y0, 0.03, y1 - y0])
         max_data = np.nanmax([self.data] + [comp.data for comp in compare_cubes])
@@ -666,15 +666,10 @@ class Cube(object):
         if cube_init == 0:
             img_data = self.data[chan_init]
         else:
-            img_data = compare_cubes[cube_init-1].data[chan_init]
-            
+            img_data = compare_cubes[cube_init - 1].data[chan_init]
+
         img = ax[0].imshow(
-            img_data,
-            cmap=cmapc,
-            extent=extent,
-            origin="lower",
-            vmin=vmin,
-            vmax=vmax,
+            img_data, cmap=cmapc, extent=extent, origin="lower", vmin=vmin, vmax=vmax,
         )
         cbar = plt.colorbar(img, cax=axcbar)
         img.cmap.set_under("w")
@@ -720,7 +715,7 @@ class Cube(object):
                 img.set_data(compare_cubes[i - 1].data[chan])
             current_chan.set_xdata(vchan)
             text_chan.set_x((vchan - v0) / dv)
-            text_chan.set_text("%4.1f %s" %(vchan, vel_unit))
+            text_chan.set_text("%4.1f %s" % (vchan, vel_unit))
             fig.canvas.draw_idle()
 
         if ncubes > 0:
@@ -746,8 +741,8 @@ class Cube(object):
                 valfmt="%2d",
                 color="dodgerblue",
             )
-            slider_cubes.on_changed(update_cubes) 
-            slider_chan.on_changed(update_cubes) # update_cubes works for both
+            slider_cubes.on_changed(update_cubes)
+            slider_chan.on_changed(update_cubes)  # update_cubes works for both
         else:
             axchan = plt.axes([0.2, 0.9, 0.24, 0.05], facecolor="0.7")
             slider_chan = Slider(
@@ -767,7 +762,7 @@ class Cube(object):
         # *************
         def go2cursor(event):
             # If already cursor, return 0 and pass, else, exec cursor func
-            if self.interactive == self._cursor: 
+            if self.interactive == self._cursor:
                 return 0
             interactive_obj[0].set_active(False)
             self.interactive = self._cursor
@@ -784,8 +779,10 @@ class Cube(object):
             print("Activating function to extract intensities along path...")
             plt.close()
             chan = int(slider_chan.val)
-            if ncubes>0: ci = int(slider_cubes.val)
-            else: ci=0
+            if ncubes > 0:
+                ci = int(slider_cubes.val)
+            else:
+                ci = 0
             self._show_path(
                 extent=extent,
                 chan_init=chan,
@@ -799,13 +796,15 @@ class Cube(object):
                 surface=surface,
                 **kwargs
             )
-            
+
         def go2trash(event):
             print("Cleaning interactive figure...")
             plt.close()
             chan = int(slider_chan.val)
-            if ncubes>0: ci = int(slider_cubes.val)
-            else: ci=0
+            if ncubes > 0:
+                ci = int(slider_cubes.val)
+            else:
+                ci = 0
             self.show(
                 extent=extent,
                 cmap=cmap,
@@ -820,7 +819,7 @@ class Cube(object):
                 show_beam=show_beam,
                 **kwargs
             )
-            
+
         def go2surface(event):
             self._surface(ax[0], *surface["args"], **surface["kwargs"])
             fig.canvas.draw()
@@ -831,12 +830,12 @@ class Cube(object):
         path_img = plt.imread(path_icons + "button_path.png")
         trash_img = plt.imread(path_icons + "button_trash.jpg")
         surface_img = plt.imread(path_icons + "button_surface.png")
-        
+
         axbcursor = plt.axes([0.05, 0.779, 0.05, 0.05])
         axbbox = plt.axes([0.05, 0.72, 0.05, 0.05])
         axbpath = plt.axes([0.05, 0.661, 0.05, 0.05], frameon=True, aspect="equal")
         axbtrash = plt.axes([0.05, 0.60, 0.05, 0.05], frameon=True, aspect="equal")
-        
+
         bcursor = Button(axbcursor, "", image=cursor_img)
         bcursor.on_clicked(go2cursor)
         bbox = Button(axbbox, "", image=box_img)
@@ -853,7 +852,6 @@ class Cube(object):
 
         plt.show(block=True)
 
-        
     def show_side_by_side(
         self,
         cube1,
@@ -871,7 +869,7 @@ class Cube(object):
 
         compare_cubes = [cube1]
         self._check_cubes_shape(compare_cubes)
-        
+
         v0, v1 = self.vchannels[0], self.vchannels[-1]
         dv = v1 - v0
         fig, ax = plt.subplots(ncols=3, figsize=(17, 5))
@@ -890,7 +888,7 @@ class Cube(object):
         ax[2].set_ylabel(int_unit, labelpad=15)
         ax[2].yaxis.set_label_position("right")
         ax[2].set_xlim(v0 - 0.1, v1 + 0.1)
-        vmin, vmax = -1 * max_data / 100, 0.7 * max_data  # 0.8*max_data#
+        vmin, vmax = -1 * max_data / 100, 0.7 * max_data
         ax[2].set_ylim(vmin, vmax)
         cmap = copy.copy(plt.get_cmap(cmap))
         cmap.set_bad(color=(0.9, 0.9, 0.9))
@@ -1030,13 +1028,26 @@ class Cube(object):
             bsurf.on_clicked(go2surface)
 
         plt.show(block=True)
-        
+
     # ************************
     # SHOW SPECTRUM ALONG PATH
     # ************************
-    def _plot_spectrum_path(self, fig, ax, xa, ya, chan, color_list=[], extent=None, plot_color=None, compare_cubes=[], **kwargs_curve):
+    def _plot_spectrum_path(
+        self,
+        fig,
+        ax,
+        xa,
+        ya,
+        chan,
+        color_list=[],
+        extent=None,
+        plot_color=None,
+        compare_cubes=[],
+        **kwargs_curve
+    ):
 
-        if xa is None: return 0
+        if xa is None:
+            return 0
 
         if extent is None:
             j = xa.astype(int)
@@ -1056,9 +1067,11 @@ class Cube(object):
             plot_color = plot_path[0].get_color()
             color_list.append(plot_color)
         else:
-            plot_path = ax[1].step(pix_ids, path_val, where="mid", lw=2, color=plot_color, **kwargs_curve)
+            plot_path = ax[1].step(
+                pix_ids, path_val, where="mid", lw=2, color=plot_color, **kwargs_curve
+            )
         path_on_cube = ax[0].plot(xa, ya, color=plot_color, lw=2, **kwargs_curve)
-            
+
         ncubes = len(compare_cubes)
         if ncubes > 0:
             alpha = 0.2
@@ -1080,7 +1093,6 @@ class Cube(object):
         fig.canvas.draw()
         fig.canvas.flush_events()
 
-        
     def _curve(
         self,
         fig,
@@ -1093,7 +1105,7 @@ class Cube(object):
         compare_cubes=[],
         **kwargs
     ):
-        kwargs_curve = dict(linewidth=2.5) 
+        kwargs_curve = dict(linewidth=2.5)
         kwargs_curve.update(kwargs)
 
         xa, ya = None, None
@@ -1109,14 +1121,14 @@ class Cube(object):
 
         rectprops = dict(facecolor="0.7", edgecolor="k", alpha=0.3, fill=True)
         lineprops = dict(color="white", linestyle="-", linewidth=3, alpha=0.8)
-            
+
         def onselect(eclick, erelease):
             if eclick.inaxes is ax[0]:
-                #Must correct if click and realease are not right by comparing with current pos of mouse.
-                if xm[0] < erelease.xdata: 
-                    eclick.xdata, erelease.xdata=erelease.xdata, eclick.xdata
+                # Must correct if click and realease are not right by comparing with current pos of mouse.
+                if xm[0] < erelease.xdata:
+                    eclick.xdata, erelease.xdata = erelease.xdata, eclick.xdata
                 if ym[0] < erelease.ydata:
-                    eclick.ydata, erelease.ydata=erelease.ydata, eclick.ydata
+                    eclick.ydata, erelease.ydata = erelease.ydata, eclick.ydata
                 x0, y0 = eclick.xdata, eclick.ydata
                 x1, y1 = erelease.xdata, erelease.ydata
                 xa = np.linspace(x0, x1, 100)
@@ -1126,18 +1138,31 @@ class Cube(object):
                 print("used button  : ", eclick.button)
                 xa_list.append(xa)
                 ya_list.append(ya)
-                self._plot_spectrum_path(fig, ax, xa, ya, self._chan_path, color_list=color_list, extent=extent, compare_cubes=compare_cubes, **kwargs)
-            
-        if click:    
+                self._plot_spectrum_path(
+                    fig,
+                    ax,
+                    xa,
+                    ya,
+                    self._chan_path,
+                    color_list=color_list,
+                    extent=extent,
+                    compare_cubes=compare_cubes,
+                    **kwargs
+                )
+
+        if click:
             toggle_selector.RS = RectangleSelector(
-                ax[0], onselect, drawtype="box", rectprops=rectprops, lineprops=lineprops
+                ax[0],
+                onselect,
+                drawtype="box",
+                rectprops=rectprops,
+                lineprops=lineprops,
             )
 
         cid = fig.canvas.mpl_connect("key_press_event", toggle_selector)
-        fig.canvas.mpl_connect('motion_notify_event', mouse_move)        
+        fig.canvas.mpl_connect("motion_notify_event", mouse_move)
         return cid
 
-    
     def _show_path(
         self,
         extent=None,
@@ -1145,12 +1170,12 @@ class Cube(object):
         cube_init=0,
         compare_cubes=[],
         cursor_grid=True,
-        cmap="gnuplot2_r",            
+        cmap="gnuplot2_r",
         int_unit=r"Intensity [mJy beam$^{-1}$]",
         pos_unit="au",
         vel_unit=r"km s$^{-1}$",
         show_beam=False,
-        surface={"args": (), "kwargs": {}},            
+        surface={"args": (), "kwargs": {}},
         **kwargs
     ):
 
@@ -1161,7 +1186,7 @@ class Cube(object):
         plt.subplots_adjust(wspace=0.25)
         ncubes = len(compare_cubes)
         self._chan_path = chan_init
-        
+
         y0, y1 = ax[1].get_position().y0, ax[1].get_position().y1
         axcbar = plt.axes([0.47, y0, 0.03, y1 - y0])
         max_data = np.nanmax([self.data] + [comp.data for comp in compare_cubes])
@@ -1183,19 +1208,14 @@ class Cube(object):
 
         if show_beam and self.beam_kernel:
             self._plot_beam(ax[0])
-            
+
         if cube_init == 0:
             img_data = self.data[chan_init]
         else:
-            img_data = compare_cubes[cube_init-1].data[chan_init]
-        
+            img_data = compare_cubes[cube_init - 1].data[chan_init]
+
         img = ax[0].imshow(
-            img_data,
-            cmap=cmapc,
-            extent=extent,
-            origin="lower",
-            vmin=vmin,
-            vmax=vmax,
+            img_data, cmap=cmapc, extent=extent, origin="lower", vmin=vmin, vmax=vmax,
         )
         cbar = plt.colorbar(img, cax=axcbar)
         text_chan = ax[1].text(
@@ -1213,20 +1233,21 @@ class Cube(object):
         cursor_img = plt.imread(path_icons + "button_cursor.jpeg")
 
         xa_list, ya_list, color_list = [], [], []
+
         def get_interactive(func, click=True):
             cid = func(
                 fig,
                 ax,
-                xa_list = xa_list,
-                ya_list = ya_list,
-                color_list = color_list,
+                xa_list=xa_list,
+                ya_list=ya_list,
+                color_list=color_list,
                 extent=extent,
-                click = click,
+                click=click,
                 compare_cubes=compare_cubes,
                 **kwargs
             )
             return cid
-        
+
         interactive_obj = [get_interactive(self.interactive_path)]
 
         # ***************
@@ -1236,26 +1257,38 @@ class Cube(object):
             chan = int(val)
             vchan = self.vchannels[chan]
             self._chan_path = chan
-            
-            if ncubes>0:
+
+            if ncubes > 0:
                 ci = int(slider_cubes.val)
                 if ci == 0:
                     img.set_data(self.data[chan])
                 else:
-                    img.set_data(compare_cubes[ci-1].data[chan])
+                    img.set_data(compare_cubes[ci - 1].data[chan])
             else:
                 img.set_data(self.data[chan])
 
-            for line in ax[1].get_lines(): 
+            for line in ax[1].get_lines():
                 line.remove()
-            for i in range(len(xa_list)): #Needs to be done more than once for some (memory) reason
+            for i in range(
+                len(xa_list)
+            ):  # Needs to be done more than once for some (memory) reason
                 for mcoll in ax[1].collections:
                     mcoll.remove()
 
-            text_chan.set_text(r"v$_{\rmchan}$=%4.1f %s" % (vchan, vel_unit))            
+            text_chan.set_text(r"v$_{\rmchan}$=%4.1f %s" % (vchan, vel_unit))
             for i in range(len(xa_list)):
                 if xa_list[i] is not None:
-                    self._plot_spectrum_path(fig, ax, xa_list[i], ya_list[i], chan, extent=extent, plot_color=color_list[i], compare_cubes=compare_cubes, **kwargs)                    
+                    self._plot_spectrum_path(
+                        fig,
+                        ax,
+                        xa_list[i],
+                        ya_list[i],
+                        chan,
+                        extent=extent,
+                        plot_color=color_list[i],
+                        compare_cubes=compare_cubes,
+                        **kwargs
+                    )
             fig.canvas.draw_idle()
 
         def update_cubes(val):
@@ -1265,9 +1298,9 @@ class Cube(object):
             if ci == 0:
                 img.set_data(self.data[chan])
             else:
-                img.set_data(compare_cubes[ci-1].data[chan])
+                img.set_data(compare_cubes[ci - 1].data[chan])
             fig.canvas.draw_idle()
-            
+
         if ncubes > 0:
             axcubes = plt.axes([0.2, 0.90, 0.24, 0.025], facecolor="0.7")
             axchan = plt.axes([0.2, 0.95, 0.24, 0.025], facecolor="0.7")
@@ -1309,13 +1342,15 @@ class Cube(object):
 
         # *************
         # BUTTONS
-        # *************            
+        # *************
         def go2show(event):
             print("Returning to intensity vs velocity plot...")
             plt.close()
             chan = int(slider_chan.val)
-            if ncubes>0: ci = int(slider_cubes.val)
-            else: ci=0
+            if ncubes > 0:
+                ci = int(slider_cubes.val)
+            else:
+                ci = 0
             self.show(
                 extent=extent,
                 chan_init=chan,
@@ -1334,8 +1369,10 @@ class Cube(object):
             print("Cleaning interactive figure...")
             plt.close()
             chan = int(slider_chan.val)
-            if ncubes>0: ci = int(slider_cubes.val)
-            else: ci=0
+            if ncubes > 0:
+                ci = int(slider_cubes.val)
+            else:
+                ci = 0
             self._show_path(
                 extent=extent,
                 chan_init=chan,
@@ -1349,21 +1386,32 @@ class Cube(object):
                 **kwargs
             )
 
-        return_img = plt.imread(path_icons + "button_return.png")
-        axbreturn = plt.axes([0.043, 0.661, 0.0635, 0.0635], frameon=True, aspect="equal")
-        breturn = Button(axbreturn, "", image=return_img, color="white", hovercolor="lime")
-        breturn.on_clicked(go2show)
+        def go2surface(event):
+            self._surface(ax[0], *surface["args"], **surface["kwargs"])
+            fig.canvas.draw()
+            fig.canvas.flush_events()
             
+        return_img = plt.imread(path_icons + "button_return.png")
+        axbretu = plt.axes([0.043, 0.661, 0.0635, 0.0635], frameon=True, aspect="equal")
+        bretu = Button(axbretu, "", image=return_img, color="white", hovercolor="lime")
+        bretu.on_clicked(go2show)
+
         trash_img = plt.imread(path_icons + "button_trash.jpg")
         axbtrash = plt.axes([0.05, 0.60, 0.05, 0.05], frameon=True, aspect="equal")
         btrash = Button(axbtrash, "", image=trash_img, color="white", hovercolor="lime")
         btrash.on_clicked(go2trash)
-                        
+
+        surface_img = plt.imread(path_icons + "button_surface.png")
+        if len(surface["args"]) > 0:
+            axbsurf = plt.axes([0.005, 0.759, 0.07, 0.07], frameon=True, aspect="equal")
+            bsurf = Button(axbsurf, "", image=surface_img)
+            bsurf.on_clicked(go2surface)
+
         plt.show(block=True)
 
     # *************
     # MAKE GIF
-    # *************        
+    # *************
     def make_gif(
         self,
         folder="./gif/",

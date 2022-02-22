@@ -45,7 +45,6 @@ class Data(Cube):
             beam = None
             warnings.warn('No beam was found in the header of the input FITS file.')
         #self._init_cube()
-        print (beam)
         super().__init__(data, header, vchannels, beam=beam, filename=filename)
 
     def _init_cube(self):
