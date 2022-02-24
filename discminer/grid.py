@@ -1,5 +1,6 @@
-import numpy as np
 from .disc2d import Tools
+from astropy import units as u
+import numpy as np
 
 def grid(xmax, nx, indexing="xy", verbose=True):
     """
@@ -20,13 +21,14 @@ def grid(xmax, nx, indexing="xy", verbose=True):
     Returns
     -------    
     grid : dict
-        Dictionary containing grid information.
+        Dictionary containing grid information. Cartesian and polar grids are returned in units of metres.
     
     Examples
     --------        
 
     """
     Tools._break_line()
+    xmax = xmax.to(u.m).value
     xymax = np.array([xmax, xmax])
     nx = np.int32(nx)
     step = 2 * xmax / (nx - 1)

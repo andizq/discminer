@@ -1,23 +1,24 @@
-import numpy as np
 from .disc2d import InputError, PlotTools, Tools, path_icons
-from radio_beam import Beam
 from astropy.convolution import Gaussian2DKernel
 from astropy import units as u
 from astropy import constants as apc
 from astropy.io import fits
 from astropy.wcs import utils as aputils, WCS
-import warnings
-import os
 import copy
 import matplotlib
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, Cursor, Slider, RectangleSelector
+import numpy as np
+import os
+from radio_beam import Beam
+import warnings
 
 SMALL_SIZE = 10
 MEDIUM_SIZE = 15
 BIGGER_SIZE = 22
 
+# The Cube class should inherit a PlotTools class which can be used to make 2D plots (e.g. moment maps).
 
 class Cube(object):
     def __init__(self, data, header, vchannels, beam=None, filename="./cube.fits"):
