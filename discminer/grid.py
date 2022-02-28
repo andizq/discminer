@@ -34,7 +34,7 @@ def grid(xmax, nx, indexing="xy", verbose=True):
     step = 2 * xmax / (nx - 1)
 
     if verbose:
-        print("Computing square grid...")
+        print("Computing grid...")
         print("Grid maximum extent:", xmax)
         print("Grid step (cell size):", step)
 

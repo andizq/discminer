@@ -96,7 +96,7 @@ class Model(Cube, Mcmc):
             self.vchannels = cube.vchannels
             self.beam = cube.beam            
             self.make_grid()
-        beam_au = (dpc*np.tan(datacube.beam.major.to(u.radian))).to(u.au)
+        beam_au = (dpc*np.tan(cube.beam.major.to(u.radian))).to(u.au)
         self.Rin = Rin*beam_au
 
         #if prototype:
