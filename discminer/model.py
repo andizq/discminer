@@ -1,7 +1,6 @@
 import numpy as np
 from .disc2d import Cube, Tools
-import discminer.utils as utils
-from discminer.grid import grid as dgrid
+from .grid import grid as dgrid
 from astropy import units as u
 from astropy import constants as apc
 from astropy.io import fits

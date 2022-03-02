@@ -1,4 +1,4 @@
-from .disc2d import InputError, PlotTools, Tools, path_icons
+from .disc2d import Contours, InputError, PlotTools, Tools, path_icons
 from astropy.convolution import Gaussian2DKernel
 from astropy import units as u
 from astropy import constants as apc
