@@ -198,8 +198,8 @@ class Tools:
             #print (pix_scale, pix_radians)
         else: raise InputError(beam, 'beam object must either be str or Beam instance')
 
-        x_stddev = ((beam.major/pix_scale) / sigma2fwhm).value 
-        y_stddev = ((beam.minor/pix_scale) / sigma2fwhm).value 
+        x_stddev = ((beam.major/pix_scale) / sigma2fwhm).decompose().value 
+        y_stddev = ((beam.minor/pix_scale) / sigma2fwhm).decompose().value 
         #print (x_stddev, beam.major, pix_scale)
         angle = (90*u.deg+beam.pa).to(u.radian).value
         gauss_kern = Gaussian2DKernel(x_stddev, y_stddev, angle) 
