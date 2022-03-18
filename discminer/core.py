@@ -99,6 +99,13 @@ class Model(Cube, Mcmc):
         beam_au = (dpc*np.tan(cube.beam.major.to(u.radian))).to(u.au)
         self.Rin = Rin*beam_au
 
+        #elif isinstance(cube, grid):
+        #   self.beam = beam
+        #   make_header()
+        #   make_channels()
+        #   make_prototype()
+        #
+        
         #if prototype:
         #   make_prototype()
         #       vel2d, int2d, linew2d, lineb2d = model.make_model(R_inner=R_inner, R_disc=R_disc)

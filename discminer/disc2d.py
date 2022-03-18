@@ -2087,12 +2087,12 @@ class Intensity:
         return int2d_full
 
     def get_cube(self, vchannels, velocity2d, intensity2d, linewidth2d, lineslope2d, make_convolve=True, 
-                 nchan=None, tb={'nu': False, 'beam': False, 'full': True}, return_data_only=False, **kwargs):
+                 nchan=None, rms=None, tb={'nu': False, 'beam': False, 'full': True}, return_data_only=False, **kwargs):
         vel2d, int2d, linew2d, lineb2d = velocity2d, {}, {}, {}
         line_profile = self.line_profile
         if nchan is None: nchan=len(vchannels)
-        cube = []
-
+        int2d_shape = np.shape(velocity2d['upper'])
+        
         if isinstance(intensity2d, numbers.Number): int2d['upper'] = int2d['lower'] = intensity2d
         else: int2d = intensity2d
         if isinstance(linewidth2d, numbers.Number): linew2d['upper'] = linew2d['lower'] = linewidth2d
@@ -2111,6 +2111,8 @@ class Intensity:
             vel2d_far_nan = np.isnan(vel2d['lower']) #~vel2d['lower'].mask
         """
 
+        cube = []
+        noise = 0.0
         #for _ in itertools.repeat(None, nchan):
         for vchan in vchannels:
             v_near, v_far = self.get_line_profile(vchan, vel2d, linew2d, lineb2d, **kwargs)
@@ -2125,13 +2127,16 @@ class Intensity:
             int2d_far = int2d['lower'] * v_far
             #vel nans might differ from Int nans when a z surf is zero and SG is active, then nanmax must be used: 
             int2d_full = np.nanmax([int2d_near, int2d_far], axis=0) 
+            if rms is not None:
+                noise = np.random.normal(scale=rms, size=int2d_shape)
+                int2d_full += noise
 
             if make_convolve and self.beam_kernel:
                 """
                 inf_mask = np.isinf(int2d_full)
                 """
                 inf_mask = np.isnan(int2d_full) # Use np.nan_to_num instead
-                int2d_full = np.where(inf_mask, 0.0, int2d_full)                
+                int2d_full = np.where(inf_mask, noise, int2d_full)                
                 int2d_full = self._beam_area*convolve(int2d_full, self.beam_kernel, preserve_nan=False)
 
             cube.append(int2d_full)

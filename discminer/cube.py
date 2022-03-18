@@ -10,6 +10,7 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, Cursor, Slider, RectangleSelector
 import numpy as np
+import copy
 import os
 from radio_beam import Beam
 import warnings
@@ -43,9 +44,9 @@ class Cube(object):
             The name of this file would be used as the root name of new FITS files which would be created if the original datacube is modified via `~discminer.cube.Cube` methods.
 
         """
-        self.data = data
-        self.header = header
-        self.vchannels = vchannels
+        self.data = copy.copy(data)
+        self.header = copy.copy(header)
+        self.vchannels = copy.copy(vchannels)
         self.beam = beam
         self.wcs = WCS(self.header)
         self.fileroot = os.path.expanduser(filename).split(".fits")[0]
@@ -93,13 +94,16 @@ class Cube(object):
            
         """
         ktag = ""
+        kwargs_io = dict(overwrite=True)  # Default kwargs
+        kwargs_io.update(kwargs)
+
         if logkeys is not None:
             for key in logkeys:
                 if key in self.header and self.header[key]:
                     ktag += "_" + key.lower()
 
         self.fileroot += ktag + tag
-        fits.writeto(self.fileroot + ".fits", self.data, header=self.header, **kwargs)
+        fits.writeto(self.fileroot + ".fits", self.data, header=self.header, **kwargs_io)
 
     def convert_to_tb(self, planck=True, writefits=True, tag="", **kwargs):
         """
