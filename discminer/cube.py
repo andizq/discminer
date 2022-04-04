@@ -174,7 +174,7 @@ class Cube(object):
         self, npix, method=np.median, kwargs_method={}, writefits=True, tag="", **kwargs
     ):
         """
-        Downsample data cube to reduce spatial correlations between pixels and/or to save computational costs in the modelling. 
+        Downsample datacube to reduce spatial correlations between pixels and/or to save computational costs in the modelling. 
 
         Parameters
         ----------
@@ -210,7 +210,7 @@ class Cube(object):
             progress = Tools._progress_bar
             di = npix
             dj = npix
-            print("Averaging %dx%d pixels from data cube..." % (di, dj))
+            print("Averaging %dx%d pixels from datacube..." % (di, dj))
             for k in range(nchan):
                 progress(int(100 * k / nchan))
                 for i in range(nx):
@@ -219,7 +219,7 @@ class Cube(object):
                             self.data[k, j * dj : j * dj + dj, i * di : i * di + di],
                             **kwargs_method
                         )
-            progress(100)
+            progress(100); print('\n')
 
             self.nx = nx
             self.data = av_data
@@ -247,7 +247,13 @@ class Cube(object):
             self.header["NAXIS2"] = nx
 
             self.wcs = WCS(self.header)
-            self._init_beam_kernel()
+            if isinstance(self.beam, Beam):
+                self._init_beam_kernel()  # Get 2D Gaussian kernel from beam
+            elif self.beam is None:
+                pass
+            else:
+                raise InputError(self.beam, "beam must be either None or radio_beam.Beam object")
+
             # keeping track of changes to original cube
             self.header[hdrkey] = (True, hdrcard)
             if writefits:
@@ -303,7 +309,8 @@ class Cube(object):
         hdrcard = "Clipped by DISCMINER"
         kwargs_io = dict(overwrite=True)  # Default kwargs
         kwargs_io.update(kwargs)
-
+        print ("Clipping datacube...")
+        
         if icenter is not None:
             icenter = int(icenter)
         else:  # Assume reference centre at the centre of the image

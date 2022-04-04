@@ -20,11 +20,15 @@ class Data(Cube):
 
         """
         cube_spe = SpectralCube.read(filename)
-        cube_vel = cube_spe.with_spectral_unit(
-            u.km / u.s,
-            velocity_convention="radio",
-            rest_value=cube_spe.header["RESTFRQ"] * u.Hz,
-        )
+        try:
+            cube_vel = cube_spe.with_spectral_unit(
+                u.km / u.s,
+                velocity_convention="radio",
+                rest_value=cube_spe.header["RESTFRQ"] * u.Hz,
+            )
+        except KeyError:
+            cube_vel = cube_spe
+            
         # in km/s, remove .value to keep astropy units
         vchannels = cube_vel.spectral_axis.value
         header = cube_vel.header
@@ -96,8 +100,11 @@ class Model(Cube, Mcmc):
             self.vchannels = cube.vchannels
             self.beam = cube.beam            
             self.make_grid()
-        beam_au = (dpc*np.tan(cube.beam.major.to(u.radian))).to(u.au)
-        self.Rin = Rin*beam_au
+
+        if cube.beam is not None:
+            beam_au = (dpc*np.tan(cube.beam.major.to(u.radian))).to(u.au)
+            self.Rin = Rin*beam_au
+        else: self.Rin = 0.0*u.Unit(u.au)
 
         #elif isinstance(cube, grid):
         #   self.beam = beam
