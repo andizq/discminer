@@ -789,8 +789,8 @@ class Contours(PlotTools):
             if callable(error_func): #if error map provided, compute average error per radius, divided by sqrt of number of beams (see Michiel Hogerheijde notes on errors)
                 av_west_error, av_east_error = np.zeros(nconts), np.zeros(nconts)
                 for i in range(nconts):
-                    x_west, y_west, __ = get_sky_from_disc_coords(lev_list[i], coord_list[i][ind_west[i]])
-                    x_east, y_east, __ = get_sky_from_disc_coords(lev_list[i], coord_list[i][ind_east[i]])
+                    x_west, y_west, __ = Tools.get_sky_from_disc_coords(lev_list[i], coord_list[i][ind_west[i]])
+                    x_east, y_east, __ = Tools.get_sky_from_disc_coords(lev_list[i], coord_list[i][ind_east[i]])
                     error_west = np.array(list(map(error_func, x_west, y_west))).T[0]
                     error_east = np.array(list(map(error_func, x_east, y_east))).T[0]
                     sigma2_west = np.where((np.isfinite(error_west)) & (error_unit*error_west<error_thres) & (error_west>0), (error_unit*error_west)**2, 0)
@@ -2420,7 +2420,8 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
                  use_zeus=False,
                  #custom_header={}, custom_kind={}, mc_layers=1,
                  z_mirror=False, 
-                 plot_walkers=True, plot_corner=True, tag='', 
+                 plot_walkers=True, plot_corner=True, tag='',
+                 mpi=False,
                  **kwargs_model): 
         #p0: list of initial guesses. In the future will support 'optimize', 'min_bound', 'max_bound'
         self.data = data
@@ -2475,13 +2476,28 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
             print ('p0 pars stddev:', p0_stddev)
         Tools._break_line(init='\n', end='\n\n')
 
-        with Pool(processes=nthreads) as pool:
-            sampler = sampler_id.EnsembleSampler(nwalkers, ndim, self.ln_likelihood, pool=pool, kwargs=kwargs_model)                                                        
-            start = time.time()
-            sampler.run_mcmc(p0, nsteps, progress=True)
-            end = time.time()
-            multi_time = end - start
-            print("Multiprocessing took {0:.1f} seconds".format(multi_time))
+        if mpi: #Needs schwimmbad library: $ pip install schwimmbad
+            from schwimmbad import MPIPool
+            with MPIPool() as pool:
+                if not pool.is_master():
+                    pool.wait()
+                    sys.exit(0)
+
+                sampler = sampler_id.EnsembleSampler(nwalkers, ndim, self.ln_likelihood, pool=pool, kwargs=kwargs_model)
+                start = time.time()
+                sampler.run_mcmc(p0, nsteps, progress=True)
+                end = time.time()
+                multi_time = end - start
+                print("MPI multiprocessing took {0:.1f} seconds".format(multi_time))
+
+        else:
+            with Pool(processes=nthreads) as pool:
+                sampler = sampler_id.EnsembleSampler(nwalkers, ndim, self.ln_likelihood, pool=pool, kwargs=kwargs_model)
+                start = time.time()
+                sampler.run_mcmc(p0, nsteps, progress=True)
+                end = time.time()
+                multi_time = end - start
+                print("Multiprocessing took {0:.1f} seconds".format(multi_time))
             
         sampler_chain = sampler.chain
         if use_zeus: sampler_chain = np.swapaxes(sampler.chain, 0, 1) #zeus chains shape (nsteps, nwalkers, npars) must be swapped
