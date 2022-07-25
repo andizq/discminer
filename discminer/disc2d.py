@@ -762,11 +762,14 @@ class Contours(PlotTools):
     @staticmethod
     def beams_along_ring(lev, Rgrid, beam_size, X, Y):
         xc, yc, _, _ = Contours.make_contour_lev(Rgrid, lev, X, Y)
-        rc = hypot_func(xc, yc)
-        a = np.max(rc)
-        b = np.min(rc)
-        ellipse_perim = np.pi*(3*(a+b)-np.sqrt((3*a+b)*(a+3*b)))
-        return ellipse_perim/beam_size
+        try:
+            rc = hypot_func(xc, yc)
+            a = np.max(rc)
+            b = np.min(rc)
+            ellipse_perim = np.pi*(3*(a+b)-np.sqrt((3*a+b)*(a+3*b))) #Assuming that disc vertical extent does not distort much the ellipse
+            return ellipse_perim/beam_size
+        except ValueError: #No contour was found
+            return np.inf
 
     @staticmethod
     def get_average_east_west(resid_list, coord_list, lev_list, 
@@ -778,8 +781,8 @@ class Contours(PlotTools):
         if resid_thres is None: resid_thres = [np.inf]*nconts
         elif resid_thres == '3sigma': resid_thres = [3*np.nanstd(resid_list[i]) for i in range(nconts)] #anything higher than 3sigma is rejected from annulus
         # -np.pi<coord_list<np.pi
-        ind_west = [((coord_list[i]<90-mask_ang) & (coord_list[i]>-90+mask_ang)) & (np.abs(resid_list[i])<resid_thres[i]) for i in range(nconts)]
-        ind_east = [((coord_list[i]>90+mask_ang) | (coord_list[i]<-90-mask_ang)) & (np.abs(resid_list[i])<resid_thres[i]) for i in range(nconts)]
+        ind_west = [((coord_list[i]<90-mask_ang) & (coord_list[i]>-90+mask_ang)) & (np.abs(resid_list[i]-np.nanmean(resid_list[i])) < resid_thres[i]) for i in range(nconts)]
+        ind_east = [((coord_list[i]>90+mask_ang) | (coord_list[i]<-90-mask_ang)) & (np.abs(resid_list[i]-np.nanmean(resid_list[i])) < resid_thres[i]) for i in range(nconts)]
         av_west = np.array([av_func(resid_list[i][ind_west[i]]) for i in range(nconts)])
         av_east = np.array([av_func(resid_list[i][ind_east[i]]) for i in range(nconts)])
         
@@ -789,8 +792,8 @@ class Contours(PlotTools):
             if callable(error_func): #if error map provided, compute average error per radius, divided by sqrt of number of beams (see Michiel Hogerheijde notes on errors)
                 av_west_error, av_east_error = np.zeros(nconts), np.zeros(nconts)
                 for i in range(nconts):
-                    x_west, y_west, __ = Tools.get_sky_from_disc_coords(lev_list[i], coord_list[i][ind_west[i]])
-                    x_east, y_east, __ = Tools.get_sky_from_disc_coords(lev_list[i], coord_list[i][ind_east[i]])
+                    x_west, y_west, __ = Tools.get_sky_from_disc_coords(lev_list[i], coord_list[i][ind_west[i]]) #MISSING z, incl, PA for the function to work
+                    x_east, y_east, __ = Tools.get_sky_from_disc_coords(lev_list[i], coord_list[i][ind_east[i]]) #MISSING z, incl, PA for the function to work
                     error_west = np.array(list(map(error_func, x_west, y_west))).T[0]
                     error_east = np.array(list(map(error_func, x_east, y_east))).T[0]
                     sigma2_west = np.where((np.isfinite(error_west)) & (error_unit*error_west<error_thres) & (error_west>0), (error_unit*error_west)**2, 0)
@@ -819,7 +822,7 @@ class Contours(PlotTools):
         # -np.pi<coord_list<np.pi        
         ind_accep = [(((coord_list[i]<90-mask_ang) & (coord_list[i]>-90+mask_ang)) |
                       ((coord_list[i]>90+mask_ang) | (coord_list[i]<-90-mask_ang))) &
-                     (np.abs(resid_list[i])<resid_thres[i])
+                     (np.abs(resid_list[i]-np.nanmean(resid_list[i]))<resid_thres[i])
                      for i in range(nconts)]
         av_annulus = np.array([av_func(resid_list[i][ind_accep[i]]) for i in range(nconts)])
         
@@ -829,7 +832,7 @@ class Contours(PlotTools):
             if callable(error_func): #if error map provided, compute average error per radius, divided by sqrt of number of beams (see Michiel Hogerheijde notes on errors)
                 av_error = np.zeros(nconts)
                 for i in range(nconts):
-                    x_accep, y_accep, __ = get_sky_from_disc_coords(lev_list[i], coord_list[i][ind_accep[i]])
+                    x_accep, y_accep, __ = get_sky_from_disc_coords(lev_list[i], coord_list[i][ind_accep[i]]) #MISSING z, incl, PA for the function to work
                     error_accep = np.array(list(map(error_func, x_accep, y_accep))).T[0]
                     sigma2_accep = np.where((np.isfinite(error_accep)) & (error_unit*error_accep<error_thres) & (error_accep>0), (error_unit*error_accep)**2, 0)
                     Np_accep = len(coord_list[i][ind_accep[i]])
@@ -839,7 +842,73 @@ class Contours(PlotTools):
                 
         return av_annulus, av_error
 
+    @staticmethod
+    def get_average_zones(resid_list, coord_list, lev_list, Rgrid, beam_size, X, Y,
+                          az_zones=[[-30, 30], [150,  -150]], join_zones=False, av_func=np.nanmean,
+                          resid_thres='3sigma', error_func=True, error_unit=1.0, error_thres=np.inf):
+                          
+        #resid_thres: None, '3sigma', or list of thresholds with size len(lev_list)
+        nconts = len(lev_list)
+        nzones = len(az_zones)
+        
+        if resid_thres is None: resid_thres = [np.inf]*nconts
+        elif resid_thres == '3sigma': resid_thres = [3*np.nanstd(resid_list[i]) for i in range(nconts)] #anything higher than 3sigma is rejected from annulus
 
+        make_or = lambda az0, az1: [((coord_list[i]>az0) | (coord_list[i]<az1)) & (np.abs(resid_list[i]-np.nanmean(resid_list[i])) < resid_thres[i]) for i in range(nconts)]
+        make_and = lambda az0, az1: [((coord_list[i]>az0) & (coord_list[i]<az1)) & (np.abs(resid_list[i]-np.nanmean(resid_list[i])) < resid_thres[i]) for i in range(nconts)]
+
+        def get_portion_inds(az):
+            az0, az1 = az
+            if (az0 > az1):
+                inds = make_or(az0, az1)
+            else:
+                inds = make_and(az0, az1)
+            return inds
+
+        def get_portion_percent(az):
+            az0, az1 = az
+            if (az0 > az1):
+                if az0 < 0: perc = 1 - (az0-az1)/360.
+                else: perc = (180-az0 + 180-np.abs(az1))/360.
+            else:
+                perc = (az1-az0)/360.
+            return perc
+
+        #inds containts lists of indices, one list per zone. Each is a list of lists, with as many lists as nconts (number of radii). Each sublist has different number of indices, the larger the radius (i.e. larger path) the more indices.        
+        inds = [get_portion_inds(zone) for zone in az_zones] 
+        az_percent = np.array([get_portion_percent(zone) for zone in az_zones])
+
+        if join_zones and nzones>1:
+            concat = lambda x,y: x+y
+            inds = [[functools.reduce(concat, [ind[i] for ind in inds]) for i in range(nconts)]] #concatenates indices from zones, per radius.
+            az_percent = np.sum(az_percent)[None] #array of single number
+            nzones = 1
+            
+        av_on_inds = [np.array([av_func(resid_list[i][ind[i]]) for i in range(nconts)]) for ind in inds]        
+
+        beams_ring_full = [Contours.beams_along_ring(lev, Rgrid, beam_size, X, Y) for lev in lev_list]
+        beams_zone_sqrt = [np.sqrt(az_percent*br) for br in beams_ring_full]
+
+        if error_func is None: av_error = None
+        else:
+            if callable(error_func): #Not yet tested
+                #if error map provided, compute average error per radius, divided by sqrt of number of beams (see Michiel Hogerheijde notes on errors)  
+                av_error = []
+                for i in range(nconts):
+                    r_ind = [Tools.get_sky_from_disc_coords(lev_list[i], coord_list[i][ind[i]]) for ind in inds] #MISSING z, incl, PA for the function to work
+                    error_ind = [np.array(list(map(error_func, r_ind[j][0], r_ind[j][1]))).T[0] for j in range(nzones)]
+                    sigma2_ind = [np.where((np.isfinite(error_ind[j])) & (error_unit*error_ind[j]<error_thres) & (error_ind[j]>0),
+                                           (error_unit*error_ind[j])**2,
+                                           0)
+                                  for j in range(nzones)]
+                    np_ind = [len(coord_list[i][ind[i]]) for ind in inds]
+                    av_error.append([np.sqrt(np.nansum(sigma2_ind[j])/np_ind[j])/beams_zone_sqrt[i][j] for j in range(nzones) in np_ind])
+            else: #compute standard error of mean value 
+                av_error = [np.array([np.std(resid_list[i][inds[j][i]], ddof=1)/beams_zone_sqrt[i][j] for i in range(nconts)]) for j in range(nzones)]
+
+        return av_on_inds, av_error    
+
+    
 class Cube(object):
     def __init__(self, nchan, channels, data, beam=False, beam_kernel=False, tb={'nu': False, 'beam': False, 'full': True}):
         self.nchan = nchan
@@ -1729,6 +1798,23 @@ class Velocity:
         return vel_sign*np.sqrt(sfc.G*Mstar/r**3)*R * 1e-3 
 
     @staticmethod
+    def keplerian_pressure(coord, Mstar=1.0, vel_sign=1, vsys=0,
+                           gamma=1.0, beta=0.5, H0=6.5, R0=100.0):
+        #pressure support taken from Lodato's 2021 notes and Viscardi+2021 thesis
+        #--> pressure term assumes vertically isothermal disc, T propto R**-beta, and surfdens propto R**-gamma (using Rosenfeld+2013 notation).
+        #--> R0 is the ref radius for scaleheight powerlaw, no need to be set as free par during mcmc.
+        Mstar *= sfu.MSun
+        if 'R' not in coord.keys(): R = hypot_func(coord['x'], coord['y'])
+        else: R = coord['R']
+        alpha = 1.5 + gamma + 0.5*beta
+        dlogH_dlogR = 1.5 - 0.5*beta
+        psi = -0.5*beta + 1.5
+        H = ScaleHeight.powerlaw({'R': R}, H0=H0, R0=R0, psi=psi)
+        vk2 = sfc.G*Mstar/R
+        vp2 = vk2*(-alpha*(H/R)**2) #pressure term
+        return vel_sign*np.sqrt(vk2 + vp2) * 1e-3 
+
+    @staticmethod
     def keplerian_vertical_pressure(coord, Mstar=1.0, vel_sign=1, vsys=0,
                                     gamma=1.0, beta=0.5, H0=6.5, R0=100.0):
         #pressure support taken from Lodato's 2021 notes and Viscardi+2021 thesis
@@ -1751,6 +1837,7 @@ class Velocity:
         vp2 = vk2*( -alpha*(H/R)**2 + (2/z_R32)*( 1+1.5*z_R2-z_R32-dlogH_dlogR*(1+z_R2-z_R32) ) ) #pressure term        
         return vel_sign*np.sqrt(R**2*sfc.G*Mstar/r**3 + vp2) * 1e-3 
 
+    
     @staticmethod
     def keplerian_vertical_selfgravity(coord, Mstar=1.0, vel_sign=1, vsys=0,
                                        Ec=30.0, gamma=1.0, Rc=100.0,
@@ -1862,7 +1949,7 @@ class Intensity:
         print('Setting beam_kernel var to', beam_kernel)
         x_stddev = beam_kernel.model.x_stddev.value
         y_stddev = beam_kernel.model.y_stddev.value
-        self._beam_area = 2*np.pi*x_stddev*y_stddev
+        self._beam_area = 2*np.pi*x_stddev*y_stddev #see https://en.wikipedia.org/wiki/Gaussian_function, and https://science.nrao.edu/facilities/vla/proposing/TBconv
         self._beam_kernel = beam_kernel
 
     @beam_kernel.deleter 

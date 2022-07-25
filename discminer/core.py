@@ -1,11 +1,11 @@
 from .cube import Cube
-from .disc2d import Mcmc
+from .disc2d import Mcmc, InputError
 from .grid import grid as dgrid 
 from astropy import units as u
 import numpy as np
-from radio_beam import Beam
+from radio_beam import Beam, Beams
 from radio_beam.beam import NoBeamException
-from spectral_cube import SpectralCube
+from spectral_cube import SpectralCube, VaryingResolutionSpectralCube
 import warnings
 
 class Data(Cube):
@@ -29,16 +29,37 @@ class Data(Cube):
         except KeyError:
             cube_vel = cube_spe
             
-        # in km/s, remove .value to keep astropy units
+        #In km/s, remove .value to keep astropy units
         vchannels = cube_vel.spectral_axis.value
         header = cube_vel.header
-        data = cube_vel.hdu.data.squeeze()        
 
-        try:
-            beam = Beam.from_fits_header(header)  # radio_beam object
-        except NoBeamException:
-            beam = None
-            warnings.warn('No beam was found in the header of the input FITS file.')
+        #Get data and beam info
+        if isinstance(cube_vel, SpectralCube):
+            data = cube_vel.hdu.data.squeeze()
+            try:
+                beam = Beam.from_fits_header(header)  # radio_beam object
+            except NoBeamException:
+                beam = None
+                warnings.warn('No beam was found in the header of the input FITS file.')
+            
+        elif isinstance(cube_vel, VaryingResolutionSpectralCube):
+            data = cube_vel.hdulist[0].data.squeeze()
+            """
+            beams = cube_vel.hdulist[1].data #One beam per channel
+            bmaj = np.median(beams['BMAJ'])
+            bmin = np.median(beams['BMIN'])
+            bpa = np.median(beams['BPA'])            
+            beam = Beam(major=bmaj*u.arcsec, minor=bmin*u.arcsec, pa=bpa*u.deg)
+            """
+            beams = Beams.from_fits_bintable(cube_vel.hdulist[1])
+            beam = beams.common_beam() #Smallest common beam
+            header.update(beam.to_header_keywords()) #Add single beam to header
+        else:
+            raise InputError(cube_vel,
+                             'Type of datacube supplied is invalid. Supported spectral_cube instances: SpectralCube, VaryingResolutionSpectralCube.')
+            
+        self.filename = filename
+        self.beam = beam
         #self._init_cube()
         super().__init__(data, header, vchannels, beam=beam, filename=filename)
         
