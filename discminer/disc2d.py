@@ -909,6 +909,40 @@ class Contours(PlotTools):
         return av_on_inds, av_error    
 
     
+    def make_filaments(prop_2D, R_nonan_up_au, R_inner_au, beam_size_au, distance_pc, dpix_arcsec, **kwargs):
+        #FIND FILAMENTS
+        #adapt_thresh is the width of the element used for the adaptive thresholding mask.
+        # This is primarily the step that picks out the filamentary structure. The element size should be similar to the width of the expected filamentary structure
+
+        #kw_fil_mask = dict(verbose=False, adapt_thresh=50*apu.au, smooth_size=1*beam_size_au*apu.au, size_thresh=100*apu.pix**2, border_masking=False, fill_hole_size=0.01*apu.arcsec**2)
+        from fil_finder import FilFinder2D
+        from astropy import units as apu
+
+        distance=distance_pc*apu.pc
+        ang_scale=dpix_arcsec*apu.arcsec
+        R_min=R_inner_au
+        
+        kw_fil_mask = dict(verbose=False, adapt_thresh=1*beam_size_au*apu.au, smooth_size=0.2*beam_size_au*apu.au, size_thresh=500*apu.pix**2, border_masking=False, fill_hole_size=0.01*apu.arcsec**2)
+        kw_fil_mask.update(kwargs)
+        Rgrid = R_nonan_up_au
+        Rind = (Rgrid>R_min) #& (Rgrid<R_max)
+        fil_pos = FilFinder2D(np.where(Rind & (prop_2D>0), np.abs(prop_2D), 0), ang_scale=ang_scale, distance=distance)
+        fil_pos.preprocess_image(skip_flatten=True) 
+        fil_pos.create_mask(**kw_fil_mask)
+        fil_pos.medskel(verbose=False)
+        
+        fil_neg = FilFinder2D(np.where(Rind & (prop_2D<0), np.abs(prop_2D), 0), ang_scale=ang_scale, distance=distance)
+        fil_neg.preprocess_image(skip_flatten=True) 
+        fil_neg.create_mask(**kw_fil_mask)
+        fil_neg.medskel(verbose=False)
+        
+        fil_pos.analyze_skeletons(prune_criteria='length')
+        fil_neg.analyze_skeletons(prune_criteria='length')
+        return fil_pos, fil_neg
+
+    
+    
+    
 class Cube(object):
     def __init__(self, nchan, channels, data, beam=False, beam_kernel=False, tb={'nu': False, 'beam': False, 'full': True}):
         self.nchan = nchan
