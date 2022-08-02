@@ -202,7 +202,7 @@ class Pick(object):
         #***************************
         #FIND PEAK AZIMUTHAL CLUSTER VARIANCES
         #***************************
-        acc_peaks_phi, var_std_phi, var_width_phi = get_neighbour_peaks(variance_phi_x, kcenters_phi[:,0], variance_phi_y)
+        acc_peaks_phi, var_std_phi, var_width_phi = get_neighbour_peaks(variance_phi_x, kcenters_phi[:,0], variance_phi_y, n_clusters=n_clusters_phi, std_thres=std_thres)
         print ("accepted variance peaks on PHI:", acc_peaks_phi)
         
         var_colors_phi = np.array(['1.0']*n_clusters_phi).astype('<U9')
@@ -224,7 +224,7 @@ class Pick(object):
         #***************************
         #FIND PEAK RADIAL CLUSTER VARIANCES
         #***************************
-        acc_peaks_R, var_std_R, var_width_R = get_neighbour_peaks(variance_R_x, kcenters_R[:,0], variance_R_y)
+        acc_peaks_R, var_std_R, var_width_R = get_neighbour_peaks(variance_R_x, kcenters_R[:,0], variance_R_y, n_clusters=n_clusters_R, std_thres=std_thres)
         print ("accepted variance peaks on R:", acc_peaks_R)
         
         var_colors_R = np.array(['1.0']*n_clusters_R).astype('<U9')
