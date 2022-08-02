@@ -679,7 +679,7 @@ class Contours(PlotTools):
                 prop_diff_neg = np.asarray(prop_diff_neg)
 
                 if len(angle_diff_neg)>1:
-                    ind_sort_neg = np.argsort(angle_diff_neg)    
+                    ind_sort_neg = np.argsort(np.abs(angle_diff_neg))
                     plot_ang_diff_neg = angle_diff_neg[ind_sort_neg]
                     plot_prop_diff_neg = prop_diff_neg[ind_sort_neg]
                     ind_prop_neg = np.abs(plot_prop_diff_neg)<max_prop_threshold
