@@ -137,7 +137,8 @@ class Pick(object):
         #APPLY K-MEANS CLUSTERING
         #************************
         n_peaks = len(self.peak_resid)
-        peak_both = np.array([self.peak_angle, self.peak_resid]).T
+        if axis=='phi': peak_both = np.array([self.peak_angle, self.peak_resid]).T
+        elif axis=='phi': peak_both = np.array([self.lev_list, self.peak_resid]).T        
         kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(peak_both)
         kcenters = kmeans.cluster_centers_
         klabels = kmeans.labels_
