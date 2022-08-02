@@ -13,7 +13,7 @@ from .disc2d import Tools
 
 import copy
 
-def get_neighbour_peaks(var_x, pos_x, var_y, n_clusters=n_clusters, std_thres=std_thres):
+def get_neighbour_peaks(var_x, pos_x, var_y, n_clusters=8, std_thres=3):
     #Everything is referred to the variance sorted wrt x
     ind_x_sort = np.argsort(pos_x)
     var_x = var_x[ind_x_sort]
@@ -69,7 +69,7 @@ def get_neighbour_peaks(var_x, pos_x, var_y, n_clusters=n_clusters, std_thres=st
 
 
 class Pick(object):
-    def __init__(coord_list, resid_list, color_list, lev_list, kw_find_peaks={}):
+    def __init__(self, coord_list, resid_list, color_list, lev_list, kw_find_peaks={}):
         self.coord_list = copy.copy(coord_list)
         self.resid_list = copy.copy(resid_list)
         self.color_list = copy.copy(color_list)
@@ -77,8 +77,13 @@ class Pick(object):
         
         self.find_peaks(**kw_find_peaks)        
                 
-    def find_peaks(self, phi_min=-85, phi_max=85, clean_peaks=True):
-        
+    def find_peaks(self, phi_min=-85, phi_max=85, std_thres=3, clean_peaks=True):
+        len_res = len(self.resid_list)
+        peak_angle = np.zeros(len_res)
+        peak_resid = np.zeros(len_res)
+        peak_sign = np.zeros(len_res)
+        peak_error = np.zeros(len_res)
+
         for i in np.arange(0, len_res): #1 radius per quadrant (0,90), (-90,0)
             arg90 = (self.coord_list[i] >= phi_min) & (self.coord_list[i] <= phi_max)  #-90, 90
             if np.sum(arg90) == 0: abs_resid = [0] #if arg90 is empty
@@ -113,7 +118,7 @@ class Pick(object):
         #********************
         #FIND GLOBAL PEAK
         #********************
-        peak_mean = np.sum(self.peak_weight*peak_resid)/np.sum(self.peak_weight)
+        peak_mean = np.sum(peak_weight*peak_resid)/np.sum(peak_weight)
         peak_std = Tools.weighted_std(peak_resid, peak_weight, weighted_mean=peak_mean)
         for stdi in np.arange(std_thres+1)[::-1]: #If it fails to find peaks above the threshold continue and try the next, lower, sigma threshold
             ind_global_peak = peak_resid > peak_mean+stdi*peak_std
@@ -129,9 +134,9 @@ class Pick(object):
         self.peak_sign = peak_sign
         self.peak_error = peak_error
         self.peak_weight = peak_weight
+
         
-        
-    def make_clusters(n_clusters, axis='phi'): #, kw_find_peaks={}):
+    def make_clusters(self, n_clusters, axis='phi'): #, kw_find_peaks={}):
     
         #************************
         #APPLY K-MEANS CLUSTERING
@@ -189,7 +194,7 @@ class Pick(object):
         variance_y = np.asarray(variance_y) * npoints_clust*(n_clusters/n_peaks) #weighting by number of points in clusters
         return kcenters, variance_x, variance_y
             
-    def find_peak_clusters(n_clusters_phi, n_clusters_R, std_thres=3, var_scale=3, kw_find_peaks={}):
+    def find_peak_clusters(self,n_clusters_phi, n_clusters_R, std_thres=3, var_scale=1e3, kw_find_peaks={}):
 
         kcenters_phi, variance_phi_x, variance_phi_y = self.make_clusters(n_clusters_phi, axis='phi', **kw_find_peaks)
         kcenters_R, variance_R_x, variance_R_y = self.make_clusters(n_clusters_R, axis='R', **kw_find_peaks)
@@ -202,8 +207,8 @@ class Pick(object):
         
         var_colors_phi = np.array(['1.0']*n_clusters_phi).astype('<U9')
         var_colors_phi[acc_peaks_phi] = 'palegreen' #kde_color
-        ind_variance_peak_phi = np.argmax(self.variance_phi_y)
-        variance_nomax = np.sort(self.variance_phi_y)[:-len(acc_peaks_phi)]
+        ind_variance_peak_phi = np.argmax(variance_phi_y)
+        variance_nomax = np.sort(variance_phi_y)[:-len(acc_peaks_phi)]
         peak_variance_std_phi = var_std_phi #std of variances except those from accepted peaks np.std(variance_nomax)
         peak_variance_angle = kcenters_phi[:,0][ind_variance_peak_phi]
         
@@ -224,8 +229,8 @@ class Pick(object):
         
         var_colors_R = np.array(['1.0']*n_clusters_R).astype('<U9')
         var_colors_R[acc_peaks_R] = 'palegreen' #kde_color
-        ind_variance_peak_R = np.argmax(self.variance_R_y)
-        variance_nomax = np.sort(self.variance_R_y)[:-len(acc_peaks_R)]
+        ind_variance_peak_R = np.argmax(variance_R_y)
+        variance_nomax = np.sort(variance_R_y)[:-len(acc_peaks_R)]
         peak_variance_std_R = var_std_R #std of variances except those from accepted peaks np.std(variance_nomax)
         peak_variance_angle = kcenters_R[:,0][ind_variance_peak_R]
         
