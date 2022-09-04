@@ -1,4 +1,5 @@
 from .disc2d import Contours, InputError, PlotTools, Tools, path_icons
+from .cart import get_attribute_cmap
 from astropy.convolution import Gaussian2DKernel
 from astropy import units as u
 from astropy import constants as apc
@@ -15,11 +16,20 @@ import os
 from radio_beam import Beam
 import warnings
 
+from .plottools import *
+        
 SMALL_SIZE = 10
 MEDIUM_SIZE = 15
 BIGGER_SIZE = 22
 
+matplotlib.rcParams['font.family'] = 'monospace'
+matplotlib.rcParams['axes.linewidth'] = 1.5  
+matplotlib.rcParams['axes.titlepad'] = 20
+matplotlib.rcParams['axes.labelpad'] = 12
+
 # The Cube class should inherit a PlotTools class which can be used to make 2D plots (e.g. moment maps).
+
+make_up_ax = PlotTools.make_up_ax
 
 class Cube(object):
     def __init__(self, data, header, vchannels, beam=None, filename="./cube.fits"):
@@ -76,6 +86,40 @@ class Cube(object):
         beam_angle = (90 * u.deg + self.beam.pa).to(u.radian).value
         self.beam_kernel = Gaussian2DKernel(x_stddev, y_stddev, beam_angle)
 
+    @staticmethod
+    def _channel_picker(channels, warn_hdr=True):
+        """
+        Returns channel indices based on interval of indices or indices specified
+
+        Parameters
+        ----------
+        channels : {"interval" : [i0, i1]} or {"indices" : [i0, i1,..., in]}, optional
+            Dictionary of indices to clip velocity channels from data. If both entries are None, all velocity channels are considered.         
+ 
+            * If 'interval' is defined, velocity channels between *i0* and *i1* indices are considered, *i1* inclusive.          
+            * If 'indices' is defined, only velocity channels corresponding to the input indices will be considered.            
+            * If both entries are set, only 'interval' will be taken into account.
+        """
+        
+        if channels is None:
+            channels = {}
+        if "interval" not in channels.keys():
+            channels.update({"interval": None})
+        if "indices" not in channels.keys():
+            channels.update({"indices": None})
+        if channels["interval"] is not None:
+            i0, i1 = channels["interval"]
+            idchan = np.arange(i0, i1 + 1).astype(int)
+        elif channels["indices"] is not None:
+            idchan = np.asarray(channels["indices"]).astype(int)
+            if warn_hdr: warnings.warn(
+                    "Note that if you select channels that are not regularly spaced the header of the output fits file will not reflect this information and therefore external analysis tools such as CASA or DS9 will not display the velocity information correctly.",
+            )
+        else:
+            idchan = slice(None)
+
+        return idchan
+    
     def _writefits(self, logkeys=None, tag="", **kwargs):
         """
         Write fits file
@@ -320,23 +364,7 @@ class Cube(object):
         else:
             jcenter = int(0.5 * self.header["NAXIS2"] + 1)
 
-        if channels is None:
-            channels = {}
-        if "interval" not in channels.keys():
-            channels.update({"interval": None})
-        if "indices" not in channels.keys():
-            channels.update({"indices": None})
-        if channels["interval"] is not None:
-            i0, i1 = channels["interval"]
-            idchan = np.arange(i0, i1 + 1).astype(int)
-        elif channels["indices"] is not None:
-            idchan = np.asarray(channels["indices"]).astype(int)
-            warnings.warn(
-                "Note that if you select channels that are not regularly spaced the header of the output fits file will not reflect this information and therefore external analysis tools such as CASA or DS9 will not display the velocity information correctly.",
-            )
-        else:
-            idchan = slice(None)
-
+        idchan = self._channel_picker(channels)
         self.data = self.data[idchan]
         self.vchannels = self.vchannels[idchan]
 
@@ -1504,3 +1532,127 @@ class Cube(object):
         print("Making movie...")
         os.system(gif_command)
         os.chdir(cwd)
+
+        
+    def make_channel_maps(self, channels={'interval': None, 'indices': None}, ncols=5,
+                          attribute='intensity', projection='wcs', **kwargs_contourf):
+
+        vmin, vmax = self.data.min(), self.data.max()
+        vmin, vmax = 0.0, 0.8*vmax #If levels are not provided these are used as min and max boundaries of contourf levels
+        cmap_chan = get_attribute_cmap(attribute) #See default cmaps of attributes in cart.py
+        kwargs_cf = dict(cmap=cmap_chan, levels=np.linspace(vmin, vmax, 32))
+        kwargs_cf.update(kwargs_contourf)
+
+        if projection=='wcs':
+            plot_projection=self.wcs.celestial
+        else:
+            plot_projection=None
+            
+        idchan = self._channel_picker(channels, warn_hdr=False) #Warning on hdr not relevant here
+        plot_data = self.data[idchan]
+        plot_channels = self.vchannels[idchan]
+        plot_nchan = len(plot_channels)
+
+        #*****************
+        #FIGURE PROPERTIES
+        #*****************        
+        nrows = int(plot_nchan/ncols)
+        if plot_nchan >= ncols:
+            lastrow_ncols = plot_nchan%ncols
+            if lastrow_ncols==0:
+                lastrow_ncols=ncols
+            else:
+                nrows += 1
+        else:
+            lastrow_ncols = ncols = plot_nchan
+            nrows += 1
+
+        figx = 2*ncols
+        figy = 2*nrows
+        fig = plt.figure(figsize=(figx, figy))
+        dw = 0.9/ncols
+        dh = dw*figx/figy
+        ax = [[fig.add_axes([0.05+i*dw, 0.97-(j+1)*dh-0.02*j, dw, dh], projection=plot_projection)
+               for i in range(ncols)] for j in range(nrows)]        
+        for axi in ax[-1][lastrow_ncols:]: axi.set_visible(False)
+
+        #*****************
+        #BEAM
+        #*****************        
+        if self.beam is not None:
+            xbeam, ybeam = 0.05, 0.05
+            x_fwhm = self.beam_kernel.model.x_fwhm/self.nx
+            y_fwhm = self.beam_kernel.model.y_fwhm/self.nx
+
+        def make_beam(ax):
+            ellipse = matplotlib.patches.Ellipse(xy=(xbeam,ybeam), angle=90+self.beam.pa.value,
+                                                 width=x_fwhm, height=y_fwhm, lw=0.5, fill=True,
+                                                 fc='cyan', ec='k', transform=ax.transAxes)
+            ax.add_artist(ellipse)
+            
+        #*****************
+        #PLOT
+        #*****************        
+        ichan = 0
+        im = []
+        fakecolor = '0.6'
+        for j in range(nrows):
+            for i in range(ncols):
+                axji = ax[j][i]
+                im.append(axji.contourf(plot_data[ichan], **kwargs_cf))
+
+                axji.text(0.05,0.95, r'%.2f$^{\rm km/s}$'%plot_channels[ichan], va='top', fontsize=SMALL_SIZE+2, transform=axji.transAxes)
+                                                    
+                if j==nrows-1 and i==0:
+                    labelbottom, labelleft = True, True
+                    if projection=='wcs': xlabel, ylabel = 'Right Ascension', 'Declination'
+                    else: xlabel, ylabel = 'Offset [au]', 'Offset [au]'
+                    axji.set_xlabel(xlabel, labelpad=1, fontsize=MEDIUM_SIZE-2, color=fakecolor)                       
+                    axji.set_ylabel(ylabel, labelpad=1, fontsize=MEDIUM_SIZE-2, color=fakecolor)
+
+                else:
+                    labelbottom, labelleft = False, False
+
+                    
+                    
+                for axi in ['x', 'y']:
+                    #WCS projection does not allow some props to be modified simultaneously in both axes
+                    make_up_ax(axji, axis=axi, 
+                               direction='in', 
+                               pad=8, 
+                               left=True, right=True,
+                               bottom=True, top=True,
+                               color=fakecolor,
+                               labelcolor=fakecolor,
+                               labelsize=SMALL_SIZE-1)
+                axji.tick_params(axis='x', labelbottom=labelbottom, labeltop=False, labelcolor=fakecolor)
+                axji.tick_params(axis='y', labelleft=labelleft)
+                axji.tick_params(which='major', width=1.5, size=7.3)
+                #axji.tick_params(which='minor', width=3.0, size=5.3)
+                mod_major_ticks(axji, axis='x', nbins=3)
+                mod_major_ticks(axji, axis='y', nbins=3)
+
+                if self.beam is not None: make_beam(axji)
+                
+                if ichan==plot_nchan-1:
+                    break
+                ichan+=1                
+
+        #*****************
+        #COLORBAR
+        #*****************                    
+        axc_pos = ax[0][-1].axes.get_position()
+        axc_cbar = fig.add_axes([axc_pos.x1+0.005, axc_pos.y0, 0.08*dw, 0.5*dh])
+
+        im_cbar = im[ncols-1]        
+        cbar = plt.colorbar(im_cbar, cax=axc_cbar, format='%.2f', orientation='vertical', 
+                            ticks=np.linspace(im_cbar.levels[0], im_cbar.levels[-1], 5))
+
+        cbar.set_label(attribute.capitalize(), fontsize=SMALL_SIZE+1, rotation=-90, labelpad=20)
+        cbar.ax.tick_params(which='major', direction='in', width=1.7, size=3.8, pad=2, labelsize=SMALL_SIZE)
+        cbar.ax.tick_params(which='minor', direction='in', width=1.7, size=2.3)
+        mod_minor_ticks(cbar.ax)
+        
+        return fig, ax, im, cbar
+
+    

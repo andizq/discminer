@@ -74,9 +74,9 @@ class Pick(object):
         self.resid_list = copy.copy(resid_list)
         self.color_list = copy.copy(color_list)
         self.lev_list = copy.copy(lev_list)
-        
-        self.find_peaks(**kw_find_peaks)        
-                
+
+        self.find_peaks(**kw_find_peaks)
+
     def find_peaks(self, phi_min=-85, phi_max=85, std_thres=3, clean_peaks=True):
         len_res = len(self.resid_list)
         peak_angle = np.zeros(len_res)
@@ -88,7 +88,7 @@ class Pick(object):
             arg90 = (self.coord_list[i] >= phi_min) & (self.coord_list[i] <= phi_max)  #-90, 90
             if np.sum(arg90) == 0: abs_resid = [0] #if arg90 is empty
             else: abs_resid = np.abs(self.resid_list[i][arg90])
-            
+
             argpeak = np.argmax(abs_resid)
             if abs_resid[argpeak] > 10.0: peak_resid[i]=0.1
             else: peak_resid[i] = abs_resid[argpeak]
@@ -99,7 +99,7 @@ class Pick(object):
             else:
                 peak_angle[i] = self.coord_list[i][arg90][argpeak]
                 peak_sign[i] = np.sign(self.resid_list[i][arg90][argpeak])
-                        
+
         if clean_peaks:
             rej_thresh = np.median(peak_resid) + 3*np.std(peak_resid)
             ii = peak_resid < rej_thresh
@@ -123,11 +123,11 @@ class Pick(object):
         for stdi in np.arange(std_thres+1)[::-1]: #If it fails to find peaks above the threshold continue and try the next, lower, sigma threshold
             ind_global_peak = peak_resid > peak_mean+stdi*peak_std
             if np.sum(ind_global_peak)>0: break
-            
+
         self.peak_global_val = np.max(peak_resid[ind_global_peak])
         self.peak_global_angle = np.median(peak_angle[ind_global_peak])
         self.peak_global_radius = np.median(self.lev_list[ind_global_peak])
-        
+
         #********************
         self.peak_resid = peak_resid
         self.peak_angle = peak_angle
@@ -135,15 +135,15 @@ class Pick(object):
         self.peak_error = peak_error
         self.peak_weight = peak_weight
 
-        
+
     def make_clusters(self, n_clusters, axis='phi'): #, kw_find_peaks={}):
-    
+
         #************************
         #APPLY K-MEANS CLUSTERING
         #************************
         n_peaks = len(self.peak_resid)
         if axis=='phi': peak_both = np.array([self.peak_angle, self.peak_resid]).T
-        elif axis=='R': peak_both = np.array([self.lev_list, self.peak_resid]).T        
+        elif axis=='R': peak_both = np.array([self.lev_list, self.peak_resid]).T
         kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(peak_both)
         kcenters = kmeans.cluster_centers_
         klabels = kmeans.labels_
@@ -164,12 +164,12 @@ class Pick(object):
         percentiles = [5, 67] #95%, 68% and 33% contours
         #kde_color = '#FFB000'
         #kde_cmap = get_cmap_from_color(kde_color, lev=len(percentiles)) #'#DC267F' #'#FFB000' #'#648FFF'
-        
+
         if axis=='phi': xmin_c, xmax_c = -90*1.05, 90*1.05
         elif axis=='R': xmin_c, xmax_c = np.nanmin(self.lev_list), np.nanmax(self.lev_list)
         ymin_c, ymax_c = -0.3*self.peak_global_val, 1.5*self.peak_global_val
         xx, yy = np.mgrid[xmin_c:xmax_c:200j, ymin_c:ymax_c:200j]
-        
+
         for i in range(n_clusters):
             x = peak_both[:,0][klabels == i]
             y = peak_both[:,1][klabels == i]
@@ -192,28 +192,31 @@ class Pick(object):
         #********************
         variance_x = np.asarray(variance_x)
         variance_y = np.asarray(variance_y) * npoints_clust*(n_clusters/n_peaks) #weighting by number of points in clusters
+        if axis=='phi': self.klabels_phi = klabels
+        if axis=='R': self.klabels_R = klabels
         return kcenters, variance_x, variance_y
-            
+
     def find_peak_clusters(self,n_clusters_phi, n_clusters_R, std_thres=3, var_scale=1e3, kw_find_peaks={}):
 
         kcenters_phi, variance_phi_x, variance_phi_y = self.make_clusters(n_clusters_phi, axis='phi', **kw_find_peaks)
         kcenters_R, variance_R_x, variance_R_y = self.make_clusters(n_clusters_R, axis='R', **kw_find_peaks)
-                
+
         #***************************
         #FIND PEAK AZIMUTHAL CLUSTER VARIANCES
         #***************************
         acc_peaks_phi, var_std_phi, var_width_phi = get_neighbour_peaks(variance_phi_x, kcenters_phi[:,0], variance_phi_y, n_clusters=n_clusters_phi, std_thres=std_thres)
         print ("accepted variance peaks on PHI:", acc_peaks_phi)
-        
+
         var_colors_phi = np.array(['1.0']*n_clusters_phi).astype('<U9')
         var_colors_phi[acc_peaks_phi] = 'palegreen' #kde_color
         ind_variance_peak_phi = np.argmax(variance_phi_y)
         variance_nomax = np.sort(variance_phi_y)[:-len(acc_peaks_phi)]
         peak_variance_std_phi = var_std_phi #std of variances except those from accepted peaks np.std(variance_nomax)
         peak_variance_angle = kcenters_phi[:,0][ind_variance_peak_phi]
-        
+
         kc_indsort_phi = np.argsort(kcenters_phi[:,0])
         kcent_sort_phi = kcenters_phi[:,0][kc_indsort_phi]
+        kcent_sort_vel_phi = kcenters_phi[:,1][kc_indsort_phi]
         var_y_sort_phi = variance_phi_y[kc_indsort_phi]*var_scale
         var_nopeaks_phi = np.delete(var_y_sort_phi, acc_peaks_phi)
         peak_variance_mean_phi = np.mean(var_nopeaks_phi)/var_scale #mean of variances excluding those from accepted peaks
@@ -226,16 +229,17 @@ class Pick(object):
         #***************************
         acc_peaks_R, var_std_R, var_width_R = get_neighbour_peaks(variance_R_x, kcenters_R[:,0], variance_R_y, n_clusters=n_clusters_R, std_thres=std_thres)
         print ("accepted variance peaks on R:", acc_peaks_R)
-        
+
         var_colors_R = np.array(['1.0']*n_clusters_R).astype('<U9')
         var_colors_R[acc_peaks_R] = 'palegreen' #kde_color
         ind_variance_peak_R = np.argmax(variance_R_y)
         variance_nomax = np.sort(variance_R_y)[:-len(acc_peaks_R)]
         peak_variance_std_R = var_std_R #std of variances except those from accepted peaks np.std(variance_nomax)
         peak_variance_angle = kcenters_R[:,0][ind_variance_peak_R]
-        
+
         kc_indsort_R = np.argsort(kcenters_R[:,0])
         kcent_sort_R = kcenters_R[:,0][kc_indsort_R]
+        kcent_sort_vel_R = kcenters_R[:,1][kc_indsort_R]
         var_y_sort_R = variance_R_y[kc_indsort_R]*var_scale
         var_nopeaks_R = np.delete(var_y_sort_R, acc_peaks_R)
         peak_variance_mean_R = np.mean(var_nopeaks_R)/var_scale #mean of variances excluding those from accepted peaks
@@ -243,10 +247,18 @@ class Pick(object):
         #peak_variance_sigmas = (self.variance_y[ind_variance_peak]-peak_variance_mean)/peak_variance_std #Considering only peak accepted variance
         self.peak_variance_sigmas_R = (np.mean(var_y_sort_R[acc_peaks_R])/var_scale-peak_variance_mean_R)/peak_variance_std_R #Considering mean std of all accepted peaks
 
-        #**************************        
+        #**************************
         self.kcent_sort_phi = kcent_sort_phi
         self.var_y_sort_phi = var_y_sort_phi
-        
+
         self.kcent_sort_R = kcent_sort_R
         self.var_y_sort_R = var_y_sort_R
-    
+
+        self.var_colors_phi = var_colors_phi
+        self.var_colors_R = var_colors_R
+
+        self.kc_indsort_phi = kc_indsort_phi
+        self.kc_indsort_R = kc_indsort_R
+
+        self.kcent_sort_vel_R = kcent_sort_vel_R
+        self.kcent_sort_vel_phi = kcent_sort_vel_phi

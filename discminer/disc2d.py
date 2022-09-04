@@ -44,6 +44,8 @@ from scipy.special import ellipe, ellipk
 from sf3dmodels.utils import constants as sfc
 from sf3dmodels.utils import units as sfu
 
+#from .cart import Intensity
+
 os.environ["OMP_NUM_THREADS"] = "1"
 
 try: 
@@ -143,7 +145,7 @@ class Tools:
         zp = z
         xp, yp, zp = Tools._project_on_skyplane(xp, yp, zp, np.cos(incl), np.sin(incl))
         xp, yp = Tools._rotate_sky_plane(xp, yp, PA)
-        return xp, yp, zp
+        return xp, yp, zp #Missing +xc, +yc
 
     @staticmethod #should be a bound method, self.grid is constant except for z_upper, z_lower
     def _compute_prop(grid, prop_funcs, prop_kwargs):
@@ -2208,7 +2210,10 @@ class Intensity:
         return int2d_full
 
     def get_cube(self, vchannels, velocity2d, intensity2d, linewidth2d, lineslope2d, make_convolve=True, 
-                 nchan=None, rms=None, tb={'nu': False, 'beam': False, 'full': True}, return_data_only=False, **kwargs):
+                 nchan=None, rms=None, tb={'nu': False, 'beam': False, 'full': True}, return_data_only=False, header=None, **kwargs):
+
+        #from .cube import Cube as Cube2 #header should already be known by here, i.e. it should be an input when General2d is initialised
+        
         vel2d, int2d, linew2d, lineb2d = velocity2d, {}, {}, {}
         line_profile = self.line_profile
         if nchan is None: nchan=len(vchannels)
@@ -2264,6 +2269,7 @@ class Intensity:
             
         if return_data_only: return np.asarray(cube)
         else: return Cube(nchan, vchannels, np.asarray(cube), beam=self.beam_info, beam_kernel=self.beam_kernel, tb=tb)
+        #else: return Cube2(np.asarray(cube), header, vchannels, beam=self.beam_info)
 
     @staticmethod
     def make_channels_movie(vchan0, vchan1, velocity2d, intensity2d, linewidth2d, lineslope2d, nchans=30, folder='./movie_channels/', **kwargs):
@@ -2293,7 +2299,7 @@ class Intensity:
         os.system('convert -delay 10 *int2d* cube_channels.gif')
         return np.array(int2d_cube)
 
-
+    
 class Mcmc:
     @staticmethod
     def _get_params2fit(mc_params, boundaries):
