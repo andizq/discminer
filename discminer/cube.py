@@ -1535,11 +1535,25 @@ class Cube(object):
 
         
     def make_channel_maps(self, channels={'interval': None, 'indices': None}, ncols=5,
-                          attribute='intensity', projection='wcs', **kwargs_contourf):
+                          attribute='intensity', projection='wcs', mask_under=None, **kwargs_contourf):
+        
+        try:
+            vmin = kwargs_contourf['levels'][0]
+            vmax = kwargs_contourf['levels'][-1]            
+        #If levels are not provided, min and max data values are used as min and max boundaries for contourf levels
+        except KeyError:
+            vmin = np.nanmin(self.data)
+            vmax = np.nanmax(self.data)
+            if attribute=='intensity':
+                vmin, vmax = 0.0, 0.8*vmax
+            else:
+                max_val = np.max(np.abs([vmin, vmax]))
+                vmin, vmax = -0.8*max_val, 0.8*max_val
 
-        vmin, vmax = self.data.min(), self.data.max()
-        vmin, vmax = 0.0, 0.8*vmax #If levels are not provided these are used as min and max boundaries of contourf levels
-        cmap_chan = get_attribute_cmap(attribute) #See default cmaps of attributes in cart.py
+        cmap_chan = get_attribute_cmap(attribute) #See default cmap for each attribute in cart.py
+        if mask_under is not None:
+            cmap_chan = mask_cmap_interval(cmap_chan, [vmin, vmax], [-mask_under, mask_under], mask_color=(1,1,1,0), append=True)
+            
         kwargs_cf = dict(cmap=cmap_chan, levels=np.linspace(vmin, vmax, 32))
         kwargs_cf.update(kwargs_contourf)
 
@@ -1645,11 +1659,11 @@ class Cube(object):
         axc_cbar = fig.add_axes([axc_pos.x1+0.005, axc_pos.y0, 0.08*dw, 0.5*dh])
 
         im_cbar = im[ncols-1]        
-        cbar = plt.colorbar(im_cbar, cax=axc_cbar, format='%.2f', orientation='vertical', 
+        cbar = plt.colorbar(im_cbar, cax=axc_cbar, format='%5.1f', orientation='vertical', 
                             ticks=np.linspace(im_cbar.levels[0], im_cbar.levels[-1], 5))
 
         cbar.set_label(attribute.capitalize(), fontsize=SMALL_SIZE+1, rotation=-90, labelpad=20)
-        cbar.ax.tick_params(which='major', direction='in', width=1.7, size=3.8, pad=2, labelsize=SMALL_SIZE)
+        cbar.ax.tick_params(which='major', direction='in', width=1.7, size=3.8, pad=2, labelsize=SMALL_SIZE-1)
         cbar.ax.tick_params(which='minor', direction='in', width=1.7, size=2.3)
         mod_minor_ticks(cbar.ax)
         
