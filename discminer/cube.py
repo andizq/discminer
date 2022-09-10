@@ -1171,8 +1171,8 @@ class Cube(object):
                     eclick.ydata, erelease.ydata = erelease.ydata, eclick.ydata
                 x0, y0 = eclick.xdata, eclick.ydata
                 x1, y1 = erelease.xdata, erelease.ydata
-                xa = np.linspace(x0, x1, 100)
-                ya = np.linspace(y0, y1, 100)
+                xa = np.linspace(x0, x1, 50)
+                ya = np.linspace(y0, y1, 50)
                 print("startposition: (%.1f, %.1f)" % (x0, y0))
                 print("endposition  : (%.1f, %.1f)" % (x1, y1))
                 print("used button  : ", eclick.button)
@@ -1189,6 +1189,8 @@ class Cube(object):
                     compare_cubes=compare_cubes,
                     **kwargs
                 )
+                color_cycle = next(ax[0]._get_lines.prop_cycler)['color']
+                ax[0].scatter(x0, y0, s=30, lw=1.5, edgecolor=color_cycle, facecolor='none')
 
         if click:
             toggle_selector.RS = RectangleSelector(
@@ -1535,6 +1537,7 @@ class Cube(object):
 
         
     def make_channel_maps(self, channels={'interval': None, 'indices': None}, ncols=5,
+                          unit_intensity=None, unit_coordinates=None,
                           attribute='intensity', projection='wcs', mask_under=None, **kwargs_contourf):
         
         try:
@@ -1550,6 +1553,20 @@ class Cube(object):
                 max_val = np.max(np.abs([vmin, vmax]))
                 vmin, vmax = -0.8*max_val, 0.8*max_val
 
+        if unit_intensity is None:
+            try:
+                unit_intensity = ' [%s]'%self.header['BUNIT']
+            except KeyErorr:
+                unit_intensity = ''
+        else:
+            unit_intensity = ' [%s]'%unit_intensity
+
+        if unit_coordinates is None:
+            unit_coordinates = ''
+        else:
+            unit_coordinates = ' [%s]'%unit_coordinates
+
+            
         cmap_chan = get_attribute_cmap(attribute) #See default cmap for each attribute in cart.py
         if mask_under is not None:
             cmap_chan = mask_cmap_interval(cmap_chan, [vmin, vmax], [-mask_under, mask_under], mask_color=(1,1,1,0), append=True)
@@ -1620,7 +1637,7 @@ class Cube(object):
                 if j==nrows-1 and i==0:
                     labelbottom, labelleft = True, True
                     if projection=='wcs': xlabel, ylabel = 'Right Ascension', 'Declination'
-                    else: xlabel, ylabel = 'Offset [au]', 'Offset [au]'
+                    else: xlabel, ylabel = 'Offset%s'%unit_coordinates, 'Offset%s'%unit_coordinates
                     axji.set_xlabel(xlabel, labelpad=1, fontsize=MEDIUM_SIZE-2, color=fakecolor)                       
                     axji.set_ylabel(ylabel, labelpad=1, fontsize=MEDIUM_SIZE-2, color=fakecolor)
 
@@ -1659,10 +1676,10 @@ class Cube(object):
         axc_cbar = fig.add_axes([axc_pos.x1+0.005, axc_pos.y0, 0.08*dw, 0.5*dh])
 
         im_cbar = im[ncols-1]        
-        cbar = plt.colorbar(im_cbar, cax=axc_cbar, format='%5.1f', orientation='vertical', 
+        cbar = plt.colorbar(im_cbar, cax=axc_cbar, format='%3d', orientation='vertical', 
                             ticks=np.linspace(im_cbar.levels[0], im_cbar.levels[-1], 5))
 
-        cbar.set_label(attribute.capitalize(), fontsize=SMALL_SIZE+1, rotation=-90, labelpad=20)
+        cbar.set_label(attribute.capitalize()+'%s'%unit_intensity, fontsize=SMALL_SIZE+0, rotation=-90, labelpad=20)
         cbar.ax.tick_params(which='major', direction='in', width=1.7, size=3.8, pad=2, labelsize=SMALL_SIZE-1)
         cbar.ax.tick_params(which='minor', direction='in', width=1.7, size=2.3)
         mod_minor_ticks(cbar.ax)
