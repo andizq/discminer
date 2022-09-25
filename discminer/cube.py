@@ -61,7 +61,7 @@ class Cube(object):
         self.wcs = WCS(self.header)
         self.fileroot = os.path.expanduser(filename).split(".fits")[0]
         # Assuming (nchan, nx, nx); nchan should be equal to cube_vel.spectral_axis.size
-        self.nchan, self.nx, _ = np.shape(data)
+        self.nchan, self.nx, self.ny = np.shape(data) #nx: nrows, ny: ncols
 
         if isinstance(beam, Beam):
             self._init_beam_kernel()  # Get 2D Gaussian kernel from beam
@@ -349,10 +349,17 @@ class Cube(object):
             Additional keyword arguments to pass to `~astropy.io.fits.writeto` function.
         
         """
+
+        nsky_min = np.min([self.nx, self.ny])
+        if 2*npix>nsky_min:
+            raise InputError((2*npix, nsky_min), 'Number of pixels to clip must be less than '\
+                             'the number of pixels in the smallest spatial axis of the input data cube.')
+                             
         hdrkey = "CLIPPED"
         hdrcard = "Clipped by DISCMINER"
         kwargs_io = dict(overwrite=True)  # Default kwargs
         kwargs_io.update(kwargs)
+
         print ("Clipping datacube...")
         
         if icenter is not None:
@@ -1537,7 +1544,7 @@ class Cube(object):
 
         
     def make_channel_maps(self, channels={'interval': None, 'indices': None}, ncols=5,
-                          unit_intensity=None, unit_coordinates=None,
+                          unit_intensity=None, unit_coordinates=None, fmt_cbar='%3d',
                           attribute='intensity', projection='wcs', mask_under=None, **kwargs_contourf):
         
         try:
@@ -1569,7 +1576,13 @@ class Cube(object):
             
         cmap_chan = get_attribute_cmap(attribute) #See default cmap for each attribute in cart.py
         if mask_under is not None:
-            cmap_chan = mask_cmap_interval(cmap_chan, [vmin, vmax], [-mask_under, mask_under], mask_color=(1,1,1,0), append=True)
+            if attribute=='intensity':
+                mask_up = mask_under
+                mask_down = 0
+            else:
+                mask_up = mask_under
+                mask_down = -mask_under
+            cmap_chan = mask_cmap_interval(cmap_chan, [vmin, vmax], [mask_down, mask_up], mask_color=(1,1,1,0), append=True)
             
         kwargs_cf = dict(cmap=cmap_chan, levels=np.linspace(vmin, vmax, 32))
         kwargs_cf.update(kwargs_contourf)
@@ -1676,7 +1689,7 @@ class Cube(object):
         axc_cbar = fig.add_axes([axc_pos.x1+0.005, axc_pos.y0, 0.08*dw, 0.5*dh])
 
         im_cbar = im[ncols-1]        
-        cbar = plt.colorbar(im_cbar, cax=axc_cbar, format='%3d', orientation='vertical', 
+        cbar = plt.colorbar(im_cbar, cax=axc_cbar, format=fmt_cbar, orientation='vertical', 
                             ticks=np.linspace(im_cbar.levels[0], im_cbar.levels[-1], 5))
 
         cbar.set_label(attribute.capitalize()+'%s'%unit_intensity, fontsize=SMALL_SIZE+0, rotation=-90, labelpad=20)

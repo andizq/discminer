@@ -56,7 +56,7 @@ class Data(Cube):
             header.update(beam.to_header_keywords()) #Add single beam to header
         else:
             raise InputError(cube_vel,
-                             'Type of datacube supplied is invalid. Supported spectral_cube instances: SpectralCube, VaryingResolutionSpectralCube.')
+                             'The input datacube is not valid. Only the following spectral_cube instances are supported: SpectralCube, VaryingResolutionSpectralCube.')
             
         self.filename = filename
         self.beam = beam
@@ -145,6 +145,11 @@ class Model(Cube, Mcmc):
         dpix_rad = np.abs(self.header['CDELT2'])*u.Unit(self.header['CUNIT1']).to(u.radian)
         dpix_au = (self.dpc*np.tan(dpix_rad)).to(u.au)
         nx = self.header['NAXIS1']
+        ny = self.header['NAXIS2']
+        if nx!=ny:
+            raise InputError((nx, ny), 'Number of spatial rows and columns in the datacube must be equal. '\
+                             'Please clip the datacube using the datacube.clip(npix) method to produce a square cube.')
+        
         xsky = ysky = ((nx-1) * dpix_au/2.0) # Sky maximum extent
         # dpix_au*nx = np.abs(-xsky - dpix_au/2) + (xsky + dpix_au/2) --> xsky is referred
         #  to the centre of the left/rightmost pixel. To recover the full extent of the sky,

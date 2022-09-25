@@ -4,6 +4,7 @@
 
 *.fits
 *.dat
+*.log
 
 build/
 dist/
