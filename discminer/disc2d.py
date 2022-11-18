@@ -2630,7 +2630,6 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
                     sampler.run_mcmc(None, nsteps, progress=True)
                 else:
                     sampler.run_mcmc(p0, nsteps, progress=True)
-                sampler.run_mcmc(p0, nsteps, progress=True)
                 end = time.time()
                 multi_time = end - start
                 print("Multiprocessing took {0:.1f} seconds".format(multi_time))
