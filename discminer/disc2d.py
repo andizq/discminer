@@ -2614,10 +2614,10 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
                
                 sampler = sampler_id.EnsembleSampler(nwalkers, ndim, self.ln_likelihood, pool=pool, backend=backend, kwargs=kwargs_model)                                                        
                 start = time.time()
-                if backend is None:
-                    sampler.run_mcmc(p0, nsteps, progress=True)
-                else:
+                if backend is not None and backend.iteration!=0:
                     sampler.run_mcmc(None, nsteps, progress=True)
+                else:
+                    sampler.run_mcmc(p0, nsteps, progress=True)
                 end = time.time()
                 multi_time = end - start
                 print("MPI multiprocessing took {0:.1f} seconds".format(multi_time))
@@ -2626,10 +2626,10 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
             with Pool(processes=nthreads) as pool:
                 sampler = sampler_id.EnsembleSampler(nwalkers, ndim, self.ln_likelihood, pool=pool, backend=backend, kwargs=kwargs_model)                                                        
                 start = time.time()
-                if backend is None:
-                    sampler.run_mcmc(p0, nsteps, progress=True)
-                else:
+                if backend is not None and backend.iteration!=0:
                     sampler.run_mcmc(None, nsteps, progress=True)
+                else:
+                    sampler.run_mcmc(p0, nsteps, progress=True)
                 sampler.run_mcmc(p0, nsteps, progress=True)
                 end = time.time()
                 multi_time = end - start
