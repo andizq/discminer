@@ -1,5 +1,7 @@
 from .disc2d import Contours, InputError, PlotTools, Tools, path_icons
 from .cart import get_attribute_cmap
+from .tools.fit_kernel import fit_gaussian
+from .tools.utils import FrontendUtils
 from astropy.convolution import Gaussian2DKernel
 from astropy import units as u
 from astropy import constants as apc
@@ -30,6 +32,8 @@ matplotlib.rcParams['axes.labelpad'] = 12
 # The Cube class should inherit a PlotTools class which can be used to make 2D plots (e.g. moment maps).
 
 make_up_ax = PlotTools.make_up_ax
+_progress_bar = FrontendUtils._progress_bar
+_break_line = FrontendUtils._break_line
 
 class Cube(object):
     def __init__(self, data, header, vchannels, beam=None, filename="./cube.fits"):
@@ -251,19 +255,18 @@ class Cube(object):
 
         if npix > 1:
             av_data = np.zeros((nchan, nx, nx))  # assuming ny = nx
-            progress = Tools._progress_bar
             di = npix
             dj = npix
             print("Averaging %dx%d pixels from datacube..." % (di, dj))
             for k in range(nchan):
-                progress(int(100 * k / nchan))
+                _progress_bar(int(100 * k / nchan))
                 for i in range(nx):
                     for j in range(nx):
                         av_data[k, j, i] = method(
                             self.data[k, j * dj : j * dj + dj, i * di : i * di + di],
                             **kwargs_method
                         )
-            progress(100); print('\n')
+            _progress_bar(100); print('\n')
 
             self.nx = nx
             self.data = av_data
@@ -402,6 +405,31 @@ class Cube(object):
         if writefits:
             self._writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)
 
+            
+    def make_moments(self, method='gaussian', **kwargs_method):
+        """
+        Make moment maps from line profile observables.
+
+        Parameters
+        ----------
+        method : str, optional
+            Type of kernel to be fitted to each pixel's line profile. Available methods: ['gaussian'].
+          
+            * If 'gaussian', fit a single Gaussian profile to the line and return [peak, centroid, linewidth, dpeak, dcent, dlinewidth].
+
+        """
+
+        if method=='gaussian':
+            _break_line()
+            moments = fit_gaussian(self.data, self.vchannels, **kwargs_method)
+            _break_line()
+            return moments
+        else:
+            raise InputError(
+                method, "The requested method/kernel is not supported in this version of discminer. Available methods: ['gaussian']"
+            )
+
+        
     # *********************************
     # FUNCTIONS FOR INTERACTIVE WINDOWS
     # *********************************

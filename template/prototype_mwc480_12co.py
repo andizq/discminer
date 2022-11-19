@@ -1,6 +1,6 @@
 from discminer.core import Data, Model
 from discminer.cube import Cube
-from discminer.disc2d import General2d
+from discminer.disc2d import General2d, Tools
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -164,4 +164,26 @@ fig, ax, im, cbar = residualscube.make_channel_maps(channels={'interval': [60, 7
 plt.savefig('testchans_residuals.png', bbox_inches = 'tight', dpi=100)
 plt.close()
 
+#**********************
+#MAKE MOMENT MAPS
+#**********************
+from astropy.io import fits
 
+def write_moment_maps(moments, which='data', **kw_writeto):
+    A,B,C,dA,dB,dC = moments
+
+    fits.writeto('peakintensity_%s.fits'%which, A, **kw_writeto)
+    fits.writeto('velocity_%s.fits'%which, B, **kw_writeto)
+    fits.writeto('linewidth_%s.fits'%which, C, **kw_writeto)
+
+    fits.writeto('delta_peakintensity_%s.fits'%which, dA, **kw_writeto)
+    fits.writeto('delta_velocity_%s.fits'%which, dB, **kw_writeto)
+    fits.writeto('delta_linewidth_%s.fits'%which, dC, **kw_writeto)
+
+    return A,B,C,dA,dB,dC
+
+moments_data = datacube.make_moments(method='gaussian')
+write_moment_maps(moments_data, which='data', header=datacube.header, overwrite=True)
+
+moments_model = modelcube.make_moments(method='gaussian')
+write_moment_maps(moments_model, which='model', header=modelcube.header, overwrite=True)
