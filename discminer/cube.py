@@ -7,7 +7,7 @@ from astropy import units as u
 from astropy import constants as apc
 from astropy.io import fits
 from astropy.wcs import utils as aputils, WCS
-import copy
+
 import matplotlib
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
@@ -406,7 +406,7 @@ class Cube(object):
             self._writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)
 
             
-    def make_moments(self, method='gaussian', **kwargs_method):
+    def make_moments(self, method='gaussian', writefits=True, overwrite=True, tag='', **kwargs_method):
         """
         Make moment maps from line profile observables.
 
@@ -418,12 +418,41 @@ class Cube(object):
             * If 'gaussian', fit a single Gaussian profile to the line and return [peak, centroid, linewidth, dpeak, dcent, dlinewidth].
 
         """
+        
+        hdr_vel = copy.copy(self.header)
+        hdr_int = copy.copy(self.header)
+        hdr_vel["BUNIT"] = "km/s"
 
+        kwargs_io_vel = dict(overwrite=overwrite, header=hdr_vel)
+        kwargs_io_int = dict(overwrite=overwrite, header=hdr_int) 
+
+        if len(tag)>0:
+            if tag[0]!='_':
+                tag = '_'+tag
+        
         if method=='gaussian':
             _break_line()
             moments = fit_gaussian(self.data, self.vchannels, **kwargs_method)
+
+            if writefits:
+                filenames = ['peakintensity',
+                             'velocity',
+                             'linewidth',
+                             'delta_peakintensity',
+                             'delta_velocity',
+                             'delta_linewidth',
+                ]
+
+                print ('Writing moments into FITS files...')
+                for i in range(6):
+                    if i==0 or i==3:
+                        kwargs = kwargs_io_int
+                    else:
+                        kwargs = kwargs_io_vel
+                    fits.writeto(filenames[i]+'%s.fits'%tag, moments[i], **kwargs)
+                    
             _break_line()
-            return moments
+            return moments #A, c, lw, dA, dc, dlw
         else:
             raise InputError(
                 method, "The requested method/kernel is not supported in this version of discminer. Available methods: ['gaussian']"
