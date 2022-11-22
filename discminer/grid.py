@@ -1,6 +1,8 @@
-from .disc2d import Tools
+from .tools.utils import FrontendUtils
 from astropy import units as u
 import numpy as np
+
+_break_line = FrontendUtils._break_line
 
 def grid(xmax, nx, indexing="xy", verbose=True):
     """
@@ -27,7 +29,7 @@ def grid(xmax, nx, indexing="xy", verbose=True):
     --------        
 
     """
-    Tools._break_line()
+    _break_line()
     xmax = xmax.to(u.m).value
     xymax = np.array([xmax, xmax])
     nx = np.int32(nx)
@@ -45,7 +47,7 @@ def grid(xmax, nx, indexing="xy", verbose=True):
     RList = np.linalg.norm([xList, yList], axis=0)
     phiList = np.arctan2(yList, xList)
     phiList = np.where(phiList < 0, phiList + 2 * np.pi, phiList)
-    Tools._break_line()
+    _break_line()
 
     return {
         "x": xList,
@@ -59,3 +61,49 @@ def grid(xmax, nx, indexing="xy", verbose=True):
         "ncells": nx ** 2,
         "step": step,
     }
+
+class GridTools:
+    @staticmethod
+    def _rotate_sky_plane(x, y, ang):
+        xy = np.array([x,y])
+        cos_ang = np.cos(ang)
+        sin_ang = np.sin(ang)
+        rot = np.array([[cos_ang, -sin_ang],
+                        [sin_ang, cos_ang]])
+        return np.dot(rot, xy)
+
+    @staticmethod
+    def _rotate_sky_plane3d(x, y, z, ang, axis='z'):
+        xyz = np.array([x,y,z])
+        cos_ang = np.cos(ang)
+        sin_ang = np.sin(ang)
+        if axis == 'x':
+            rot = np.array([[1, 0, 0],
+                            [0, cos_ang, -sin_ang],
+                            [0, sin_ang, cos_ang]])
+        if axis == 'y':
+            rot = np.array([[cos_ang, 0, -sin_ang],
+                            [0, 1, 0],
+                            [sin_ang, 0, cos_ang]])
+            
+        if axis == 'z':
+            rot = np.array([[cos_ang, -sin_ang , 0],
+                            [sin_ang, cos_ang, 0], 
+                            [0, 0, 1]])
+        return np.dot(rot, xyz)
+
+    @staticmethod
+    def _project_on_skyplane(x, y, z, cos_incl, sin_incl):
+        x_pro = x
+        y_pro = y * cos_incl - z * sin_incl
+        z_pro = y * sin_incl + z * cos_incl
+        return x_pro, y_pro, z_pro
+
+    @staticmethod
+    def get_sky_from_disc_coords(R, az, z, incl, PA):
+        xp = R*np.cos(az)
+        yp = R*np.sin(az)
+        zp = z
+        xp, yp, zp = Tools._project_on_skyplane(xp, yp, zp, np.cos(incl), np.sin(incl))
+        xp, yp = Tools._rotate_sky_plane(xp, yp, PA)
+        return xp, yp, zp #Missing +xc, +yc

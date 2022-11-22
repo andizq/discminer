@@ -1,12 +1,13 @@
 from .cube import Cube
-from .disc2d import Mcmc, InputError
 from .grid import grid as dgrid 
 from astropy import units as u
 import numpy as np
 from radio_beam import Beam, Beams
 from radio_beam.beam import NoBeamException
 from spectral_cube import SpectralCube, VaryingResolutionSpectralCube
+import numbers
 import warnings
+import json
 
 class Data(Cube):
     def __init__(self, filename):
@@ -78,8 +79,8 @@ beam : None or `~radio_beam.Beam`, optional
 - If `~radio_beam.Beam` object, it uses this 
 """
         
-class Model(Cube, Mcmc):
-    def __init__(self, cube, dpc, Rdisc, Rin=1.0, prototype=False, subpixels=False):
+class Model():
+    def __init__(self, cube, dpc, Rmax, Rmin=1.0, prototype=False, subpixels=False):
         """
         Initialise Model object. Inherits `~discminer.disc2d.cube.Cube` properties and methods.
 
@@ -91,11 +92,15 @@ class Model(Cube, Mcmc):
         dpc : `~astropy.units.quantity.Quantity`
             Distance to object in physical units. The unit must be specified using the `~astropy.units` module, e.g. 100*units.pc
 
-        Rdisc : `~astropy.units.quantity.Quantity`
-            Disc radius in phisical units.
+        Rmax : `~astropy.units.quantity.Quantity`
+            Disc maximum radial extent in phisical units.
 
-        Rin : float
-            Inner radius of the disc to be masked in the model, in number of beams. Default is 1.0.
+        Rmin : float or `~astropy.units.quantity.Quantity`
+            Disc inner radius to mask out from the model.
+
+            - If float, computes inner radius in number of beams. Default is 1.0.
+
+            - If `~astropy.units.quantity.Quantity`, takes the provided value.
 
         prototype : bool, optional
             Compute a prototype model. This is useful for quick inspection of channels given a set of parameters, which can then be used as seeding parameters for the MCMC fit. Default is False.
@@ -113,7 +118,7 @@ class Model(Cube, Mcmc):
             
         """
         self.dpc = dpc
-        self.Rdisc = Rdisc
+        self.Rmax = Rmax
         self.prototype = prototype
         if isinstance(cube, Cube):
             self.datacube = cube
@@ -122,11 +127,14 @@ class Model(Cube, Mcmc):
             self.beam = cube.beam            
             self.make_grid()
 
-        if cube.beam is not None:
-            beam_au = (dpc*np.tan(cube.beam.major.to(u.radian))).to(u.au)
-            self.Rin = Rin*beam_au
-        else: self.Rin = 0.0*u.Unit(u.au)
-
+        if isinstance(Rmin, numbers.Real):
+            if cube.beam is not None:
+                beam_au = (dpc*np.tan(cube.beam.major.to(u.radian))).to(u.au)
+                self.Rmin = Rmin*beam_au
+            else: self.Rmin = 0.0*u.Unit(u.au)
+        else:
+            self.Rmin = self.Rmin.to(u.au)
+            
         #elif isinstance(cube, grid):
         #   self.beam = beam
         #   make_header()
@@ -141,7 +149,7 @@ class Model(Cube, Mcmc):
         #       cube = model.get_cube(vchan_data, vel2d, int2d, linew2d, lineb2d, make_convolve=False)
         #Cube.__init__(data, self.header, self.vchannels, beam=self.beam, filename=filename)    
 
-    def make_grid(self):
+    def make_grid(self, write_extent=True):
         dpix_rad = np.abs(self.header['CDELT2'])*u.Unit(self.header['CUNIT1']).to(u.radian)
         dpix_au = (self.dpc*np.tan(dpix_rad)).to(u.au)
         nx = self.header['NAXIS1']
@@ -155,11 +163,11 @@ class Model(Cube, Mcmc):
         #  to the centre of the left/rightmost pixel. To recover the full extent of the sky,
         #   which should be equal to dpix_au*nx, one has to add twice half the pixel size to
         #    account for the total extent of the border pixels.
-        grid = dgrid(xsky, nx)        
+        grid = dgrid(xsky, nx) #Transforms xsky from au to metres and computes Cartesian grid
         self.skygrid = grid
 
         # The cell size of the discgrid is the same as that of the skygrid.
-        #  The extent of the discgrid is the closest posible to the input Rdisc using
+        #  The extent of the discgrid is the closest posible to the input Rmax using
         #   the aforementioned cell size.
 
         # discgrid should always exists, in general npix_disc != npix_sky,
@@ -167,8 +175,12 @@ class Model(Cube, Mcmc):
         #   if npix_disc>npix_sky discgrid is needed for the emission to appear smooth
         #    instead of having sharp square boundaries.
 
-        nx_disc = nx + int(np.round(2*self.Rdisc.to(u.au)/dpix_au - nx))
+        nx_disc = nx + int(np.round(2*self.Rmax.to(u.au)/dpix_au - nx))
         nx_disc += nx_disc%2 # making it even
         xdisc = (nx_disc-1)*dpix_au/2.0
-        self.discgrid = dgrid(xdisc, nx_disc)
-
+        self.discgrid = dgrid(xdisc, nx_disc) #Transforms xdisc from au to metres and computes Cartesian grid
+        
+        if write_extent:
+            log_grid = dict(nx=nx, ny=ny, xsky=xsky.value, xdisc=xdisc.value, cellsize=dpix_au.value, unit='au')
+            with open("grid_extent.json", "w") as outfile:
+                json.dump(log_grid, outfile, indent=4, sort_keys=False)

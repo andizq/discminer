@@ -1,7 +1,7 @@
-from .disc2d import Contours, InputError, PlotTools, Tools, path_icons
-from .cart import get_attribute_cmap
+from .plottools import get_attribute_cmap, make_up_ax, mod_major_ticks, mod_minor_ticks, mask_cmap_interval
 from .tools.fit_kernel import fit_gaussian
-from .tools.utils import FrontendUtils
+from .tools.utils import FrontendUtils, InputError, path_icons
+from .rail import Contours
 from astropy.convolution import Gaussian2DKernel
 from astropy import units as u
 from astropy import constants as apc
@@ -18,7 +18,7 @@ import os
 from radio_beam import Beam
 import warnings
 
-from .plottools import *
+#from .plottools import *
         
 SMALL_SIZE = 10
 MEDIUM_SIZE = 15
@@ -31,7 +31,6 @@ matplotlib.rcParams['axes.labelpad'] = 12
 
 # The Cube class should inherit a PlotTools class which can be used to make 2D plots (e.g. moment maps).
 
-make_up_ax = PlotTools.make_up_ax
 _progress_bar = FrontendUtils._progress_bar
 _break_line = FrontendUtils._break_line
 
@@ -149,7 +148,11 @@ class Cube(object):
             for key in logkeys:
                 if key in self.header and self.header[key]:
                     ktag += "_" + key.lower()
-
+        else:
+            if len(tag)>0:
+                if tag[0]!='_':
+                    tag = '_'+tag                    
+        
         self.fileroot += ktag + tag
         fits.writeto(self.fileroot + ".fits", self.data, header=self.header, **kwargs_io)
 
@@ -406,7 +409,7 @@ class Cube(object):
             self._writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)
 
             
-    def make_moments(self, method='gaussian', writefits=True, overwrite=True, tag='', **kwargs_method):
+    def make_moments(self, method='gaussian', writefits=True, overwrite=True, tag="", **kwargs_method):
         """
         Make moment maps from line profile observables.
 
@@ -435,12 +438,13 @@ class Cube(object):
             moments = fit_gaussian(self.data, self.vchannels, **kwargs_method)
 
             if writefits:
-                filenames = ['peakintensity',
-                             'velocity',
-                             'linewidth',
-                             'delta_peakintensity',
-                             'delta_velocity',
-                             'delta_linewidth',
+                filenames = [
+                    'peakintensity',
+                    'velocity',
+                    'linewidth',
+                    'delta_peakintensity',
+                    'delta_velocity',
+                    'delta_linewidth',
                 ]
 
                 print ('Writing moments into FITS files...')
@@ -751,7 +755,7 @@ class Cube(object):
         ax[0].set_xlabel(pos_unit)
         ax[0].set_ylabel(pos_unit)
         ax[1].set_xlabel("l.o.s velocity [%s]" % vel_unit)
-        PlotTools.mod_major_ticks(ax[0], axis="both", nbins=5)
+        mod_major_ticks(ax[0], axis="both", nbins=5)
         ax[0].tick_params(direction="out")
         ax[1].tick_params(direction="in", right=True, labelright=False, labelleft=False)
         axcbar.tick_params(direction="out")
@@ -985,7 +989,7 @@ class Cube(object):
         ax[0].set_xlabel(pos_unit)
         ax[0].set_ylabel(pos_unit)
         ax[2].set_xlabel("l.o.s velocity [%s]" % vel_unit)
-        PlotTools.mod_major_ticks(ax[0], axis="both", nbins=5)
+        mod_major_ticks(ax[0], axis="both", nbins=5)
         ax[0].tick_params(direction="out")
         ax[2].tick_params(direction="in", right=True, labelright=False, labelleft=False)
         axcbar.tick_params(direction="out")
@@ -1298,7 +1302,7 @@ class Cube(object):
         max_data = np.nanmax([self.data] + [comp.data for comp in compare_cubes])
         ax[0].set_xlabel(pos_unit)
         ax[0].set_ylabel(pos_unit)
-        PlotTools.mod_major_ticks(ax[0], axis="both", nbins=5)
+        mod_major_ticks(ax[0], axis="both", nbins=5)
         ax[0].tick_params(direction="out")
 
         ax[1].tick_params(direction="in", right=True, labelright=False, labelleft=False)

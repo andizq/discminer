@@ -5,6 +5,23 @@ plottools module
 import copy
 import matplotlib
 import numpy as np
+import matplotlib.pyplot as plt
+from collections.abc import Iterable
+
+_attribute_colors = {
+    'residuals': ["#010b14","#1d4c72","#3d97e1","#ffffff","#f36353","#b6163e","#140200"],
+    'velocity': ["#010b14","#1d4c72","#3d97e1","#ffffff","#f36353","#b6163e","#140200"],
+    'linewidth': ["#"+tmp for tmp in ["001219","005f73","0a9396","94d2bd","e9d8a6","ee9b00","ca6702","bb3e03","ae2012","9b2226"]],
+    'intensity': "terrain_r",
+}
+
+_attribute_cranges = {
+    'residuals': [0, 0.2, 0.3, 0.5, 0.7, 0.8, 1.0],
+    'velocity': [0, 0.2, 0.3, 0.5, 0.7, 0.8, 1.0],
+    'linewidth': None,
+    'intensity': "matplotlib",    
+}
+
 
 def mod_nticks_cbars(cbars, nbins=5):
     for cb in cbars:
@@ -102,3 +119,13 @@ def get_continuous_cmap(hex_list, float_list=None):
         cdict[col] = col_list
         cmap_new = matplotlib.colors.LinearSegmentedColormap('my_cmp', segmentdata=cdict, N=256)
     return cmap_new
+
+def get_attribute_cmap(attribute):
+    cranges = _attribute_cranges[attribute]
+    if cranges=='matplotlib':
+        cmap = copy.copy(plt.get_cmap("terrain_r"))
+    elif isinstance(cranges, Iterable) or cranges is None:
+        colors = _attribute_colors[attribute]
+        cmap = get_continuous_cmap(colors, float_list=cranges)
+    return cmap
+        

@@ -3,19 +3,18 @@
 ==============
 Classes: Rosenfeld2d, General2d, Velocity, Intensity, Cube, Tools
 """
-#TODO in show(): Perhaps use text labels on line profiles to distinguish profiles for more than 2 cubes.  
-#TODO in make_model(): Find a smart way to detect and pass only the coords needed by a prop attribute.
-#TODO in run_mcmc(): Enable an arg to allow the user see the position of parameter walkers every 'arg' steps.
+
+#TODO in v1.0: migrate to astropy units
 #TODO in General2d: Implement irregular grids (see e.g.  meshio from nschloe on github) for the disc grid. It could be useful for better refinement of e.g. disc centre w/o wasting too much in the outer region.
 #TODO in General2d: Compute props in the interpolated grid (not in the original grid) to avoid interpolation of props and save time.
 #TODO in General2d: Allow the lower surface to have independent intensity and line width parametrisations.
-#TODO in General2d: Implement pressure support term
 #TODO in make_model(): Allow for warped emitting surfaces, check notes for ideas as to how to solve for multiple intersections between l.o.s and emission surface.
 #TODO in __main__ file: show intro message when python -m disc2d
 #TODO in run_mcmc(): use get() methods instead of allowing the user to use self obj attributes.
-#TODO in make_model(): Allow R_disc to be a free parameter.
+#TODO in General2d: Initialise R_inner and R_disc in General2d
 #TODO in make_model(): Enable 3D velocities too when subpixel algorithm is used
-#TODO in v1.0: migrate to astropy units
+#TODO in make_model(): Find a smart way (e.g. having a dict per attribute) to pass only the coords needed by a prop attribute, i.e. not all coordinates need to be passed to compute e.g. keplerian velocities.
+#TODO in show(): use text labels on line profiles to distinguish profiles when more than 2 cubes are shown.
 #TODO in make_model(): Save/load bestfit/input parameters in json files. These should store relevant info in separate dicts (e.g. nwalkers, attribute functions). 
 #TODO in run_mcmc(): Implement other minimisation kernels (i.e. Delta_v). Only one kernel currently: difference of intensities on each pixel, on each channel.
 from __future__ import print_function
@@ -41,8 +40,10 @@ from scipy.integrate import quad
 from scipy.interpolate import griddata, interp1d
 from scipy.optimize import curve_fit
 from scipy.special import ellipe, ellipk
+from .tools.utils import InputError
 from sf3dmodels.utils import constants as sfc
 from sf3dmodels.utils import units as sfu
+from .core import Model
 
 #from .cart import Intensity
 
@@ -87,20 +88,6 @@ BIGGER_SIZE = 22
 
 hypot_func = lambda x,y: np.sqrt(x**2 + y**2) #Slightly faster than np.hypot<np.linalg.norm<scipydistance. Checked precision up to au**2 orders and seemed ok.
 
-class InputError(Exception):
-    """Exception raised for input errors.
-
-    Attributes:
-        expression -- input expression where error occurred
-        message -- description of the error
-    """
-    def __init__(self, expression, message):
-        self.expression = expression
-        self.message = message
-        
-    def __str__(self):
-        return '%s --> %s'%(self.expression, self.message)
-
 class Tools:
     @staticmethod
     def _rotate_sky_plane(x, y, ang):
@@ -139,13 +126,13 @@ class Tools:
         return x_pro, y_pro, z_pro
 
     @staticmethod
-    def get_sky_from_disc_coords(R, az, z, incl, PA):
+    def get_sky_from_disc_coords(R, az, z, incl, PA, xc=0, yc=0):
         xp = R*np.cos(az)
         yp = R*np.sin(az)
         zp = z
         xp, yp, zp = Tools._project_on_skyplane(xp, yp, zp, np.cos(incl), np.sin(incl))
         xp, yp = Tools._rotate_sky_plane(xp, yp, PA)
-        return xp, yp, zp #Missing +xc, +yc
+        return xp+xc, yp+yc, zp #Missing +xc, +yc
 
     @staticmethod #should be a bound method, self.grid is constant except for z_upper, z_lower
     def _compute_prop(grid, prop_funcs, prop_kwargs):
@@ -527,7 +514,7 @@ class Contours(PlotTools):
                 ax.contour(R['lower'], levels=R_lev, **kwargs_Rf)
                 ax.contour(phi_pos_far, levels=phi_lev_pos, **kwargs_phif)
                 ax.contour(phi_neg_far, levels=phi_lev_neg, **kwargs_phif)
-                                
+
     #The following method can be optimised if the contour finding process is separated from the plotting
     # by returning coords_list and inds_cont first, which will allow the user use the same set of contours to plot different props.
     @staticmethod
@@ -2412,13 +2399,22 @@ class Mcmc:
     
      
 class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #Inheritance should only be from Intensity and Mcmc, the others contain just staticmethods...
-    def __init__(self, grid, prototype=False, subpixels=False, beam=None, skygrid=None, kwargs_beam={}):
-        Tools._print_logo()
+    #def __init__(self, grid, prototype=False, subpixels=False, beam=None, skygrid=None, kwargs_beam={}):
+    def __init__(self, datacube, dpc, Rmax, Rmin=1.0, prototype=False, subpixels=False, beam=None, kwargs_beam={}):        
+        Tools._print_logo()        
         self.flags = {'disc': True, 'env': False}
-        self.grid = grid
         self.prototype = prototype
-        if skygrid is None: skygrid = grid
 
+        mgrid = Model(datacube, dpc, Rmax, Rmin=Rmin, prototype=prototype, subpixels=subpixels) #Make model grid (disc and sky grids)
+        grid = mgrid.discgrid        
+        skygrid = mgrid.skygrid
+
+        self.Rmax = mgrid.Rmax
+        self.Rmin = mgrid.Rmin
+
+        self.Rmax_m = mgrid.Rmax.to('m').value
+        self.Rmin_m = mgrid.Rmin.to('m').value        
+        
         self._beam_info = False #Should be None; on if statements use isinstance(beam, Beam) instead
         self._beam_from = False #Should be deprecated
         self._beam_kernel = False #Should be None
@@ -2440,7 +2436,9 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
         self.x_true, self.y_true = x_true, y_true
         self.phi_true = grid['phi']
         self.R_true = grid['R']         
-        self.mesh = skygrid['meshgrid'] #disc grid will be interpolated onto this sky grid in make_model(). Must match data dims for mcmc. 
+        self.mesh = skygrid['meshgrid'] #disc grid will be interpolated onto this sky grid in make_model(). Must match data shape for mcmc. 
+        self.grid = grid
+        self.skygrid = skygrid
         
         self.R_1d = None #will be modified if selfgravity is considered
 
@@ -2698,8 +2696,9 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
         yc = yc*sfu.au
         return incl, PA, xc, yc
 
-    def get_projected_coords(self, z_mirror=False, R_inner=0, R_disc=None, 
+    def get_projected_coords(self, z_mirror=False, writebinaries=True, 
                              R_nan_val=0, phi_nan_val=10*np.pi, z_nan_val=0):
+            
         if self.prototype: 
             Tools._break_line()
             print ('Computing disc upper and lower surface coordinates, projected on the sky plane...')
@@ -2739,17 +2738,52 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
             #phi[side] = griddata((x_pro, y_pro), self.phi_true, (self.mesh[0], self.mesh[1]), method='linear')
             z[side] = griddata((x_pro, y_pro), z_true[side], (self.mesh[0], self.mesh[1]), method='linear')
             #r[side] = hypot_func(R[side], z[side])
-            if R_disc is not None: 
-                for prop in [R, phi, z]: prop[side] = np.where(np.logical_and(R[side]<R_disc, R[side]>R_inner), prop[side], np.nan)
-            
+            if self.Rmax_m is not None: 
+                for prop in [R, phi, z]: prop[side] = np.where(np.logical_and(R[side]<self.Rmax_m, R[side]>self.Rmin_m), prop[side], np.nan)
+
+            if writebinaries:
+                np.save('%s_R.npy'%side, R[side])
+                np.save('%s_phi.npy'%side, phi[side])
+                np.save('%s_z.npy'%side, z[side])
+                
         R_nonan, phi_nonan, z_nonan = None, None, None
         if R_nan_val is not None: R_nonan = {side: np.where(np.isnan(R[side]), R_nan_val, R[side]) for side in ['upper', 'lower']} #Use np.nan_to_num instead
         if phi_nan_val is not None: phi_nonan = {side: np.where(np.isnan(phi[side]), phi_nan_val, phi[side]) for side in ['upper', 'lower']}
         if z_nan_val is not None: z_nonan = {side: np.where(np.isnan(z[side]), z_nan_val, z[side]) for side in ['upper', 'lower']}
 
         return R, phi, z, R_nonan, phi_nonan, z_nonan
+
+    def make_disc_axes(self, ax, Rmax=None, surface='upper'): #can be generalised and put outside this class, would require incl, PA and z_func as args.
+        if Rmax is None:
+            Rmax = self.Rmax.to('au')
+        else:
+            Rmax = Rmax.to('au')
+
+        R_daxes = np.linspace(0, Rmax, 50)            
+        phi_daxes_0 = np.zeros(50)
+        phi_daxes_90 = np.zeros(50)+np.pi/2
+        phi_daxes_180 = np.zeros(50)+np.pi
+        phi_daxes_270 = np.zeros(50)-np.pi/2
+
+        incl, PA, xc, yc = General2d.orientation(**self.params['orientation'])
+        xc /= sfu.au
+        yc /= sfu.au        
+
+        if surface=='upper':
+            z_daxes = self.z_upper_func({'R': R_daxes.to('m').value}, **self.params['height_upper'])/sfu.au 
+        elif surface=='lower':
+            z_daxes = self.z_lower_func({'R': R_daxes.to('m').value}, **self.params['height_lower'])/sfu.au
+        else:
+            raise InputError(surface, "Only 'upper' or 'lower' are valid surfaces.")
+
+        kwargs_axes = dict(color='k', ls=':', lw=1.5, dash_capstyle='round', dashes=(0.5, 1.5), alpha=0.7)        
+        make_ax = lambda x, y: ax.plot(x, y, **kwargs_axes)
         
-    def make_model(self, z_mirror=False, R_inner=0, R_disc=None):                   
+        for phi_dax in [phi_daxes_0, phi_daxes_90, phi_daxes_180, phi_daxes_270]:            
+            x_cont, y_cont,_ = Tools.get_sky_from_disc_coords(R_daxes.value, phi_dax, z_daxes, incl, PA, xc, yc)
+            make_ax(x_cont, y_cont)
+    
+    def make_model(self, z_mirror=False):                   
         if self.prototype: 
             Tools._break_line()
             print ('Running prototype model with the following parameters:\n')
@@ -2836,7 +2870,7 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
             if PA: x_pro, y_pro = self._rotate_sky_plane(x_pro, y_pro, PA)             
             x_pro = x_pro+xc
             y_pro = y_pro+yc
-            if R_disc is not None: R_grid = griddata((x_pro, y_pro), self.R_true, (self.mesh[0], self.mesh[1]), method='linear')
+            if self.Rmax_m is not None: R_grid = griddata((x_pro, y_pro), self.R_true, (self.mesh[0], self.mesh[1]), method='linear')
             x_pro_dict[side] = x_pro
             y_pro_dict[side] = y_pro
             z_pro_dict[side] = z_pro
@@ -2846,11 +2880,11 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
                     props[0][i][side] = griddata((x_pro, y_pro), props[0][i][side], (self.mesh[0], self.mesh[1]), method='linear') #subpixels velocity
                 for prop in props[1:]:
                     prop[side] = griddata((x_pro, y_pro), prop[side], (self.mesh[0], self.mesh[1]), method='linear')
-                    if R_disc is not None: prop[side] = np.where(np.logical_and(R_grid<R_disc, R_grid>R_inner), prop[side], np.nan) #Todo: allow for R_in as well
+                    if self.Rmax_m is not None: prop[side] = np.where(np.logical_and(R_grid<self.Rmax_m, R_grid>self.Rmin_m), prop[side], np.nan) #Todo: allow for R_in as well
             else:
                 for prop in props:
                     if not isinstance(prop[side], numbers.Number): prop[side] = griddata((x_pro, y_pro), prop[side], (self.mesh[0], self.mesh[1]), method='linear')
-                    if R_disc is not None: prop[side] = np.where(np.logical_and(R_grid<R_disc, R_grid>R_inner), prop[side], np.nan)
+                    if self.Rmax_m is not None: prop[side] = np.where(np.logical_and(R_grid<self.Rmax_m, R_grid>self.Rmin_m), prop[side], np.nan)
             
         #*************************************                
         return props

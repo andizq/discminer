@@ -1,11 +1,13 @@
 from discminer.core import Data, Model
 from discminer.cube import Cube
-from discminer.disc2d import General2d, Tools
+from discminer.disc2d import General2d
+from discminer.rail import Contours
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 from astropy import units as u
+import sys
 
 #****************
 #SOME DEFINITIONS
@@ -17,7 +19,7 @@ nsteps = 10000
 au_to_m = u.au.to('m')
 
 dpc = 162*u.pc
-Rdisc = 700*u.au
+Rmax = 700*u.au
 
 #********
 #GRIDDING
@@ -28,20 +30,13 @@ downsamp_factor = (downsamp_fit/downsamp_pro)**2 # Required to correct intensity
 
 datacube = Data(file_data) # Read data and convert to Cube object
 noise = np.std( np.append(datacube.data[:5,:,:], datacube.data[-5:,:,:], axis=0), axis=0)
-
-mgrid = Model(datacube, dpc, Rdisc) # Make grid from datacube info
+#mgrid = Model(datacube, dpc, Rdisc) # Make grid from datacube info
 vchannels = datacube.vchannels
-
-#Useful definitions for plots
-xmax = mgrid.skygrid['xmax'] 
-xlim = 1.15*xmax/au_to_m
-extent= np.array([-xmax, xmax, -xmax, xmax])/au_to_m
 
 #****************************
 #INIT MODEL AND PRESCRIPTIONS
 #****************************
-model = General2d(mgrid.discgrid, # Disc grid
-                  skygrid=mgrid.skygrid, # Sky grid
+model = General2d(datacube, dpc, Rmax,
                   prototype = True, # Prototype? If False it assumes you'll run MCMC fit
                   beam=datacube.beam, # Data beam
                   kwargs_beam={'distance': dpc.value} 
@@ -76,6 +71,11 @@ model.intensity_func = intensity_powerlaw_rout
  #of R and z by default, whereas lineslope is constant.
   #See Table 1 of discminer paper 1.
 
+#Useful definitions for plots
+xmax = model.skygrid['xmax'] 
+xlim = 1.15*xmax/au_to_m
+extent= np.array([-xmax, xmax, -xmax, xmax])/au_to_m
+  
 #**************
 #PROTOTYPE PARS
 #**************
@@ -115,7 +115,7 @@ model.params['orientation']['yc'] = yc
 model.params['intensity']['I0'] = I0/downsamp_factor #Jy/pix
 model.params['intensity']['p'] = p
 model.params['intensity']['q'] = q
-model.params['intensity']['Rout'] = Rdisc/u.au
+model.params['intensity']['Rout'] = Rmax.to('au').value
 model.params['linewidth']['L0'] = L0 
 model.params['linewidth']['p'] = pL
 model.params['linewidth']['q'] = qL
@@ -133,9 +133,9 @@ model.params['height_lower']['q'] = q_lower
 #**************************
 #MAKE MODEL (2D ATTRIBUTES)
 #**************************
-Rdisc_m = Rdisc.to('m').value
-vel2d, int2d, linew2d, lineb2d = model.make_model(R_inner=0, R_disc=Rdisc_m) #Projected attributes
-R, phi, z, R_nonan, phi_nonan, z_nonan = model.get_projected_coords(R_inner=0, R_disc=Rdisc_m) #Projected disc coordinates
+vel2d, int2d, linew2d, lineb2d = model.make_model() #Line profile attributes projected on the sky
+R, phi, z, R_nonan, phi_nonan, z_nonan = model.get_projected_coords() #Disc coordinates from upper and lower emission surfaces as projected on the sky
+
 
 #**********************
 #VISUALISE CHANNEL MAPS
@@ -150,10 +150,12 @@ plt.savefig('testchans_data.png', bbox_inches = 'tight', dpi=100)
 plt.close()
 
 #MODEL CHANNELS
-modelcube = Cube(cube.data, datacube.header, datacube.vchannels, beam=datacube.beam)
+modelcube = Cube(cube.data, datacube.header, datacube.vchannels, beam=datacube.beam, filename='cube_model.fits')
 fig, ax, im, cbar = modelcube.make_channel_maps(channels={'interval': [60, 70]}, ncols=5, attribute='intensity', levels=im[0].levels)
 plt.savefig('testchans_model.png', bbox_inches = 'tight', dpi=100)
 plt.close()
+
+modelcube._writefits(tag="") #write model cube into FITS file
 
 #RESIDUAL CHANNELS
 noise_mean = np.nanmean(noise)
@@ -161,6 +163,12 @@ residualscube = Cube(datacube.data-modelcube.data, datacube.header, datacube.vch
 fig, ax, im, cbar = residualscube.make_channel_maps(channels={'interval': [60, 70]}, ncols=5, attribute='residuals',
                                                     projection=None, extent=extent, unit_intensity='Kelvin', unit_coordinates='au',
                                                     mask_under=3*noise_mean, levels=np.linspace(-29, 29, 32))
+for axi in ax[0]:
+    Contours.emission_surface(axi, R, phi, extent=extent)
+
+for axi in ax[1]:
+    model.make_disc_axes(axi)
+    
 plt.savefig('testchans_residuals.png', bbox_inches = 'tight', dpi=100)
 plt.close()
 

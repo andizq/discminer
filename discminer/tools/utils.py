@@ -4,6 +4,8 @@ import numpy as np
 from astropy import units as u
 from astropy import constants as apc
 
+path_icons = os.path.dirname(os.path.realpath(__file__))+'/icons/'
+
 class InputError(Exception):
     """Exception raised for input errors.
 
