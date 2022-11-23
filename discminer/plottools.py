@@ -2,6 +2,7 @@
 plottools module
 ===========
 """
+import os
 import copy
 import matplotlib
 import numpy as np
@@ -129,3 +130,6 @@ def get_attribute_cmap(attribute):
         cmap = get_continuous_cmap(colors, float_list=cranges)
     return cmap
         
+def use_discminer_style():
+    tools = os.path.dirname(os.path.realpath(__file__))+'/tools/'
+    plt.style.use(tools+'discminer.mplstyle') 

@@ -24,11 +24,6 @@ SMALL_SIZE = 10
 MEDIUM_SIZE = 15
 BIGGER_SIZE = 22
 
-matplotlib.rcParams['font.family'] = 'monospace'
-matplotlib.rcParams['axes.linewidth'] = 1.5  
-matplotlib.rcParams['axes.titlepad'] = 20
-matplotlib.rcParams['axes.labelpad'] = 12
-
 # The Cube class should inherit a PlotTools class which can be used to make 2D plots (e.g. moment maps).
 
 _progress_bar = FrontendUtils._progress_bar
@@ -1732,7 +1727,7 @@ class Cube(object):
                                labelsize=SMALL_SIZE-1)
                 axji.tick_params(axis='x', labelbottom=labelbottom, labeltop=False, labelcolor=fakecolor)
                 axji.tick_params(axis='y', labelleft=labelleft)
-                axji.tick_params(which='major', width=1.5, size=7.3)
+                axji.tick_params(which='major', width=1.7, size=6.5)
                 #axji.tick_params(which='minor', width=3.0, size=5.3)
                 mod_major_ticks(axji, axis='x', nbins=3)
                 mod_major_ticks(axji, axis='y', nbins=3)

@@ -2,6 +2,7 @@ from discminer.core import Data, Model
 from discminer.cube import Cube
 from discminer.disc2d import General2d
 from discminer.rail import Contours
+from discminer.plottools import use_discminer_style
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,6 +10,7 @@ import matplotlib.pyplot as plt
 from astropy import units as u
 import sys
 
+use_discminer_style()
 #****************
 #SOME DEFINITIONS
 #****************
@@ -164,7 +166,10 @@ fig, ax, im, cbar = residualscube.make_channel_maps(channels={'interval': [60, 7
                                                     projection=None, extent=extent, unit_intensity='Kelvin', unit_coordinates='au',
                                                     mask_under=3*noise_mean, levels=np.linspace(-29, 29, 32))
 for axi in ax[0]:
-    Contours.emission_surface(axi, R, phi, extent=extent)
+    Contours.emission_surface(
+        axi, R, phi, extent=extent,
+        kwargs_R={'colors': '0.4', 'linewidths': 0.3},
+        kwargs_phi={'colors': '0.4', 'linewidths': 0.5})
 
 for axi in ax[1]:
     model.make_disc_axes(axi)

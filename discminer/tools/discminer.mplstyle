@@ -1,0 +1,35 @@
+## Canvas
+## figure.facecolor: ffffff
+## figure.figsize: 7,7
+## figure.dpi: 200
+figure.titlesize: 15
+
+## Tick Labels
+xtick.major.width: 2.3
+xtick.minor.width: 1.8
+xtick.major.size: 5.0
+xtick.minor.size: 3.0
+xtick.labelsize: 14
+xtick.direction: in
+
+ytick.major.width: 2.3
+ytick.minor.width: 1.8
+ytick.major.size: 5.0
+ytick.minor.size: 3.0
+ytick.labelsize: 14
+ytick.direction: in
+
+## Fonts
+font.family: monospace
+font.size: 15
+
+## Axis Labels
+axes.labelsize: 14.5
+axes.labelpad: 12
+axes.titlesize: 15
+axes.titlepad: 20
+axes.linewidth: 2.0
+
+## Legend
+legend.fontsize: 10
+
