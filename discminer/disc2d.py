@@ -2403,12 +2403,12 @@ class Mcmc:
      
 class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #Inheritance should only be from Intensity and Mcmc, the others contain just staticmethods...
     #def __init__(self, grid, prototype=False, subpixels=False, beam=None, skygrid=None, kwargs_beam={}):
-    def __init__(self, datacube, dpc, Rmax, Rmin=1.0, prototype=False, subpixels=False, beam=None, kwargs_beam={}):        
+    def __init__(self, datacube, Rmax, Rmin=1.0, prototype=False, subpixels=False, beam=None, kwargs_beam={}):        
         Tools._print_logo()        
         self.flags = {'disc': True, 'env': False}
         self.prototype = prototype
 
-        mgrid = Model(datacube, dpc, Rmax, Rmin=Rmin, prototype=prototype, subpixels=subpixels) #Make model grid (disc and sky grids)
+        mgrid = Model(datacube, Rmax, Rmin=Rmin, prototype=prototype, subpixels=subpixels) #Make model grid (disc and sky grids)
         grid = mgrid.discgrid        
         skygrid = mgrid.skygrid
 

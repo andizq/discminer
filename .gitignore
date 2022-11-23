@@ -5,6 +5,9 @@
 *.fits
 *.dat
 *.log
+*.png
+*.json
+*.npy
 
 build/
 dist/

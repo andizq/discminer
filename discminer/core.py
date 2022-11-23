@@ -10,7 +10,7 @@ import warnings
 import json
 
 class Data(Cube):
-    def __init__(self, filename):
+    def __init__(self, filename, dpc):
         """
         Initialise Data object. Inherits `~discminer.disc2d.Cube` properties and methods.
         
@@ -33,7 +33,7 @@ class Data(Cube):
         #In km/s, remove .value to keep astropy units
         vchannels = cube_vel.spectral_axis.value
         header = cube_vel.header
-
+        
         #Get data and beam info
         if isinstance(cube_vel, SpectralCube):
             data = cube_vel.hdu.data.squeeze()
@@ -61,6 +61,7 @@ class Data(Cube):
             
         self.filename = filename
         self.beam = beam
+        self.dpc = dpc
         #self._init_cube()
         super().__init__(data, header, vchannels, beam=beam, filename=filename)
         
@@ -80,7 +81,7 @@ beam : None or `~radio_beam.Beam`, optional
 """
         
 class Model():
-    def __init__(self, cube, dpc, Rmax, Rmin=1.0, prototype=False, subpixels=False):
+    def __init__(self, datacube, Rmax, Rmin=1.0, prototype=False, subpixels=False):
         """
         Initialise Model object. Inherits `~discminer.disc2d.cube.Cube` properties and methods.
 
@@ -117,7 +118,7 @@ class Model():
             In some cases the maximum (deprojected) extent of the disc is larger than the size of the sky grid. Therefore, having independent grids is needed to make sure that the deprojected disc properties do not show sharp boundaries determined by the skyplane grid. In other cases, the maximum extent of the disc is smaller than the skyplane, in which case it's useful to employ a (smaller) independent grid to save computing resources.
             
         """
-        self.dpc = dpc
+        self.dpc = datacube.dpc
         self.Rmax = Rmax
         self.prototype = prototype
         if isinstance(cube, Cube):

@@ -30,7 +30,7 @@ downsamp_pro = 2 # Downsampling used for prototype
 downsamp_fit = 10 # Downsampling used for MCMC fit
 downsamp_factor = (downsamp_fit/downsamp_pro)**2 # Required to correct intensity normalisation for prototype
 
-datacube = Data(file_data) # Read data and convert to Cube object
+datacube = Data(file_data, dpc) # Read data and convert to Cube object
 noise = np.std( np.append(datacube.data[:5,:,:], datacube.data[-5:,:,:], axis=0), axis=0)
 #mgrid = Model(datacube, dpc, Rdisc) # Make grid from datacube info
 vchannels = datacube.vchannels
@@ -38,7 +38,7 @@ vchannels = datacube.vchannels
 #****************************
 #INIT MODEL AND PRESCRIPTIONS
 #****************************
-model = General2d(datacube, dpc, Rmax,
+model = General2d(datacube, Rmax,
                   prototype = True, # Prototype? If False it assumes you'll run MCMC fit
                   beam=datacube.beam, # Data beam
                   kwargs_beam={'distance': dpc.value} 
