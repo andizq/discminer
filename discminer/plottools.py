@@ -9,16 +9,26 @@ import numpy as np
 import matplotlib.pyplot as plt
 from collections.abc import Iterable
 
+_residuals_colors = {
+    'velocity': ["#"+tmp for tmp in ["000b14","004f8f","1f9aff","fff7db","ff5a47","cc0033","140200"]],
+    'linewidth': ["#"+tmp for tmp in ["000b14","036407","81ae71","fff7db","ff5a47","cc0033","140200"]],
+    'intensity': ["#"+tmp for tmp in ["000b14","382406","6a593c","fff7db","ff5a47","cc0033","140200"]]
+}
+
+_residuals_cranges = {
+    'velocity': None,
+    'linewidth': None,
+    'intensity': None,
+}
+
 _attribute_colors = {
-    'residuals': ["#010b14","#1d4c72","#3d97e1","#ffffff","#f36353","#b6163e","#140200"],
-    'velocity': ["#010b14","#1d4c72","#3d97e1","#ffffff","#f36353","#b6163e","#140200"],
+    'velocity': ["#"+tmp for tmp in ["000b14","004f8f","1f9aff","fff7db","ff5a47","cc0033","140200"]],
     'linewidth': ["#"+tmp for tmp in ["001219","005f73","0a9396","94d2bd","e9d8a6","ee9b00","ca6702","bb3e03","ae2012","9b2226"]],
     'intensity': "terrain_r",
 }
 
 _attribute_cranges = {
-    'residuals': [0, 0.2, 0.3, 0.5, 0.7, 0.8, 1.0],
-    'velocity': [0, 0.2, 0.3, 0.5, 0.7, 0.8, 1.0],
+    'velocity': None,
     'linewidth': None,
     'intensity': "matplotlib",    
 }
@@ -70,7 +80,7 @@ def mask_cmap_interval(cmap, cmap_lims, mask_lims, mask_color=np.ones(4), append
     id1 = int(round(c1*(cmap.N)))
     new_cmap = copy.copy(cmap)
     new_cmap._init()
-    """#The following does not work, plt does not know where to locate the newly added colorss
+    """#This block does not work, mpl does not know where to put the newly added colors
     if append:
        mask_color_arr = np.broadcast_to(mask_color, (id1-id0, 4))
        new_cmap._lut = np.insert(new_cmap._lut, id0, mask_color_arr, axis=0)
@@ -121,13 +131,23 @@ def get_continuous_cmap(hex_list, float_list=None):
         cmap_new = matplotlib.colors.LinearSegmentedColormap('my_cmp', segmentdata=cdict, N=256)
     return cmap_new
 
-def get_attribute_cmap(attribute):
-    cranges = _attribute_cranges[attribute]
+def get_discminer_cmap(observable, kind='attribute'):
+    if kind=='attribute':
+        colors = _attribute_colors[observable]
+        cranges = _attribute_cranges[observable]
+    elif kind=='residuals':
+        colors = _residuals_colors[observable]
+        cranges = _residuals_cranges[observable]
+    else:
+        raise InputError(
+            kind, "kind must be 'attribute' or 'residuals'"
+        )
+
     if cranges=='matplotlib':
-        cmap = copy.copy(plt.get_cmap("terrain_r"))
+        cmap = copy.copy(plt.get_cmap(colors))
     elif isinstance(cranges, Iterable) or cranges is None:
-        colors = _attribute_colors[attribute]
         cmap = get_continuous_cmap(colors, float_list=cranges)
+        
     return cmap
         
 def use_discminer_style():

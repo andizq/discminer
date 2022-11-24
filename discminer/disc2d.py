@@ -17,6 +17,7 @@ Classes: Rosenfeld2d, General2d, Velocity, Intensity, Cube, Tools
 #TODO in show(): use text labels on line profiles to distinguish profiles when more than 2 cubes are shown.
 #TODO in make_model(): Save/load bestfit/input parameters in json files. These should store relevant info in separate dicts (e.g. nwalkers, attribute functions). 
 #TODO in run_mcmc(): Implement other minimisation kernels (i.e. Delta_v). Only one kernel currently: difference of intensities on each pixel, on each channel.
+#TODO in core.py: Allow setting up a mock grid to make a prototype model without needing to pass an actual datacube. 
 from __future__ import print_function
 
 import copy
@@ -35,15 +36,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy.convolution import Gaussian2DKernel, convolve
 from matplotlib import ticker
-from radio_beam import Beam
 from scipy.integrate import quad
 from scipy.interpolate import griddata, interp1d
 from scipy.optimize import curve_fit
 from scipy.special import ellipe, ellipk
-from .tools.utils import InputError
-from sf3dmodels.utils import constants as sfc
-from sf3dmodels.utils import units as sfu
+from .tools.utils import FrontendUtils, InputError
+from . import constants as sfc
+from . import units as sfu
 from .core import Model
+from .cube import Cube
 
 #from .cart import Intensity
 
@@ -59,32 +60,12 @@ except ImportError:
 #warnings.filterwarnings("error")
 __all__ = ['Cube', 'Tools', 'Intensity', 'Velocity', 'General2d', 'Rosenfeld2d']
 path_icons = os.path.dirname(os.path.realpath(__file__))+'/icons/'
+_break_line = FrontendUtils._break_line
 
-"""
-matplotlib.rcParams['font.family'] = 'monospace'
-matplotlib.rcParams['font.weight'] = 'normal'
-matplotlib.rcParams['lines.linewidth'] = 1.5
-matplotlib.rcParams['axes.linewidth'] = 3.0
-matplotlib.rcParams['xtick.major.width']=1.6
-matplotlib.rcParams['ytick.major.width']=1.6
-
-matplotlib.rc('font', size=MEDIUM_SIZE)          # controls default text sizes
-matplotlib.rc('axes', titlesize=MEDIUM_SIZE)     # fontsize of axes title
-matplotlib.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of x and y labels
-matplotlib.rc('xtick', labelsize=MEDIUM_SIZE-2)    # fontsize of y tick labels
-matplotlib.rc('ytick', labelsize=MEDIUM_SIZE-2)    # fontsize of x tick labels
-matplotlib.rc('legend', fontsize=SMALL_SIZE-1)    # legend fontsize
-matplotlib.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of figure title
-
-params = {'xtick.major.size': 6.5,
-          'ytick.major.size': 6.5
-          }
-
-matplotlib.rcParams.update(params)
-"""
 SMALL_SIZE = 10
 MEDIUM_SIZE = 15
 BIGGER_SIZE = 22
+
 
 hypot_func = lambda x,y: np.sqrt(x**2 + y**2) #Slightly faster than np.hypot<np.linalg.norm<scipydistance. Checked precision up to au**2 orders and seemed ok.
 
@@ -175,6 +156,7 @@ class Tools:
         """
         from astropy import units as u
         from astropy.io import fits
+        from radio_beam import Beam
         sigma2fwhm = np.sqrt(8*np.log(2))
         if isinstance(beam, str):
             header = fits.getheader(beam)
@@ -306,110 +288,6 @@ class Residuals:
 
 class PlotTools:
     @staticmethod
-    def mod_nticks_cbars(cbars, nbins=5):
-        for cb in cbars:
-            cb.locator = ticker.MaxNLocator(nbins=nbins)
-            cb.update_ticks()
-
-    @staticmethod
-    def mod_major_ticks(ax, axis='both', nbins=6):
-        ax.locator_params(axis=axis, nbins=nbins)
-
-    @staticmethod
-    def mod_minor_ticks(ax):
-        ax.minorticks_on()
-        ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(2)) #1 minor tick per major interval
-        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(2))
-
-    @classmethod
-    def make_up_ax(cls, ax, xlims=(None, None), ylims=(None, None), 
-                   mod_minor=True, mod_major=True, **kwargs_tick_params):
-        kwargs_t = dict(labeltop=True, labelbottom=False, top=True, right=True, which='both', direction='in')
-        kwargs_t.update(kwargs_tick_params)
-        if mod_major: cls.mod_major_ticks(ax)
-        if mod_minor: cls.mod_minor_ticks(ax)
-        ax.set_xlim(*xlims)
-        ax.set_ylim(*ylims)
-        ax.tick_params(**kwargs_t)
-                
-    @staticmethod
-    def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):
-        new_cmap = matplotlib.colors.LinearSegmentedColormap.from_list(
-            'trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=minval, b=maxval),
-            cmap(np.linspace(minval, maxval, n)))
-        return new_cmap
-
-    @staticmethod
-    def get_cmap_from_color(color, lev=3):
-        cmap = matplotlib.colors.to_rgba(color)
-        newcolors = np.tile(cmap, lev).reshape(lev,4) #Repeats the colour lev times
-        newcolors[:,-1] = np.linspace(0.25, 0.95, lev) #Modifies alpha only
-        new_cmap = ListedColormap(newcolors)
-        return new_cmap
-
-    @staticmethod
-    def mask_cmap_interval(cmap, cmap_lims, mask_lims, mask_color=np.ones(4), append=False):
-        if isinstance(cmap, str): cmap = plt.get_cmap(cmap)
-        cmap0, cmap1 = cmap_lims
-        mask0, mask1 = mask_lims
-        c0 = (mask0-cmap0)/(cmap1-cmap0)
-        c1 = (mask1-cmap0)/(cmap1-cmap0)
-        id0 = int(round(c0*(cmap.N)))
-        id1 = int(round(c1*(cmap.N)))
-        new_cmap = copy.copy(cmap)
-        new_cmap._init()
-        """#The following does not work, plt does not know where to locate the newly added colorss
-        if append:
-           mask_color_arr = np.broadcast_to(mask_color, (id1-id0, 4))
-           new_cmap._lut = np.insert(new_cmap._lut, id0, mask_color_arr, axis=0)
-           new_cmap.N = cmap.N + id1-id0
-           #Next line redoes the continuous linearsegmented colormap, thus the masked color block is reduced to a single color  
-           #new_cmap = new_cmap._resample(new_cmap.N) 
-        """
-        new_cmap._lut[id0:id1,:] = mask_color 
-        return new_cmap
-
-    @staticmethod
-    def get_continuous_cmap(hex_list, float_list=None):                                                                               
-        """
-        Taken from https://github.com/KerryHalupka/custom_colormap 
-        creates and returns a color map that can be used in heat map figures.                                                             
-        If float_list is not provided, colour map graduates linearly between each color in hex_list.
-        If float_list is provided, each color in hex_list is mapped to the respective location in float_list. 
-                                    
-        Parameters                                                                                        
-        ----------                                                                                          
-        hex_list: list of hex code strings                                                                
-        float_list: list of floats between 0 and 1, same length as hex_list. Must start with 0 and end with 1.
-        
-        Returns     
-        ----------
-        matplotlib cmap
-
-        Examples
-        ----------
-        fig, ax = plt.subplots(1,1)
-        hex_list = ['#0091ad', '#fffffc', '#ffd166']
-        x, y = np.mgrid[-5:5:0.05, -5:5:0.05]                                
-        z = (np.sqrt(x**2 + y**2) + np.sin(x**2 + y**2))
-        im = ax.imshow(z, cmap=get_continuous_cmap(hex_list))                                                         
-        fig.colorbar(im)                                                                                                                                                                      
-        ax.yaxis.set_major_locator(plt.NullLocator()) # remove y axis ticks                                                                                                                               
-        ax.xaxis.set_major_locator(plt.NullLocator()) # remove x axis ticks
-        plt.show()
-        """
-
-        rgb_list = [matplotlib.colors.to_rgb(i) for i in hex_list]
-        if float_list is None: float_list = np.linspace(0,1,len(rgb_list))
-                                                                                                                                          
-        cdict = dict()                                                                                
-        for num, col in enumerate(['red', 'green', 'blue']):                                               
-            col_list = [[float_list[i], rgb_list[i][num], rgb_list[i][num]] for i in range(len(float_list))]
-            cdict[col] = col_list
-        cmap_new = matplotlib.colors.LinearSegmentedColormap('my_cmp', segmentdata=cdict, N=256)
-        return cmap_new
-        
-    @staticmethod
     def append_stddev_panel(ax, prop, weights=None, hist=False, fit_gauss_hist=False): #attach significance panel to ax, based on dist. of points prop 
         gauss = lambda x, A, mu, sigma: A*np.exp(-(x-mu)**2/(2.*sigma**2))
         ax1_ylims = ax[-2].get_ylim()
@@ -458,1149 +336,6 @@ class PlotTools:
        
 class Canvas3d:
     pass
-
-
-class Contours(PlotTools):
-    @staticmethod
-    def emission_surface(ax, R, phi, R_lev=None, phi_lev=None, extent=None,
-                         proj_offset=None, X=None, Y=None, which='both',
-                         kwargs_R={}, kwargs_phi={}):
-        kwargs_phif = dict(linestyles=':', linewidths=1.0, colors='k')
-        kwargs_Rf = dict(linewidths=1.4, colors='k')
-        kwargs_phif.update(kwargs_phi)        
-        kwargs_Rf.update(kwargs_R)
-
-        near_nonan = ~np.isnan(R['upper'])
-
-        Rmax = np.max(R['upper'][near_nonan])
-        if extent is None:
-            extent = np.array([-Rmax, Rmax, -Rmax, Rmax])/sfu.au
-        kwargs_phif.update({'extent': extent})
-        kwargs_Rf.update({'extent': extent})
-
-        if R_lev is None: R_lev = np.linspace(0.06, 0.97, 4)*Rmax
-        else: R_lev = np.sort(R_lev)
-        if phi_lev is None: phi_lev = np.linspace(-np.pi*0.95, np.pi, 11, endpoint=False)
-
-        #Splitting phi into pos and neg to try and avoid ugly contours close to -pi and pi
-        phi_lev_neg = phi_lev[phi_lev<0] 
-        phi_lev_pos = phi_lev[phi_lev>0]
-        phi_neg_near = np.where((phi['upper']<0) & (R['upper']>R_lev[0]) & (R['upper']<R_lev[-1]), phi['upper'], np.nan)
-        phi_pos_near = np.where((phi['upper']>0) & (R['upper']>R_lev[0]) & (R['upper']<R_lev[-1]), phi['upper'], np.nan)
-        phi_neg_far = np.where((phi['lower']<0) & (R['lower']>R_lev[0]) & (R['lower']<R_lev[-1]), phi['lower'], np.nan)
-        phi_pos_far = np.where((phi['lower']>0) & (R['lower']>R_lev[0]) & (R['lower']<R_lev[-1]), phi['lower'], np.nan)
-
-        if proj_offset is not None: #For 3d projections
-            ax.contour(X, Y, R['upper'], offset=proj_offset, levels=R_lev, **kwargs_Rf)
-            ax.contour(X, Y, np.where(near_nonan, np.nan, R['lower']), offset=proj_offset, levels=R_lev, **kwargs_Rf)
-            ax.contour(X, Y, phi_pos_near, offset=proj_offset, levels=phi_lev_pos, **kwargs_phif)
-            ax.contour(X, Y, phi_neg_near, offset=proj_offset, levels=phi_lev_neg, **kwargs_phif)
-            ax.contour(X, Y, np.where(near_nonan, np.nan, phi_pos_far), offset=proj_offset, levels=phi_lev_pos, **kwargs_phif)
-            ax.contour(X, Y, np.where(near_nonan, np.nan, phi_neg_far), offset=proj_offset, levels=phi_lev_neg, **kwargs_phif)
-            
-        else:
-            if which=='both':
-                ax.contour(R['upper'], levels=R_lev, **kwargs_Rf)
-                ax.contour(np.where(near_nonan, np.nan, R['lower']), levels=R_lev, **kwargs_Rf)
-                ax.contour(phi_pos_near, levels=phi_lev_pos, **kwargs_phif)
-                ax.contour(phi_neg_near, levels=phi_lev_neg, **kwargs_phif)
-                ax.contour(np.where(near_nonan, np.nan, phi_pos_far), levels=phi_lev_pos, **kwargs_phif)
-                ax.contour(np.where(near_nonan, np.nan, phi_neg_far), levels=phi_lev_neg, **kwargs_phif)
-            elif which=='upper':
-                ax.contour(R['upper'], levels=R_lev, **kwargs_Rf)
-                ax.contour(phi_pos_near, levels=phi_lev_pos, **kwargs_phif)
-                ax.contour(phi_neg_near, levels=phi_lev_neg, **kwargs_phif)
-            elif which=='lower':
-                ax.contour(R['lower'], levels=R_lev, **kwargs_Rf)
-                ax.contour(phi_pos_far, levels=phi_lev_pos, **kwargs_phif)
-                ax.contour(phi_neg_far, levels=phi_lev_neg, **kwargs_phif)
-
-    #The following method can be optimised if the contour finding process is separated from the plotting
-    # by returning coords_list and inds_cont first, which will allow the user use the same set of contours to plot different props.
-    @staticmethod
-    def prop_along_coords(ax, prop, coords, coord_ref, coord_levels, 
-                          ax2=None, X=None, Y=None, 
-                          PA=0,
-                          acc_threshold=0.05,
-                          max_prop_threshold=np.inf,
-                          color_bounds=[np.pi/5, np.pi/2],
-                          colors=['k', 'dodgerblue', (0,1,0), (1,0,0)],
-                          lws=[2, 0.5, 0.2, 0.2], lw_ax2_factor=1,
-                          subtract_quadrants=False,
-                          subtract_func=np.subtract):
-        """
-        Compute radial/azimuthal contours according to the model disc geometry 
-        to get and plot information from the input 2D property ``prop``.    
-
-        Parameters
-        ----------
-        ax : `matplotlib.axes` instance, optional
-           ax instance to make the plot. 
-
-        prop : array_like, shape (nx, ny)
-           Input 2D field to extract information along the computed contours.
-        
-        coords : list, shape (2,)
-           coords[0] [array_like, shape (nx, ny)], is the coordinate 2D map onto which contours will be computed using the input ``coord_levels``;
-           coords[1] [array_like, shape (nx, ny)], is the coordinate 2D map against which the ``prop`` values are plotted. The output plot is prop vs coords[1]       
-           
-        coord_ref : scalar
-           Reference coordinate (referred to ``coords[0]``) to highlight among the other contours.
-           
-        coord_levels : array_like, shape (nlevels,)
-           Contour levels to be extracted from ``coords[0]``.
-        
-        ax2 : `matplotlib.axes` instance (or list of instances), optional
-           Additional ax(s) instance(s) to plot the location of contours in the disc. 
-           If provided, ``X`` and ``Y`` must also be passed.
-           
-        X : array_like, shape (nx, ny), optional
-           Meshgrid of the model x coordinate (see `numpy.meshgrid`). Required if ax2 instance(s) is provided.
-
-        Y : array_like, shape (nx, ny), optional
-           Meshgrid of the model y coordinate (see `numpy.meshgrid`). Required if ax2 instance(s) is provided.
-        
-        PA : scalar, optional
-           Reference position angle.
-           
-        acc_threshold : float, optional 
-           Threshold to accept points on contours at constant coords[0]. If obtained level at a point is such that np.abs(level-level_reference)<acc_threshold the point is accepted
-
-        max_prop_threshold : float, optional 
-           Threshold to accept points of contours. Rejects residuals of the contour if they are < max_prop_threshold. Useful to reject hot pixels.
-
-        color_bounds : array_like, shape (nbounds,), optional
-           Colour bounds with respect to the reference contour coord_ref.
-           
-        colors : array_like, shape (nbounds+2,), optional
-           Contour colors. (i=0) is reserved for the reference contour coord_ref, 
-           (i>0) for contour colors according to the bounds in color_bounds. 
-           
-        lws : array_like, shape (nbounds+2), optional
-           Contour linewidths. Similarly, (i=0) is reserved for coord_ref and 
-           (i>0) for subsequent bounds.
-
-        subtract_quadrants : bool, optional
-           If True, subtract residuals by folding along the projected minor axis of the disc. Currently working for azimuthal contours only.
-           
-        subtract_func : function, optional
-           If subtract_quadrants, this function is used to operate between folded quadrants. Defaults to np.subtract.
-        """
-        from skimage import measure 
-
-        coord_list, lev_list, resid_list, color_list = [], [], [], []
-        if np.sum(coord_levels==coord_ref)==0: coord_levels = np.append(coord_levels, coord_ref)
-        for lev in coord_levels:
-            contour = measure.find_contours(coords[0], lev) #, fully_connected='high', positive_orientation='high')
-            if len(contour)==0:
-                print ('no contours found for phi =', lev)
-                continue
-            ind_good = np.argmin([np.abs(lev-coords[0][tuple(np.round(contour[i][0]).astype(np.int))]) for i in range(len(contour))]) #getting ind of closest contour to lev
-            inds_cont = np.round(contour[ind_good]).astype(np.int)
-            inds_cont = [tuple(f) for f in inds_cont]
-            first_cont = np.array([coords[0][i] for i in inds_cont])
-            second_cont = np.array([coords[1][i] for i in inds_cont])
-            prop_cont = np.array([prop[i] for i in inds_cont])
-            corr_inds = np.abs(first_cont-lev) < acc_threshold
-            if lev == coord_ref: zorder=10
-            else: zorder=np.random.randint(0,10)
-
-            lw = lws[-1]
-            color = colors[-1]
-            for i,bound in enumerate(color_bounds):
-                if lev == coord_ref: 
-                    lw = lws[0]
-                    color = colors[0]
-                    zorder = 10
-                    break
-                if np.abs(coord_ref - lev) < bound:
-                    lw = lws[i+1]
-                    color = colors[i+1]
-                    break
-
-            if subtract_quadrants:
-                #if lev < color_bounds[0]: continue
-                ref_pos = PA+90 #Reference axis for positive angles
-                ref_neg = PA-90
-                angles = second_cont[corr_inds]
-                prop_ = prop_cont[corr_inds]
-                angles_pos = angles[angles>=0]
-                angles_neg = angles[angles<0]
-                relative_diff_pos = ref_pos - angles_pos
-                relative_diff_neg = ref_neg - angles_neg
-                angle_diff_pos, prop_diff_pos = [], []
-                angle_diff_neg, prop_diff_neg = [], []
-
-                for i,diff in enumerate(relative_diff_pos):
-                    #Finding where the difference matches that of the current analysis angle
-                    #The -1 flips the sign so that the number on the other side of the symmetry axis is found                
-                    ind = np.argmin(np.abs(-1*relative_diff_pos - diff))  
-                    mirror_ind = angles==angles_pos[ind]
-                    current_ind = angles==angles_pos[i]
-                    prop_diff = subtract_func(prop_[current_ind][0], prop_[mirror_ind][0])
-                    angle_diff_pos.append(angles_pos[i])
-                    prop_diff_pos.append(prop_diff)
-                angle_diff_pos = np.asarray(angle_diff_pos)
-                prop_diff_pos = np.asarray(prop_diff_pos)
-
-                if len(angle_diff_pos)>1:
-                    ind_sort_pos = np.argsort(angle_diff_pos)
-                    plot_ang_diff_pos = angle_diff_pos[ind_sort_pos]
-                    plot_prop_diff_pos = prop_diff_pos[ind_sort_pos]
-                    ind_prop_pos = np.abs(plot_prop_diff_pos)<max_prop_threshold
-                    ax.plot(plot_ang_diff_pos[ind_prop_pos], plot_prop_diff_pos[ind_prop_pos], color=color, lw=lw, zorder=zorder)
-                    coord_list.append(plot_ang_diff_pos[ind_prop_pos])
-                    resid_list.append(plot_prop_diff_pos[ind_prop_pos])
-                    color_list.append(color)
-                    lev_list.append(lev)
-                else: 
-                    plot_ang_diff_pos = []
-                    plot_prop_diff_pos = []
-
-                for i,diff in enumerate(relative_diff_neg):
-                    ind = np.argmin(np.abs(-1*relative_diff_neg - diff))
-                    mirror_ind = angles==angles_neg[ind]
-                    current_ind = angles==angles_neg[i]
-                    prop_diff = subtract_func(prop_[current_ind][0], prop_[mirror_ind][0])
-                    angle_diff_neg.append(angles_neg[i])
-                    prop_diff_neg.append(prop_diff)
-                angle_diff_neg = np.asarray(angle_diff_neg)
-                prop_diff_neg = np.asarray(prop_diff_neg)
-
-                if len(angle_diff_neg)>1:
-                    ind_sort_neg = np.argsort(np.abs(angle_diff_neg))
-                    plot_ang_diff_neg = angle_diff_neg[ind_sort_neg]
-                    plot_prop_diff_neg = prop_diff_neg[ind_sort_neg]
-                    ind_prop_neg = np.abs(plot_prop_diff_neg)<max_prop_threshold
-                    ax.plot(plot_ang_diff_neg[ind_prop_neg], plot_prop_diff_neg[ind_prop_neg], color=color, lw=lw, zorder=zorder)
-                    coord_list.append(plot_ang_diff_neg[ind_prop_neg])
-                    resid_list.append(plot_prop_diff_neg[ind_prop_neg])
-                    color_list.append(color)
-                    lev_list.append(lev)
-                else: 
-                    plot_ang_diff_neg = []
-                    plot_prop_diff_neg = []
-
-                """
-                if len(angle_diff_pos)>1 or len(angle_diff_neg)>1:
-                    coord_list.append(np.append(plot_ang_diff_pos, plot_ang_diff_neg))
-                    resid_list.append(np.append(plot_prop_diff_pos, plot_prop_diff_neg))
-                    color_list.append(color)
-                    lev_list.append(lev)
-                """
-            else:
-                coord_list.append(second_cont[corr_inds])
-                resid_list.append(prop_cont[corr_inds])
-                color_list.append(color)
-                lev_list.append(lev)
-                ind_sort = np.argsort(second_cont[corr_inds]) #sorting by azimuth to avoid 'joint' boundaries in plot
-                ax.plot(second_cont[corr_inds][ind_sort], 
-                        prop_cont[corr_inds][ind_sort], 
-                        color=color, lw=lw, zorder=zorder)
-
-            if ax2 is not None:
-                x_cont = np.array([X[i] for i in inds_cont])
-                y_cont = np.array([Y[i] for i in inds_cont])
-            if isinstance(ax2, matplotlib.axes._subplots.Axes): 
-                ax2.plot(x_cont[corr_inds], y_cont[corr_inds], color=color, lw=lw*lw_ax2_factor)
-            elif isinstance(ax2, list):
-                for axi in ax2: 
-                    if isinstance(axi, matplotlib.axes._subplots.Axes): axi.plot(x_cont[corr_inds], y_cont[corr_inds], color=color, lw=lw*lw_ax2_factor)
-
-        return [np.asarray(tmp) for tmp in [coord_list, resid_list, color_list, lev_list]]
-
-    @staticmethod
-    def make_substructures(ax, twodim=False, gaps=[], rings=[], kinks=[], make_labels=False,
-                           kwargs_gaps={}, kwargs_rings={}, kwargs_kinks={}):
-        '''Overlay ring-like (if twodim) or vertical lines (if not twodim) to illustrate the radial location of substructures in the disc'''
-        kwargs_g = dict(color='0.2', ls='--', lw=1.7, alpha=0.9)
-        kwargs_r = dict(color='0.2', ls='-', lw=1.7, alpha=0.9)
-        kwargs_k = dict(color='purple', ls=':', lw=2.6, alpha=0.9)
-        kwargs_g.update(kwargs_gaps)
-        kwargs_r.update(kwargs_rings)
-        kwargs_k.update(kwargs_kinks)        
-        if twodim:
-            phi = np.linspace(0, 2*np.pi, 50)
-            cos_phi = np.cos(phi)
-            sin_phi = np.sin(phi)
-            for R in gaps: ax.plot(R*cos_phi, R*sin_phi, **kwargs_g)
-            for R in rings: ax.plot(R*cos_phi, R*sin_phi, **kwargs_r)
-            for R in kinks: ax.plot(R*cos_phi, R*sin_phi, **kwargs_k)
-        else:
-            for R in gaps: ax.axvline(R, **kwargs_g)
-            for R in rings: ax.axvline(R, **kwargs_r)
-            for R in kinks: ax.axvline(R, **kwargs_k)
-        if make_labels and len(gaps)>0: ax.plot([None], [None], label='Gaps', **kwargs_g)
-        if make_labels and len(rings)>0: ax.plot([None], [None], label='Rings', **kwargs_r)
-        if make_labels and len(kinks)>0: ax.plot([None], [None], label='Kinks', **kwargs_k)
-            
-        return ax
-        
-    @staticmethod
-    def make_contour_lev(prop, lev, X, Y, acc_threshold=20): 
-        from skimage import measure 
-        contour = measure.find_contours(prop, lev)
-        inds_cont = np.round(contour[-1]).astype(np.int)
-        inds_cont = [tuple(f) for f in inds_cont]
-        first_cont = np.array([prop[i] for i in inds_cont])
-        corr_inds = np.abs(first_cont-lev) < acc_threshold
-        x_cont = np.array([X[i] for i in inds_cont])
-        y_cont = np.array([Y[i] for i in inds_cont])
-        return x_cont[corr_inds], y_cont[corr_inds], inds_cont, corr_inds
-
-    @staticmethod
-    def beams_along_ring(lev, Rgrid, beam_size, X, Y):
-        xc, yc, _, _ = Contours.make_contour_lev(Rgrid, lev, X, Y)
-        try:
-            rc = hypot_func(xc, yc)
-            a = np.max(rc)
-            b = np.min(rc)
-            ellipse_perim = np.pi*(3*(a+b)-np.sqrt((3*a+b)*(a+3*b))) #Assuming that disc vertical extent does not distort much the ellipse
-            return ellipse_perim/beam_size
-        except ValueError: #No contour was found
-            return np.inf
-
-    @staticmethod
-    def get_average_east_west(resid_list, coord_list, lev_list, 
-                              Rgrid, beam_size, X, Y,
-                              av_func=np.nanmean, mask_ang=0, resid_thres='3sigma',
-                              error_func=True, error_unit=1.0, error_thres=np.inf):
-        #resid_thres: None, '3sigma', or list of thresholds with size len(lev_list)        
-        nconts = len(lev_list)
-        if resid_thres is None: resid_thres = [np.inf]*nconts
-        elif resid_thres == '3sigma': resid_thres = [3*np.nanstd(resid_list[i]) for i in range(nconts)] #anything higher than 3sigma is rejected from annulus
-        # -np.pi<coord_list<np.pi
-        ind_west = [((coord_list[i]<90-mask_ang) & (coord_list[i]>-90+mask_ang)) & (np.abs(resid_list[i]-np.nanmean(resid_list[i])) < resid_thres[i]) for i in range(nconts)]
-        ind_east = [((coord_list[i]>90+mask_ang) | (coord_list[i]<-90-mask_ang)) & (np.abs(resid_list[i]-np.nanmean(resid_list[i])) < resid_thres[i]) for i in range(nconts)]
-        av_west = np.array([av_func(resid_list[i][ind_west[i]]) for i in range(nconts)])
-        av_east = np.array([av_func(resid_list[i][ind_east[i]]) for i in range(nconts)])
-        
-        if error_func is None: av_west_error, av_east_error = None, None
-        else:
-            beams_ring_sqrt = np.sqrt([0.5*Contours.beams_along_ring(lev, Rgrid, beam_size, X, Y) for lev in lev_list]) #0.5 because we split the disc in halves
-            if callable(error_func): #if error map provided, compute average error per radius, divided by sqrt of number of beams (see Michiel Hogerheijde notes on errors)
-                av_west_error, av_east_error = np.zeros(nconts), np.zeros(nconts)
-                for i in range(nconts):
-                    x_west, y_west, __ = Tools.get_sky_from_disc_coords(lev_list[i], coord_list[i][ind_west[i]]) #MISSING z, incl, PA for the function to work
-                    x_east, y_east, __ = Tools.get_sky_from_disc_coords(lev_list[i], coord_list[i][ind_east[i]]) #MISSING z, incl, PA for the function to work
-                    error_west = np.array(list(map(error_func, x_west, y_west))).T[0]
-                    error_east = np.array(list(map(error_func, x_east, y_east))).T[0]
-                    sigma2_west = np.where((np.isfinite(error_west)) & (error_unit*error_west<error_thres) & (error_west>0), (error_unit*error_west)**2, 0)
-                    sigma2_east = np.where((np.isfinite(error_east)) & (error_unit*error_east<error_thres) & (error_east>0), (error_unit*error_east)**2, 0)
-                    Np_west = len(coord_list[i][ind_west[i]])
-                    Np_east = len(coord_list[i][ind_east[i]])
-                    av_west_error[i] = np.sqrt(np.nansum(sigma2_west)/Np_west)/beams_ring_sqrt[i]  
-                    av_east_error[i] = np.sqrt(np.nansum(sigma2_east)/Np_east)/beams_ring_sqrt[i]        
-            else: #compute standard error of mean value
-                av_west_error = np.array([np.std(resid_list[i][ind_west[i]], ddof=1) for i in range(nconts)])/beams_ring_sqrt
-                av_east_error = np.array([np.std(resid_list[i][ind_east[i]], ddof=1) for i in range(nconts)])/beams_ring_sqrt
-                
-        return av_west, av_east, av_west_error, av_east_error
-
-    @staticmethod
-    def get_average(resid_list, coord_list, lev_list, 
-                    Rgrid, beam_size, X, Y,
-                    av_func=np.nanmean, mask_ang=0, resid_thres='3sigma',
-                    error_func=True, error_unit=1.0, error_thres=np.inf):
-        #mask_ang: +- angles to reject around minor axis (i.e. phi=+-90) 
-        #resid_thres: None, '3sigma', or list of thresholds with size len(lev_list)        
-        frac_annulus = 1.0 #if halves, 0.5; if quadrants, 0.25
-        nconts = len(lev_list)
-        if resid_thres is None: resid_thres = [np.inf]*nconts #consider all values for the average
-        elif resid_thres == '3sigma': resid_thres = [3*np.nanstd(resid_list[i]) for i in range(nconts)] #anything higher than 3sigma is rejected from annulus
-        # -np.pi<coord_list<np.pi        
-        ind_accep = [(((coord_list[i]<90-mask_ang) & (coord_list[i]>-90+mask_ang)) |
-                      ((coord_list[i]>90+mask_ang) | (coord_list[i]<-90-mask_ang))) &
-                     (np.abs(resid_list[i]-np.nanmean(resid_list[i]))<resid_thres[i])
-                     for i in range(nconts)]
-        av_annulus = np.array([av_func(resid_list[i][ind_accep[i]]) for i in range(nconts)])
-        
-        if error_func is None: av_error = None
-        else:
-            beams_ring_sqrt = np.sqrt([frac_annulus*Contours.beams_along_ring(lev, Rgrid, beam_size, X, Y) for lev in lev_list])
-            if callable(error_func): #if error map provided, compute average error per radius, divided by sqrt of number of beams (see Michiel Hogerheijde notes on errors)
-                av_error = np.zeros(nconts)
-                for i in range(nconts):
-                    x_accep, y_accep, __ = get_sky_from_disc_coords(lev_list[i], coord_list[i][ind_accep[i]]) #MISSING z, incl, PA for the function to work
-                    error_accep = np.array(list(map(error_func, x_accep, y_accep))).T[0]
-                    sigma2_accep = np.where((np.isfinite(error_accep)) & (error_unit*error_accep<error_thres) & (error_accep>0), (error_unit*error_accep)**2, 0)
-                    Np_accep = len(coord_list[i][ind_accep[i]])
-                    av_error[i] = np.sqrt(np.nansum(sigma2_accep)/Np_accep)/beams_ring_sqrt[i]  
-            else: #compute standard error of mean value
-                av_error = np.array([np.std(resid_list[i][ind_accep[i]], ddof=1) for i in range(nconts)])/beams_ring_sqrt
-                
-        return av_annulus, av_error
-
-    @staticmethod
-    def get_average_zones(resid_list, coord_list, lev_list, Rgrid, beam_size, X, Y,
-                          az_zones=[[-30, 30], [150,  -150]], join_zones=False, av_func=np.nanmean,
-                          resid_thres='3sigma', error_func=True, error_unit=1.0, error_thres=np.inf):
-                          
-        #resid_thres: None, '3sigma', or list of thresholds with size len(lev_list)
-        nconts = len(lev_list)
-        nzones = len(az_zones)
-        
-        if resid_thres is None: resid_thres = [np.inf]*nconts
-        elif resid_thres == '3sigma': resid_thres = [3*np.nanstd(resid_list[i]) for i in range(nconts)] #anything higher than 3sigma is rejected from annulus
-
-        make_or = lambda az0, az1: [((coord_list[i]>az0) | (coord_list[i]<az1)) & (np.abs(resid_list[i]-np.nanmean(resid_list[i])) < resid_thres[i]) for i in range(nconts)]
-        make_and = lambda az0, az1: [((coord_list[i]>az0) & (coord_list[i]<az1)) & (np.abs(resid_list[i]-np.nanmean(resid_list[i])) < resid_thres[i]) for i in range(nconts)]
-
-        def get_portion_inds(az):
-            az0, az1 = az
-            if (az0 > az1):
-                inds = make_or(az0, az1)
-            else:
-                inds = make_and(az0, az1)
-            return inds
-
-        def get_portion_percent(az):
-            az0, az1 = az
-            if (az0 > az1):
-                if az0 < 0: perc = 1 - (az0-az1)/360.
-                else: perc = (180-az0 + 180-np.abs(az1))/360.
-            else:
-                perc = (az1-az0)/360.
-            return perc
-
-        #inds containts lists of indices, one list per zone. Each is a list of lists, with as many lists as nconts (number of radii). Each sublist has different number of indices, the larger the radius (i.e. larger path) the more indices.        
-        inds = [get_portion_inds(zone) for zone in az_zones] 
-        az_percent = np.array([get_portion_percent(zone) for zone in az_zones])
-
-        if join_zones and nzones>1:
-            concat = lambda x,y: x+y
-            inds = [[functools.reduce(concat, [ind[i] for ind in inds]) for i in range(nconts)]] #concatenates indices from zones, per radius.
-            az_percent = np.sum(az_percent)[None] #array of single number
-            nzones = 1
-            
-        av_on_inds = [np.array([av_func(resid_list[i][ind[i]]) for i in range(nconts)]) for ind in inds]        
-
-        beams_ring_full = [Contours.beams_along_ring(lev, Rgrid, beam_size, X, Y) for lev in lev_list]
-        beams_zone_sqrt = [np.sqrt(az_percent*br) for br in beams_ring_full]
-
-        if error_func is None: av_error = None
-        else:
-            if callable(error_func): #Not yet tested
-                #if error map provided, compute average error per radius, divided by sqrt of number of beams (see Michiel Hogerheijde notes on errors)  
-                av_error = []
-                for i in range(nconts):
-                    r_ind = [Tools.get_sky_from_disc_coords(lev_list[i], coord_list[i][ind[i]]) for ind in inds] #MISSING z, incl, PA for the function to work
-                    error_ind = [np.array(list(map(error_func, r_ind[j][0], r_ind[j][1]))).T[0] for j in range(nzones)]
-                    sigma2_ind = [np.where((np.isfinite(error_ind[j])) & (error_unit*error_ind[j]<error_thres) & (error_ind[j]>0),
-                                           (error_unit*error_ind[j])**2,
-                                           0)
-                                  for j in range(nzones)]
-                    np_ind = [len(coord_list[i][ind[i]]) for ind in inds]
-                    av_error.append([np.sqrt(np.nansum(sigma2_ind[j])/np_ind[j])/beams_zone_sqrt[i][j] for j in range(nzones) in np_ind])
-            else: #compute standard error of mean value 
-                av_error = [np.array([np.std(resid_list[i][inds[j][i]], ddof=1)/beams_zone_sqrt[i][j] for i in range(nconts)]) for j in range(nzones)]
-
-        return av_on_inds, av_error    
-
-    
-    def make_filaments(prop_2D, R_nonan_up_au, R_inner_au, beam_size_au, distance_pc, dpix_arcsec, **kwargs):
-        #FIND FILAMENTS
-        #adapt_thresh is the width of the element used for the adaptive thresholding mask.
-        # This is primarily the step that picks out the filamentary structure. The element size should be similar to the width of the expected filamentary structure
-
-        #kw_fil_mask = dict(verbose=False, adapt_thresh=50*apu.au, smooth_size=1*beam_size_au*apu.au, size_thresh=100*apu.pix**2, border_masking=False, fill_hole_size=0.01*apu.arcsec**2)
-        from fil_finder import FilFinder2D
-        from astropy import units as apu
-
-        distance=distance_pc*apu.pc
-        ang_scale=dpix_arcsec*apu.arcsec
-        R_min=R_inner_au
-        
-        kw_fil_mask = dict(verbose=False, adapt_thresh=1*beam_size_au*apu.au, smooth_size=0.2*beam_size_au*apu.au, size_thresh=500*apu.pix**2, border_masking=False, fill_hole_size=0.01*apu.arcsec**2)
-        kw_fil_mask.update(kwargs)
-        Rgrid = R_nonan_up_au
-        Rind = (Rgrid>R_min) #& (Rgrid<R_max)
-        fil_pos = FilFinder2D(np.where(Rind & (prop_2D>0), np.abs(prop_2D), 0), ang_scale=ang_scale, distance=distance)
-        fil_pos.preprocess_image(skip_flatten=True) 
-        fil_pos.create_mask(**kw_fil_mask)
-        fil_pos.medskel(verbose=False)
-        
-        fil_neg = FilFinder2D(np.where(Rind & (prop_2D<0), np.abs(prop_2D), 0), ang_scale=ang_scale, distance=distance)
-        fil_neg.preprocess_image(skip_flatten=True) 
-        fil_neg.create_mask(**kw_fil_mask)
-        fil_neg.medskel(verbose=False)
-        
-        fil_pos.analyze_skeletons(prune_criteria='length')
-        fil_neg.analyze_skeletons(prune_criteria='length')
-        return fil_pos, fil_neg
-
-    
-    
-    
-class Cube(object):
-    def __init__(self, nchan, channels, data, beam=False, beam_kernel=False, tb={'nu': False, 'beam': False, 'full': True}):
-        self.nchan = nchan
-        self.channels = channels
-        self.data = data
-        self.point = self.cursor
-        self._interactive = self.cursor
-        self._interactive_path = self.curve
-        if isinstance(beam, Beam): self.beam_info = beam
-        if beam_kernel: self.beam_kernel = beam_kernel
-        if isinstance(tb, dict): #Should be deprecated and removed from __init__
-            if tb['nu'] and tb['beam']: self.data = Tools.get_tb(self.data, tb['nu'], tb['beam'], full=tb['full'])
-
-    @property
-    def interactive(self): 
-        return self._interactive
-          
-    @interactive.setter 
-    def interactive(self, func): 
-        print('Setting interactive function to', func) 
-        self._interactive = func
-
-    @interactive.deleter 
-    def interactive(self): 
-        print('Deleting interactive function') 
-        del self._interactive
-
-    @property
-    def interactive_path(self): 
-        return self._interactive_path
-          
-    @interactive_path.setter 
-    def interactive_path(self, func): 
-        print('Setting interactive_path function to', func) 
-        self._interactive_path = func
-
-    @interactive_path.deleter 
-    def interactive_path(self): 
-        print('Deleting interactive_path function') 
-        del self._interactive_path
-
-    def ellipse(self):
-        pass
-    
-    def _plot_spectrum_region(self, x0, x1, y0, y1, ax, extent=None, compare_cubes=[], stat_func=np.mean, **kwargs):
-        kwargs_spec = dict(where='mid', linewidth=2.5, label=r'x0:%d,x1:%d'%(x0,x1))
-        kwargs_spec.update(kwargs)
-        v0, v1 = self.channels[0], self.channels[-1]
-        def get_ji(x,y):
-            pass
-        if extent is None:
-            j0, i0 = int(x0), int(y0)
-            j1, i1 = int(x1), int(y1)
-        else: 
-            nz, ny, nx = np.shape(self.data)
-            dx = extent[1] - extent[0]
-            dy = extent[3] - extent[2]
-            j0 = int(nx*(x0-extent[0])/dx)
-            i0 = int(ny*(y0-extent[2])/dy)
-            j1 = int(nx*(x1-extent[0])/dx)
-            i1 = int(ny*(y1-extent[2])/dy)
-
-        slice_cube = self.data[:,i0:i1,j0:j1]
-        spectrum = np.array([stat_func(chan) for chan in slice_cube])
-        ncubes = len(compare_cubes)
-        if ncubes > 0: 
-            slice_comp = [compare_cubes[i].data[:,i0:i1,j0:j1] for i in range(ncubes)]
-            cubes_spec = [np.array([stat_func(chan) for chan in slice_comp[i]]) for i in range(ncubes)]
-
-        if np.logical_or(np.isinf(spectrum), np.isnan(spectrum)).all(): return False
-        else:
-            plot_spec = ax.step(self.channels, spectrum, **kwargs_spec)
-            if ncubes > 0:
-                alpha = 0.2
-                dalpha = -alpha/ncubes
-                for i in range(ncubes):
-                    ax.fill_between(self.channels, cubes_spec[i], color=plot_spec[0].get_color(), step='mid', alpha=alpha)
-                    alpha+=dalpha
-            else: ax.fill_between(self.channels, spectrum, color=plot_spec[0].get_color(), step='mid', alpha=0.2)
-            return plot_spec
-   
-    def box(self, fig, ax, extent=None, compare_cubes=[], stat_func=np.mean, **kwargs):
-        from matplotlib.widgets import RectangleSelector        
-        def onselect(eclick, erelease):
-            if eclick.inaxes is ax[0]:
-                plot_spec = self._plot_spectrum_region(eclick.xdata, erelease.xdata, eclick.ydata, erelease.ydata, 
-                                                       ax[1], extent=extent, compare_cubes=compare_cubes, 
-                                                       stat_func=stat_func, **kwargs) 
-                                                       
-                if plot_spec:
-                    print('startposition: (%f, %f)' % (eclick.xdata, eclick.ydata))
-                    print('endposition  : (%f, %f)' % (erelease.xdata, erelease.ydata))
-                    print('used button  : ', eclick.button)
-                    xc, yc = eclick.xdata, eclick.ydata #Left, bottom corner
-                    dx, dy = erelease.xdata-eclick.xdata, erelease.ydata-eclick.ydata
-                    rect = patches.Rectangle((xc,yc), dx, dy, lw=2, edgecolor=plot_spec[0].get_color(), facecolor='none')
-                    ax[0].add_patch(rect)
-                    ax[1].legend()
-                    fig.canvas.draw()
-                    fig.canvas.flush_events()
-
-        def toggle_selector(event):
-            print('Key pressed.')
-            if event.key in ['Q', 'q'] and toggle_selector.RS.active:
-                print('RectangleSelector deactivated.')
-                toggle_selector.RS.set_active(False)
-            if event.key in ['A', 'a'] and not toggle_selector.RS.active:
-                print('RectangleSelector activated.')
-                toggle_selector.RS.set_active(True)
-
-        rectprops = dict(facecolor='none', edgecolor = 'white',
-                         alpha=0.8, fill=False)
-
-        lineprops = dict(color='white', linestyle='-',
-                         linewidth=3, alpha=0.8)
-
-        toggle_selector.RS = RectangleSelector(ax[0], onselect, drawtype='box', rectprops=rectprops, lineprops=lineprops)
-        cid = fig.canvas.mpl_connect('key_press_event', toggle_selector)
-        return toggle_selector.RS
-
-    def _plot_spectrum_cursor(self, x, y, ax, extent=None, compare_cubes=[], **kwargs):
-        kwargs_spec = dict(where='mid', linewidth=2.5, label=r'%d,%d'%(x,y))
-        kwargs_spec.update(kwargs)
-        def get_ji(x,y):
-            pass
-        if extent is None:
-            j, i = int(x), int(y)
-        else: 
-            nz, ny, nx = np.shape(self.data)
-            dx = extent[1] - extent[0]
-            dy = extent[3] - extent[2]
-            j = int(nx*(x-extent[0])/dx)
-            i = int(ny*(y-extent[2])/dy)
-            
-        spectrum = self.data[:,i,j]
-        v0, v1 = self.channels[0], self.channels[-1]
-        if np.logical_or(np.isinf(spectrum), np.isnan(spectrum)).all(): return False
-        else:
-            #plot_fill = ax.fill_between(self.channels, spectrum, alpha=0.1)
-            plot_spec = ax.step(self.channels, spectrum, **kwargs_spec)
-            ncubes = len(compare_cubes)
-            if ncubes > 0:
-                alpha = 0.2
-                dalpha = -alpha/ncubes
-                for cube in compare_cubes: 
-                    ax.fill_between(self.channels, cube.data[:,i,j], color=plot_spec[0].get_color(), step='mid', alpha=alpha)
-                    alpha+=dalpha
-            else: ax.fill_between(self.channels, spectrum, color=plot_spec[0].get_color(), step='mid', alpha=0.2)
-            return plot_spec
-        
-    #def point(self, *args, **kwargs):
-     #   return self.cursor(*args, **kwargs)
-
-    def cursor(self, fig, ax, extent=None, compare_cubes=[], **kwargs):
-        def onclick(event):
-            if event.button==3: 
-                print ('Right click. Disconnecting click event...')
-                fig.canvas.mpl_disconnect(cid)
-            elif event.inaxes is ax[0]:
-                plot_spec = self._plot_spectrum_cursor(event.xdata, event.ydata, ax[1], extent=extent, 
-                                                       compare_cubes=compare_cubes, **kwargs) 
-                if plot_spec:
-                    print('%s click: button=%d, xdata=%f, ydata=%f' %
-                          ('double' if event.dblclick else 'single', event.button,
-                           event.xdata, event.ydata))
-                    ax[0].scatter(event.xdata, event.ydata, marker='D', s=50, facecolor=plot_spec[0].get_color(), edgecolor='k')
-                    ax[1].legend(frameon=False, handlelength=0.7, fontsize=MEDIUM_SIZE-1)
-                    fig.canvas.draw()
-                    fig.canvas.flush_events()
-
-        cid = fig.canvas.mpl_connect('button_press_event', onclick)
-        return cid
-
-    def _plot_beam(self, ax):
-        x_fwhm = self.beam_kernel.model.x_fwhm
-        y_fwhm = self.beam_kernel.model.y_fwhm
-        ny_pix, nx_pix = np.shape(self.data[0])
-        ellipse = patches.Ellipse(xy = (0.05,0.05), angle = 90+self.beam_info.pa.value,
-                                  width=x_fwhm/nx_pix, height=y_fwhm/ny_pix, lw=1, fill=True, 
-                                  fc='gray', ec='k', transform=ax.transAxes)
-        ax.add_artist(ellipse)
-        
-    def surface(self, ax, *args, **kwargs): return Contours.emission_surface(ax, *args, **kwargs)
-
-    def show(self, extent=None, chan_init=0, compare_cubes=[], cursor_grid=True, cmap='gnuplot2_r',
-             int_unit=r'Intensity [mJy beam$^{-1}$]', pos_unit='Offset [au]', vel_unit=r'km s$^{-1}$',
-             show_beam=False, surface={'args': (), 'kwargs': {}}, **kwargs):
-        from matplotlib.widgets import Button, Cursor, Slider
-        v0, v1 = self.channels[0], self.channels[-1]
-        dv = v1-v0
-        fig, ax = plt.subplots(ncols=2, figsize=(12,5))
-        plt.subplots_adjust(wspace=0.25)
-
-        y0, y1 = ax[1].get_position().y0, ax[1].get_position().y1
-        axcbar = plt.axes([0.47, y0, 0.03, y1-y0])
-        max_data = np.nanmax([self.data]+[comp.data for comp in compare_cubes])
-        ax[0].set_xlabel(pos_unit)
-        ax[0].set_ylabel(pos_unit)
-        ax[1].set_xlabel('l.o.s velocity [%s]'%vel_unit)
-        PlotTools.mod_major_ticks(ax[0], axis='both', nbins=5)
-        ax[0].tick_params(direction='out')
-        ax[1].tick_params(direction='in', right=True, labelright=False, labelleft=False)
-        axcbar.tick_params(direction='out')
-        ax[1].set_ylabel(int_unit, labelpad=15)
-        ax[1].yaxis.set_label_position('right')
-        ax[1].set_xlim(v0-0.1, v1+0.1)
-        vmin, vmax = -1*max_data/100, 0.7*max_data#0.8*max_data#
-        ax[1].set_ylim(vmin, vmax)
-        #ax[1].grid(lw=1.5, ls=':')
-        cmap = copy.copy(plt.get_cmap(cmap))
-        cmap.set_bad(color=(0.9,0.9,0.9))
-
-        if show_beam and self.beam_kernel: self._plot_beam(ax[0])
-
-        img = ax[0].imshow(self.data[chan_init], cmap=cmap, extent=extent, origin='lower', vmin=vmin, vmax=vmax)
-        cbar = plt.colorbar(img, cax=axcbar)
-        img.cmap.set_under('w')
-        current_chan = ax[1].axvline(self.channels[chan_init], color='black', lw=2, ls='--')
-        text_chan = ax[1].text((self.channels[chan_init]-v0)/dv, 1.02, #Converting xdata coords to Axes coords 
-                               '%4.1f %s'%(self.channels[chan_init], vel_unit), ha='center', 
-                               color='black', transform=ax[1].transAxes)
-
-        if cursor_grid: cg = Cursor(ax[0], useblit=True, color='lime', linewidth=1.5)
-
-        def get_interactive(func):
-            return func(fig, ax, extent=extent, compare_cubes=compare_cubes, **kwargs)
-        
-        interactive_obj = [get_interactive(self.interactive)]
-        #***************
-        #SLIDERS
-        #***************
-        def update_chan(val):
-            chan = int(val)
-            vchan = self.channels[chan]
-            img.set_data(self.data[chan])
-            current_chan.set_xdata(vchan)
-            text_chan.set_x((vchan-v0)/dv)
-            text_chan.set_text('%4.1f %s'%(vchan, vel_unit))
-            fig.canvas.draw_idle()
-
-        def update_cubes(val):
-            i = int(slider_cubes.val)
-            chan = int(slider_chan.val)
-            vchan = self.channels[chan]
-            if i==0: img.set_data(self.data[chan])
-            else: img.set_data(compare_cubes[i-1].data[chan])
-            current_chan.set_xdata(vchan)
-            text_chan.set_x((vchan-v0)/dv)
-            text_chan.set_text('%4.1f km/s'%vchan)
-            fig.canvas.draw_idle()
-
-        ncubes = len(compare_cubes)
-        if ncubes>0:
-            axcubes = plt.axes([0.2, 0.90, 0.24, 0.025], facecolor='0.7')
-            axchan = plt.axes([0.2, 0.95, 0.24, 0.025], facecolor='0.7')
-            slider_cubes = Slider(axcubes, 'Cube id', 0, ncubes, 
-                                  valstep=1, valinit=0, valfmt='%1d', color='dodgerblue')                                  
-            slider_chan = Slider(axchan, 'Channel', 0, self.nchan-1, 
-                                 valstep=1, valinit=chan_init, valfmt='%2d', color='dodgerblue')        
-            slider_cubes.on_changed(update_cubes)
-            slider_chan.on_changed(update_cubes)
-        else: 
-            axchan = plt.axes([0.2, 0.9, 0.24, 0.05], facecolor='0.7')
-            slider_chan = Slider(axchan, 'Channel', 0, self.nchan-1, 
-                                 valstep=1, valinit=chan_init, valfmt='%2d', color='dodgerblue')        
-            slider_chan.on_changed(update_chan)
-    
-        #*************
-        #BUTTONS
-        #*************
-        def go2cursor(event):
-            if self.interactive == self.cursor or self.interactive == self.point: return 0
-            interactive_obj[0].set_active(False)
-            self.interactive = self.cursor
-            interactive_obj[0] = get_interactive(self.interactive)
-        def go2box(event):
-            if self.interactive == self.box: return 0
-            fig.canvas.mpl_disconnect(interactive_obj[0])
-            self.interactive = self.box
-            interactive_obj[0] = get_interactive(self.interactive)
-        def go2trash(event):
-            print ('Cleaning interactive figure...')
-            plt.close()
-            chan = int(slider_chan.val)
-            self.show(extent=extent, chan_init=chan, compare_cubes=compare_cubes, 
-                      cursor_grid=cursor_grid, int_unit=int_unit, pos_unit=pos_unit, 
-                      vel_unit=vel_unit, surface=surface, show_beam=show_beam, **kwargs)
-        def go2surface(event):
-            self.surface(ax[0], *surface['args'], **surface['kwargs'])
-            fig.canvas.draw()
-            fig.canvas.flush_events()
-            
-        box_img = plt.imread(path_icons+'button_box.png')
-        cursor_img = plt.imread(path_icons+'button_cursor.jpeg')
-        trash_img = plt.imread(path_icons+'button_trash.jpg') 
-        surface_img = plt.imread(path_icons+'button_surface.png') 
-        axbcursor = plt.axes([0.05, 0.779, 0.05, 0.05])
-        axbbox = plt.axes([0.05, 0.72, 0.05, 0.05])
-        axbtrash = plt.axes([0.05, 0.661, 0.05, 0.05], frameon=True, aspect='equal')
-        bcursor = Button(axbcursor, '', image=cursor_img)
-        bcursor.on_clicked(go2cursor)
-        bbox = Button(axbbox, '', image=box_img)
-        bbox.on_clicked(go2box)
-        btrash = Button(axbtrash, '', image=trash_img, color='white', hovercolor='lime')
-        btrash.on_clicked(go2trash)
-        if len(surface['args'])>0:
-            axbsurf = plt.axes([0.005, 0.759, 0.07, 0.07], frameon=True, aspect='equal')
-            bsurf = Button(axbsurf, '', image=surface_img)
-            bsurf.on_clicked(go2surface)
-        plt.show()
-
-    def show_side_by_side(self, cube1, extent=None, chan_init=0, cursor_grid=True, cmap='gnuplot2_r',
-                          int_unit=r'Intensity [mJy beam$^{-1}$]', pos_unit='Offset [au]', vel_unit=r'km s$^{-1}$',
-                          show_beam=False, surface={'args': (), 'kwargs': {}}, **kwargs):
-        from matplotlib.widgets import Button, Cursor, Slider
-        compare_cubes = [cube1]
-        v0, v1 = self.channels[0], self.channels[-1]
-        dv = v1-v0
-        fig, ax = plt.subplots(ncols=3, figsize=(17,5))
-        plt.subplots_adjust(wspace=0.25)
-
-        y0, y1 = ax[2].get_position().y0, ax[2].get_position().y1
-        axcbar = plt.axes([0.63, y0, 0.015, y1-y0])
-        max_data = np.nanmax([self.data]+[comp.data for comp in compare_cubes])
-        ax[0].set_xlabel(pos_unit)
-        ax[1].set_xlabel(pos_unit)        
-        ax[0].set_ylabel(pos_unit)
-        ax[2].set_xlabel('l.o.s velocity [%s]'%vel_unit)
-        PlotTools.mod_major_ticks(ax[0], axis='both', nbins=5)
-        PlotTools.mod_major_ticks(ax[1], axis='both', nbins=5)        
-        ax[0].tick_params(direction='out')
-        ax[1].tick_params(direction='out')        
-        ax[2].tick_params(direction='in', right=True, labelright=False, labelleft=False)
-        axcbar.tick_params(direction='out')
-        ax[2].set_ylabel(int_unit, labelpad=15)
-        ax[2].yaxis.set_label_position('right')
-        ax[2].set_xlim(v0-0.1, v1+0.1)
-        vmin, vmax = -1*max_data/100, 0.7*max_data#0.8*max_data#
-        ax[2].set_ylim(vmin, vmax)
-        cmap = copy.copy(plt.get_cmap(cmap))
-        cmap.set_bad(color=(0.9,0.9,0.9))
-
-        if show_beam and self.beam_kernel: self._plot_beam(ax[0])
-
-        img = ax[0].imshow(self.data[chan_init], cmap=cmap, extent=extent, origin='lower', vmin=vmin, vmax=vmax)
-        img1 = ax[1].imshow(cube1.data[chan_init], cmap=cmap, extent=extent, origin='lower', vmin=vmin, vmax=vmax)
-        cbar = plt.colorbar(img, cax=axcbar)
-        img.cmap.set_under('w')
-        img1.cmap.set_under('w')
-        current_chan = ax[2].axvline(self.channels[chan_init], color='black', lw=2, ls='--')
-        text_chan = ax[2].text((self.channels[chan_init]-v0)/dv, 1.02, #Converting xdata coords to Axes coords 
-                               '%4.1f %s'%(self.channels[chan_init], vel_unit), ha='center', 
-                               color='black', transform=ax[2].transAxes)
-
-        if cursor_grid: cg = Cursor(ax[0], useblit=True, color='lime', linewidth=1.5)
-
-        def get_interactive(func):
-            return func(fig, [ax[0], ax[2]], extent=extent, compare_cubes=compare_cubes, **kwargs)
-        
-        interactive_obj = [get_interactive(self.interactive)]
-        #***************
-        #SLIDERS
-        #***************
-        def update_chan(val):
-            chan = int(val)
-            vchan = self.channels[chan]
-            img.set_data(self.data[chan])
-            img1.set_data(cube1.data[chan])
-            current_chan.set_xdata(vchan)
-            text_chan.set_x((vchan-v0)/dv)
-            text_chan.set_text('%4.1f %s'%(vchan, vel_unit))
-            fig.canvas.draw_idle()
-
-        ncubes = len(compare_cubes)
-        axchan = plt.axes([0.2, 0.9, 0.24, 0.05], facecolor='0.7')
-        slider_chan = Slider(axchan, 'Channel', 0, self.nchan-1, 
-                             valstep=1, valinit=chan_init, valfmt='%2d', color='dodgerblue')        
-        slider_chan.on_changed(update_chan)
-    
-        #*************
-        #BUTTONS
-        #*************
-        def go2cursor(event):
-            if self.interactive == self.cursor or self.interactive == self.point: return 0
-            interactive_obj[0].set_active(False)
-            self.interactive = self.cursor
-            interactive_obj[0] = get_interactive(self.interactive)
-        def go2box(event):
-            if self.interactive == self.box: return 0
-            fig.canvas.mpl_disconnect(interactive_obj[0])
-            self.interactive = self.box
-            interactive_obj[0] = get_interactive(self.interactive)
-        def go2trash(event):
-            print ('Cleaning interactive figure...')
-            plt.close()
-            chan = int(slider_chan.val)
-            self.show_side_by_side(cube1, extent=extent, chan_init=chan,
-                                   cursor_grid=cursor_grid, int_unit=int_unit, pos_unit=pos_unit, 
-                                   vel_unit=vel_unit, surface=surface, show_beam=show_beam, **kwargs)
-        def go2surface(event):
-            self.surface(ax[0], *surface['args'], **surface['kwargs'])
-            self.surface(ax[1], *surface['args'], **surface['kwargs'])
-            fig.canvas.draw()
-            fig.canvas.flush_events()
-            
-        box_img = plt.imread(path_icons+'button_box.png')
-        cursor_img = plt.imread(path_icons+'button_cursor.jpeg')
-        trash_img = plt.imread(path_icons+'button_trash.jpg') 
-        surface_img = plt.imread(path_icons+'button_surface.png') 
-        axbcursor = plt.axes([0.05, 0.779, 0.05, 0.05])
-        axbbox = plt.axes([0.05, 0.72, 0.05, 0.05])
-        axbtrash = plt.axes([0.05, 0.661, 0.05, 0.05], frameon=True, aspect='equal')
-        bcursor = Button(axbcursor, '', image=cursor_img)
-        bcursor.on_clicked(go2cursor)
-        bbox = Button(axbbox, '', image=box_img)
-        bbox.on_clicked(go2box)
-        btrash = Button(axbtrash, '', image=trash_img, color='white', hovercolor='lime')
-        btrash.on_clicked(go2trash)
-        if len(surface['args'])>0:
-            axbsurf = plt.axes([0.005, 0.759, 0.07, 0.07], frameon=True, aspect='equal')
-            bsurf = Button(axbsurf, '', image=surface_img)
-            bsurf.on_clicked(go2surface)
-        plt.show()
-        
-    """
-    #Lasso functions under development
-    def _plot_lasso(self, ax, x, y, chan, color=False, show_path=True, extent=None, compare_cubes=[], **kwargs): 
-        if len(self._lasso_path) == 0: return
-        #for i in range(len(self.lasso_path))
-        if extent is None:
-            j = x.astype(np.int)
-            i = y.astype(np.int)
-        else: 
-            nz, ny, nx = np.shape(self.data)
-            dx = extent[1] - extent[0]
-            dy = extent[3] - extent[2]
-            j = (nx*(x-extent[0])/dx).astype(np.int)
-            i = (ny*(y-extent[2])/dy).astype(np.int)
-        
-        if color: self._plot_path = ax[1].step(np.arange(len(i)), self.data[chan,i,j], color=color)
-        else: self._plot_path = ax[1].step(np.arange(len(i)), self.data[chan,i,j])
-        self._plot_color = self._plot_path[0].get_color()
-        if show_path: self._path_on_cube = ax[0].plot(x,y, color=self._plot_color)
-        else: self._path_on_cube = None
-
-    def lasso(self, fig, ax, chan, color=False, show_path=True, extent=None, compare_cubes=[], **kwargs): 
-        from matplotlib.widgets import LassoSelector
-        canvas = ax[0].figure.canvas        
-        def onselect(verts):
-            #path = Path(verts)
-            canvas.draw_idle()
-            self._lasso_path.append(np.array(verts).T)
-            self._plot_lasso(ax, *np.array(verts).T, chan, color, show_path, extent, compare_cubes, **kwargs)
-            print (verts)
-        def disconnect():
-            self._lasso_obj.disconnect_events()
-            canvas.draw_idle()
-        self._lasso_obj = LassoSelector(ax[0], onselect, lineprops={'color': 'lime'})
-        def onclick(event):
-            if event.button == 3:
-                print ('Right click. Disconnecting click event...')
-                disconnect()
-                fig.canvas.draw()
-        cid = fig.canvas.mpl_connect('button_press_event', onclick) 
-    """
-
-    def curve(self, ax, x, y, chan, color=False, show_path=True, extent=None, compare_cubes=[], **kwargs): 
-        kwargs_curve = dict(linewidth=2.5)#, label=r'x0:%d,x1:%d'%(x0,x1))
-        kwargs_curve.update(kwargs)
-
-        if extent is None:
-            j = x.astype(np.int)
-            i = y.astype(np.int)
-        else: 
-            nz, ny, nx = np.shape(self.data)
-            dx = extent[1] - extent[0]
-            dy = extent[3] - extent[2]
-            j = (nx*(x-extent[0])/dx).astype(np.int)
-            i = (ny*(y-extent[2])/dy).astype(np.int)
-
-        pix_ids = np.arange(len(i))
-        path_val = self.data[chan,i,j]
-        if color: plot_path = ax[1].step(pix_ids, path_val, where='mid', color=color, **kwargs_curve)
-        else: plot_path = ax[1].step(pix_ids, path_val, where='mid', **kwargs_curve)
-        plot_color = plot_path[0].get_color()
-        if show_path: path_on_cube = ax[0].plot(x, y, color=plot_color, **kwargs_curve)
-        else: path_on_cube = None
-
-        cube_fill = []
-        plot_fill = None
-        ncubes = len(compare_cubes)        
-        if ncubes > 0:
-            alpha = 0.2
-            dalpha = -alpha/ncubes
-            for cube in compare_cubes: 
-                cube_fill.append(ax[1].fill_between(pix_ids, cube.data[chan,i,j], color=plot_color, step='mid', alpha=alpha))
-                alpha+=dalpha
-        else: plot_fill = ax[1].fill_between(pix_ids, path_val, color=plot_color, step='mid', alpha=0.2)
-
-        return path_on_cube, plot_path, plot_color, plot_fill, cube_fill
-
-    def show_path(self, x, y, extent=None, chan_init=20, compare_cubes=[], cursor_grid=True,
-                  int_unit=r'Intensity [mJy beam$^{-1}$]', pos_unit='au', vel_unit=r'km s$^{-1}$',
-                  show_beam=False, **kwargs):
-        from matplotlib.widgets import Button, Cursor, Slider
-        v0, v1 = self.channels[0], self.channels[-1]
-        dv = v1-v0
-        fig, ax = plt.subplots(ncols=2, figsize=(12,5))
-        plt.subplots_adjust(wspace=0.25)
-
-        y0, y1 = ax[1].get_position().y0, ax[1].get_position().y1
-        axcbar = plt.axes([0.47, y0, 0.03, y1-y0])
-        max_data = np.max(self.data)
-        ax[0].set_xlabel(pos_unit)
-        ax[0].set_ylabel(pos_unit)
-        ax[1].set_xlabel('Pixel id along path')
-        ax[1].tick_params(direction='in', right=True, labelright=False, labelleft=False)
-        axcbar.tick_params(direction='out')
-        ax[1].set_ylabel(int_unit, labelpad=15)
-        ax[1].yaxis.set_label_position('right')
-        #ax[1].set_xlim(v0-0.1, v1+0.1)
-        #ax[1].set_ylim(-1, max_data)
-        vmin, vmax = -max_data/30, max_data
-        ax[1].set_ylim(vmin, vmax)
-        ax[1].grid(lw=1.5, ls=':')
-        cmap = plt.get_cmap('brg')
-        cmap.set_bad(color=(0.9,0.9,0.9))
-
-        if show_beam and self.beam_kernel: self._plot_beam(ax[0])
-
-        img = ax[0].imshow(self.data[chan_init], cmap=cmap, extent=extent, origin='lower', vmin=vmin, vmax=vmax)
-        cbar = plt.colorbar(img, cax=axcbar)
-        text_chan = ax[1].text(0.15, 1.04, #Converting xdata coords to Axes coords 
-                               r'v$_{\rmchan}$=%4.1f %s'%(self.channels[chan_init], vel_unit), ha='center', 
-                               color='black', transform=ax[1].transAxes)
-
-        if cursor_grid: cg = Cursor(ax[0], useblit=True, color='lime', linewidth=1.5)
-        box_img = plt.imread(path_icons+'button_box.png')
-        cursor_img = plt.imread(path_icons+'button_cursor.jpeg')
-
-        def get_interactive(func, chan=chan_init, color=False, show_path=True):
-            return func(ax, x, y, chan, color=color, show_path=show_path, extent=extent, compare_cubes=compare_cubes, **kwargs)
-
-        interactive_obj = [get_interactive(self.interactive_path)]
-        #***************
-        #SLIDERS
-        #***************
-        def update_chan(val):
-            chan = int(val)
-            vchan = self.channels[chan]
-            img.set_data(self.data[chan])
-            text_chan.set_text(r'v$_{\rmchan}$=%4.1f %s'%(vchan, vel_unit))
-            path_on_cube, plot_path, plot_color, plot_fill, cube_fill = interactive_obj[0]
-            plot_path[0].remove()
-            if plot_fill is not None: plot_fill.remove()
-            for cbfill in cube_fill: cbfill.remove()
-            interactive_obj[0] = get_interactive(self.interactive_path, chan, color=plot_color, show_path=False)
-            fig.canvas.draw_idle()
-
-        def update_cubes(val):
-            i = int(slider_cubes.val)
-            chan = int(slider_chan.val)
-            vchan = self.channels[chan]
-            if i==0: img.set_data(self.data[chan])
-            else: img.set_data(compare_cubes[i-1].data[chan])
-            text_chan.set_text(r'v$_{\rmchan}$=%4.1f %s'%(vchan, vel_unit))
-            path_on_cube, plot_path, plot_color, plot_fill, cube_fill = interactive_obj[0]
-            plot_path[0].remove()
-            if plot_fill is not None: plot_fill.remove()
-            for cbfill in cube_fill: cbfill.remove()
-            interactive_obj[0] = get_interactive(self.interactive_path, chan, color=plot_color, show_path=False)
-            fig.canvas.draw_idle()
-
-        ncubes = len(compare_cubes)
-        if ncubes>0:
-            axcubes = plt.axes([0.2, 0.90, 0.24, 0.025], facecolor='0.7')
-            axchan = plt.axes([0.2, 0.95, 0.24, 0.025], facecolor='0.7')
-            slider_cubes = Slider(axcubes, 'Cube id', 0, ncubes, 
-                                  valstep=1, valinit=0, valfmt='%1d', color='dodgerblue')                                  
-            slider_chan = Slider(axchan, 'Channel', 0, self.nchan-1, 
-                                 valstep=1, valinit=chan_init, valfmt='%2d', color='dodgerblue')        
-            slider_cubes.on_changed(update_cubes)
-            slider_chan.on_changed(update_cubes)
-        else: 
-            axchan = plt.axes([0.2, 0.9, 0.24, 0.05], facecolor='0.7')
-            slider_chan = Slider(axchan, 'Channel', 0, self.nchan-1, 
-                                 valstep=1, valinit=chan_init, valfmt='%2d', color='dodgerblue')        
-            slider_chan.on_changed(update_chan)
-
-        plt.show()
-
-        """
-        self._path_on_cube, self._plot_path, self._plot_color = None, None, None
-        self._lasso_path = []
-        self.interactive_path(fig, ax, chan_init, color=False, show_path=True, extent=extent, compare_cubes=compare_cubes, **kwargs)
-
-        def get_interactive(func, chan=chan_init, color=False, show_path=True):
-            #func(fig, ax, chan, color=color, show_path=show_path, extent=extent, compare_cubes=compare_cubes, **kwargs)
-            if func == self.lasso:
-                return self._plot_lasso(ax, True, True, chan, color=color, show_path=show_path, extent=extent, compare_cubes=compare_cubes, **kwargs)
-        
-        #interactive_obj = [get_interactive(self.interactive_path)]
-        #print (interactive_obj)
-        #***************
-        #SLIDERS
-        #***************
-        def update_chan(val):
-            chan = int(val)
-            vchan = self.channels[chan]
-            img.set_data(self.data[chan])
-            current_chan.set_xdata(vchan)
-            text_chan.set_x((vchan-v0)/dv)
-            text_chan.set_text('%4.1f km/s'%vchan)
-            #path_on_cube, plot_path, plot_color = interactive_obj[0]
-            if self._path_on_cube is not None: 
-                self._plot_path[0].remove()
-                get_interactive(self.interactive_path, chan, color=self._plot_color, show_path=False)
-            fig.canvas.draw_idle()
-        """
-
-    def make_fits(self, output, **kw_header):
-        from astropy.io import fits
-        hdr = fits.Header()
-        hdr.update(**kw_header)
-        data = np.where(np.isfinite(self.data), self.data, 0)
-        fits.writeto(output, data, hdr, overwrite=True)
-    
-    def make_gif(self, folder='./movie/', extent=None, velocity2d=None, 
-                 unit=r'Brightness Temperature [K]',
-                 gif_command='convert -delay 10 *int2d* cube_channels.gif'):
-        cwd = os.getcwd()
-        if folder[-1] != '/': folder+='/'
-        os.system('mkdir %s'%folder)
-        max_data = np.max(self.data)
-
-        clear_list, coll_list = [], []
-        fig, ax = plt.subplots()
-        contour_color = 'red'
-        cmap = plt.get_cmap('binary')
-        cmap.set_bad(color=(0.9,0.9,0.9))
-        ax.plot([None],[None], color=contour_color, linestyle='--', linewidth=2, label='Upper surface') 
-        ax.plot([None],[None], color=contour_color, linestyle=':', linewidth=2, label='Lower surface') 
-        ax.set_xlabel('au')
-        ax.set_ylabel('au')
-        for i in range(self.nchan):
-            vchan = self.channels[i]
-            int2d = ax.imshow(self.data[i], cmap=cmap, extent=extent, origin='lower', vmax=max_data)
-            cbar = plt.colorbar(int2d)
-            cbar.set_label(unit)
-            if velocity2d is not None:
-                vel_near=ax.contour(velocity2d['upper'], levels=[vchan], colors=contour_color, linestyles='--', linewidths=1.3, extent = extent)
-                vel_far=ax.contour(velocity2d['lower'], levels=[vchan], colors=contour_color, linestyles=':', linewidths=1.3, extent = extent)
-                coll_list = [vel_near, vel_far]
-            text_chan = ax.text(0.7, 1.02, '%4.1f km/s'%vchan, color='black', transform=ax.transAxes)
-            ax.legend(loc='upper left')
-            plt.savefig(folder+'int2d_chan%04d'%i)
-            #print ('Saved channel %d'%i)
-            #plt.cla()
-            clear_list = [cbar, int2d, text_chan]
-            for obj in clear_list: obj.remove()
-            for obj in coll_list: 
-                for coll in obj.collections:
-                    coll.remove()
-        plt.close()
-        os.chdir(folder)
-        print ('Making movie...')
-        os.system(gif_command)
-        os.chdir(cwd)
-
 
 class Height:
     @property
@@ -1973,11 +708,8 @@ class Intensity:
     @beam_kernel.setter 
     def beam_kernel(self, beam_kernel): 
         print('Setting beam_kernel var to', beam_kernel)
-        x_stddev = beam_kernel.model.x_stddev.value
-        y_stddev = beam_kernel.model.y_stddev.value
-        self._beam_area = 2*np.pi*x_stddev*y_stddev #see https://en.wikipedia.org/wiki/Gaussian_function, and https://science.nrao.edu/facilities/vla/proposing/TBconv
         self._beam_kernel = beam_kernel
-
+        
     @beam_kernel.deleter 
     def beam_kernel(self): 
         print('Deleting beam_kernel var') 
@@ -2195,12 +927,12 @@ class Intensity:
             """
             inf_mask = np.isnan(int2d_full)
             int2d_full = np.where(inf_mask, 0.0, int2d_full) # Use np.nan_to_num instead
-            int2d_full = self._beam_area*convolve(int2d_full, self.beam_kernel, preserve_nan=False)
+            int2d_full = self.beam_area*convolve(int2d_full, self.beam_kernel, preserve_nan=False)
 
         return int2d_full
 
-    def get_cube(self, vchannels, velocity2d, intensity2d, linewidth2d, lineslope2d, make_convolve=True, 
-                 nchan=None, rms=None, tb={'nu': False, 'beam': False, 'full': True}, return_data_only=False, header=None, **kwargs):
+    def get_cube(self, vchannels, velocity2d, intensity2d, linewidth2d, lineslope2d, make_convolve=True, #Should be in model class
+                 nchan=None, rms=None, tb={'nu': False, 'beam': False, 'full': True}, return_data_only=False, header=None, dpc=None, **kwargs_line):
 
         #from .cube import Cube as Cube2 #header should already be known by here, i.e. it should be an input when General2d is initialised
         
@@ -2231,7 +963,7 @@ class Intensity:
         noise = 0.0
         #for _ in itertools.repeat(None, nchan):
         for vchan in vchannels:
-            v_near, v_far = self.get_line_profile(vchan, vel2d, linew2d, lineb2d, **kwargs)
+            v_near, v_far = self.get_line_profile(vchan, vel2d, linew2d, lineb2d, **kwargs_line)
             """
             v_near_clean = np.where(vel2d_near_nan, -np.inf, v_near)
             v_far_clean = np.where(vel2d_far_nan, -np.inf, v_far)
@@ -2253,12 +985,13 @@ class Intensity:
                 """
                 inf_mask = np.isnan(int2d_full) # Use np.nan_to_num instead
                 int2d_full = np.where(inf_mask, noise, int2d_full)                
-                int2d_full = self._beam_area*convolve(int2d_full, self.beam_kernel, preserve_nan=False)
+                int2d_full = self.beam_area*convolve(int2d_full, self.beam_kernel, preserve_nan=False)
 
             cube.append(int2d_full)
             
         if return_data_only: return np.asarray(cube)
-        else: return Cube(nchan, vchannels, np.asarray(cube), beam=self.beam_info, beam_kernel=self.beam_kernel, tb=tb)
+        #else: return Cube(nchan, vchannels, np.asarray(cube), beam=self.beam_info, beam_kernel=self.beam_kernel, tb=tb)
+        else: return Cube(np.asarray(cube), header, vchannels, dpc, beam=self.beam_info, filename="./cube_model.fits")
         #else: return Cube2(np.asarray(cube), header, vchannels, beam=self.beam_info)
 
     @staticmethod
@@ -2403,8 +1136,8 @@ class Mcmc:
      
 class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #Inheritance should only be from Intensity and Mcmc, the others contain just staticmethods...
     #def __init__(self, grid, prototype=False, subpixels=False, beam=None, skygrid=None, kwargs_beam={}):
-    def __init__(self, datacube, Rmax, Rmin=1.0, prototype=False, subpixels=False, beam=None, kwargs_beam={}):        
-        Tools._print_logo()        
+    def __init__(self, datacube, Rmax, Rmin=1.0, prototype=False, subpixels=False):        
+        FrontendUtils._print_logo()        
         self.flags = {'disc': True, 'env': False}
         self.prototype = prototype
 
@@ -2417,14 +1150,17 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
 
         self.Rmax_m = mgrid.Rmax.to('m').value
         self.Rmin_m = mgrid.Rmin.to('m').value        
-        
-        self._beam_info = False #Should be None; on if statements use isinstance(beam, Beam) instead
-        self._beam_from = False #Should be deprecated
-        self._beam_kernel = False #Should be None
-        self._beam_area = False 
-        if beam is not None: 
-            self.beam_info, self.beam_kernel = Tools._get_beam_from(beam, dpix=grid['step'], **kwargs_beam)
 
+        self.vchannels = mgrid.vchannels
+        self.header = mgrid.header
+        self.dpc = mgrid.dpc
+
+        
+        self.beam = datacube.beam
+        self.beam_info = datacube.beam
+        self.beam_area = datacube.beam_area
+        self.beam_kernel = datacube.beam_kernel
+        
         self._z_upper_func = General2d.z_cone
         self._z_lower_func = General2d.z_cone_neg
         self._velocity_func = General2d.keplerian
@@ -2580,7 +1316,7 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
                               size=(nwalkers, ndim)
                               )
 
-        Tools._break_line()
+        _break_line()
         print ('Initialising MCMC routines with the following (%d) parameters:\n'%self.mc_nparams)
         if found_termtables:
             bound_left, bound_right = np.array(self.mc_boundaries_list).T
@@ -2603,7 +1339,7 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
             pprint.pprint(self.mc_boundaries_list)
             print ('Mean for initial guess p0:', p0_mean)
             print ('p0 pars stddev:', p0_stddev)
-        Tools._break_line(init='\n', end='\n\n')
+        _break_line(init='\n', end='\n\n')
 
         if mpi: #Needs schwimmbad library: $ pip install schwimmbad 
             from schwimmbad import MPIPool
@@ -2665,7 +1401,7 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
         best_fit_dict = {key+'_'+self.mc_kind[i]: str(best_fit_dict[i].tolist())[1:-1] for i,key in enumerate(self.mc_header)}
         self.best_fit_dict = best_fit_dict
         
-        Tools._break_line(init='\n')
+        _break_line(init='\n')
         print ('Median from parameter walkers for the last %d steps:\n'%nstats)        
         if found_termtables:
             tt_header = ['Parameter', 'Best-fit value', 'error [-]', 'error [+]']
@@ -2679,7 +1415,7 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
                 )
         else:
             print (list(zip(self.mc_header, best_params)))
-        Tools._break_line(init='\n', end='\n\n')
+        _break_line(init='\n', end='\n\n')
 
         #************
         #PLOTTING
@@ -2703,12 +1439,11 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
                              R_nan_val=0, phi_nan_val=10*np.pi, z_nan_val=0):
             
         if self.prototype: 
-            Tools._break_line()
+            _break_line()
             print ('Computing disc upper and lower surface coordinates, projected on the sky plane...')
             print ('Using height and orientation parameters from prototype model:\n')
             pprint.pprint({key: self.params[key] for key in ['height_upper', 'height_lower', 'orientation']})
-            Tools._break_line(init='\n')
-        
+            
         incl, PA, xc, yc = General2d.orientation(**self.params['orientation'])
         cos_incl, sin_incl = np.cos(incl), np.sin(incl)
 
@@ -2745,6 +1480,7 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
                 for prop in [R, phi, z]: prop[side] = np.where(np.logical_and(R[side]<self.Rmax_m, R[side]>self.Rmin_m), prop[side], np.nan)
 
             if writebinaries:
+                print ('Saving projected R,phi,z disc coordinates for %s emission surface into .npy binaries...'%side)
                 np.save('%s_R.npy'%side, R[side])
                 np.save('%s_phi.npy'%side, phi[side])
                 np.save('%s_z.npy'%side, z[side])
@@ -2753,7 +1489,8 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
         if R_nan_val is not None: R_nonan = {side: np.where(np.isnan(R[side]), R_nan_val, R[side]) for side in ['upper', 'lower']} #Use np.nan_to_num instead
         if phi_nan_val is not None: phi_nonan = {side: np.where(np.isnan(phi[side]), phi_nan_val, phi[side]) for side in ['upper', 'lower']}
         if z_nan_val is not None: z_nonan = {side: np.where(np.isnan(z[side]), z_nan_val, z[side]) for side in ['upper', 'lower']}
-
+        _break_line()
+            
         return R, phi, z, R_nonan, phi_nonan, z_nonan
 
     def make_disc_axes(self, ax, Rmax=None, surface='upper'): #can be generalised and put outside this class, would require incl, PA and z_func as args.
@@ -2786,12 +1523,12 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
             x_cont, y_cont,_ = Tools.get_sky_from_disc_coords(R_daxes.value, phi_dax, z_daxes, incl, PA, xc, yc)
             make_ax(x_cont, y_cont)
     
-    def make_model(self, z_mirror=False):                   
+    def make_model(self, z_mirror=False, **kwargs_get_cube):                   
         if self.prototype: 
-            Tools._break_line()
+            _break_line()
             print ('Running prototype model with the following parameters:\n')
             pprint.pprint(self.params)
-            Tools._break_line(init='\n')
+            _break_line(init='\n')
 
         incl, PA, xc, yc = General2d.orientation(**self.params['orientation'])
         int_kwargs = self.params['intensity']
@@ -2889,8 +1626,11 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
                     if not isinstance(prop[side], numbers.Number): prop[side] = griddata((x_pro, y_pro), prop[side], (self.mesh[0], self.mesh[1]), method='linear')
                     if self.Rmax_m is not None: prop[side] = np.where(np.logical_and(R_grid<self.Rmax_m, R_grid>self.Rmin_m), prop[side], np.nan)
             
-        #*************************************                
-        return props
+        #*************************************
+        if self.prototype:
+            return self.get_cube(self.vchannels, *props, header=self.header, dpc=self.dpc, **kwargs_get_cube)
+        else:
+            return props
 
     
 class Rosenfeld2d(Velocity, Intensity, Linewidth, Tools):

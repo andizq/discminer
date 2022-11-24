@@ -6,8 +6,8 @@ Classes:
 
 from .grid import GridTools
 
-from sf3dmodels.utils import constants as sfc
-from sf3dmodels.utils import units as sfu
+from . import constants as sfc
+from . import units as sfu
 import matplotlib.pyplot as plt
 import numpy as np
 import numbers
@@ -34,11 +34,11 @@ class Contours(object):
 
         if R_lev is None: R_lev = np.linspace(0.06, 0.97, 4)*Rmax
         else: R_lev = np.sort(R_lev)
-        if phi_lev is None: phi_lev = np.radians(np.arange(-170, 171, 20))
+        if phi_lev is None: phi_lev = np.linspace(-np.pi*0.95, np.pi, 11, endpoint=False)
 
         #Splitting phi into pos and neg to try and avoid ugly contours close to -pi and pi
         phi_lev_neg = phi_lev[phi_lev<0] 
-        phi_lev_pos = phi_lev[phi_lev>0]
+        phi_lev_pos = phi_lev[phi_lev>=0]
         phi_neg_near = np.where((phi['upper']<0) & (R['upper']>R_lev[0]) & (R['upper']<R_lev[-1]), phi['upper'], np.nan)
         phi_pos_near = np.where((phi['upper']>0) & (R['upper']>R_lev[0]) & (R['upper']<R_lev[-1]), phi['upper'], np.nan)
         phi_neg_far = np.where((phi['lower']<0) & (R['lower']>R_lev[0]) & (R['lower']<R_lev[-1]), phi['lower'], np.nan)
@@ -68,7 +68,7 @@ class Contours(object):
                 ax.contour(R['lower'], levels=R_lev, **kwargs_Rf)
                 ax.contour(phi_pos_far, levels=phi_lev_pos, **kwargs_phif)
                 ax.contour(phi_neg_far, levels=phi_lev_neg, **kwargs_phif)
-
+                
     #The following method can be optimised if the contour finding process is separated from the plotting
     # by returning coords_list and inds_cont first, which will allow the user use the same set of contours to plot different props.
     @staticmethod
@@ -264,26 +264,34 @@ class Contours(object):
         return [np.asarray(tmp) for tmp in [coord_list, resid_list, color_list, lev_list]]
 
     @staticmethod
-    def make_substructures(ax, twodim=False, gaps=[], rings=[], kinks=[], make_labels=False,
-                           kwargs_gaps={}, kwargs_rings={}, kwargs_kinks={}):
+    def make_substructures(ax, twodim=False, polar=False, gaps=[], rings=[], kinks=[], make_labels=False,
+                           kwargs_gaps={}, kwargs_rings={}, kwargs_kinks={}, func1d='axvline'):
         '''Overlay ring-like (if twodim) or vertical lines (if not twodim) to illustrate the radial location of substructures in the disc'''
-        kwargs_g = dict(color='0.2', ls='--', lw=1.7, alpha=0.9)
-        kwargs_r = dict(color='0.2', ls='-', lw=1.7, alpha=0.9)
-        kwargs_k = dict(color='purple', ls=':', lw=2.6, alpha=0.9)
+        kwargs_g = dict(color='0.2', ls='--', lw=1.7, dash_capstyle='round', dashes=(3.0, 2.5), alpha=1.0)
+        kwargs_r = dict(color='0.2', ls='-', lw=1.7, dash_capstyle='round', alpha=1.0)
+        kwargs_k = dict(color='purple', ls=':', lw=2.5, dash_capstyle='round', dashes=(0.5, 1.5), alpha=0.9)
         kwargs_g.update(kwargs_gaps)
         kwargs_r.update(kwargs_rings)
         kwargs_k.update(kwargs_kinks)        
         if twodim:
-            phi = np.linspace(0, 2*np.pi, 50)
-            cos_phi = np.cos(phi)
-            sin_phi = np.sin(phi)
-            for R in gaps: ax.plot(R*cos_phi, R*sin_phi, **kwargs_g)
-            for R in rings: ax.plot(R*cos_phi, R*sin_phi, **kwargs_r)
-            for R in kinks: ax.plot(R*cos_phi, R*sin_phi, **kwargs_k)
+            nphi = 100
+            phi = np.linspace(0, 2*np.pi, nphi)
+            if polar:
+                for R in gaps: ax.plot(phi, [R]*nphi, **kwargs_g)
+                for R in rings: ax.plot(phi, [R]*nphi, **kwargs_r)
+                for R in kinks: ax.plot(phi, [R]*nphi, **kwargs_k)                
+            else:
+                cos_phi = np.cos(phi)
+                sin_phi = np.sin(phi)
+                for R in gaps: ax.plot(R*cos_phi, R*sin_phi, **kwargs_g)
+                for R in rings: ax.plot(R*cos_phi, R*sin_phi, **kwargs_r)
+                for R in kinks: ax.plot(R*cos_phi, R*sin_phi, **kwargs_k)
         else:
-            for R in gaps: ax.axvline(R, **kwargs_g)
-            for R in rings: ax.axvline(R, **kwargs_r)
-            for R in kinks: ax.axvline(R, **kwargs_k)
+            if func1d=='axvline': func1d=ax.axvline
+            elif func1d=='axhline': func1d=ax.axhline            
+            for R in gaps: func1d(R, **kwargs_g)
+            for R in rings: func1d(R, **kwargs_r)
+            for R in kinks: func1d(R, **kwargs_k)
         if make_labels and len(gaps)>0: ax.plot([None], [None], label='Gaps', **kwargs_g)
         if make_labels and len(rings)>0: ax.plot([None], [None], label='Rings', **kwargs_r)
         if make_labels and len(kinks)>0: ax.plot([None], [None], label='Kinks', **kwargs_k)
@@ -294,7 +302,7 @@ class Contours(object):
     def make_contour_lev(prop, lev, X, Y, acc_threshold=20): 
         from skimage import measure 
         contour = measure.find_contours(prop, lev)
-        inds_cont = np.round(contour[-1]).astype(np.int)
+        inds_cont = np.round(contour[-1]).astype(int)
         inds_cont = [tuple(f) for f in inds_cont]
         first_cont = np.array([prop[i] for i in inds_cont])
         corr_inds = np.abs(first_cont-lev) < acc_threshold
@@ -367,6 +375,7 @@ class Contours(object):
                       ((coord_list[i]>90+mask_ang) | (coord_list[i]<-90-mask_ang))) &
                      (np.abs(resid_list[i]-np.nanmean(resid_list[i]))<resid_thres[i])
                      for i in range(nconts)]
+
         av_annulus = np.array([av_func(resid_list[i][ind_accep[i]]) for i in range(nconts)])
         
         if error_func is None: av_error = None
@@ -386,13 +395,14 @@ class Contours(object):
         return av_annulus, av_error
 
     @staticmethod
-    def get_average_zones(resid_list, coord_list, lev_list, Rgrid, beam_size, X, Y,
+    def get_average_zones(resid_list, coord_list, lev_list, Rgrid, beam_size, X, Y, fast=True, 
                           az_zones=[[-30, 30], [150,  -150]], join_zones=False, av_func=np.nanmean,
                           resid_thres='3sigma', error_func=True, error_unit=1.0, error_thres=np.inf):
                           
         #resid_thres: None, '3sigma', or list of thresholds with size len(lev_list)
         nconts = len(lev_list)
         nzones = len(az_zones)
+        if not fast: join_zones=False
         
         if resid_thres is None: resid_thres = [np.inf]*nconts
         elif resid_thres == '3sigma': resid_thres = [3*np.nanstd(resid_list[i]) for i in range(nconts)] #anything higher than 3sigma is rejected from annulus
@@ -426,9 +436,23 @@ class Contours(object):
             inds = [[functools.reduce(concat, [ind[i] for ind in inds]) for i in range(nconts)]] #concatenates indices from zones, per radius.
             az_percent = np.sum(az_percent)[None] #array of single number
             nzones = 1
-            
-        av_on_inds = [np.array([av_func(resid_list[i][ind[i]]) for i in range(nconts)]) for ind in inds]        
 
+        if fast: #Compute usual average
+            av_on_inds = [np.array([av_func(resid_list[i][ind[i]]) for i in range(nconts)]) for ind in inds]        
+        else: #Compute average using integral definition (trapezoid seems to succeed better than simpson)
+            av_integral = lambda y,x,dT: np.trapz(y, x=x)/dT # or trapezoid from scipy.integrate
+            av_on_inds = []
+            for ind in inds:
+                av_annulus = []
+                for i in range(nconts):
+                    ii = ind[i]
+                    coords_ii = coord_list[i][ii]
+                    resid_ii = resid_list[i][ii]
+                    if not len(coords_ii): trap=None
+                    else: trap = av_integral(resid_ii, coords_ii, coords_ii[-1]-coords_ii[0]) #dT assumes coords_list is sorted (no matter if ascending or descending)
+                    av_annulus.append(trap) 
+                av_on_inds.append(np.array(av_annulus))
+            
         beams_ring_full = [Contours.beams_along_ring(lev, Rgrid, beam_size, X, Y) for lev in lev_list]
         beams_zone_sqrt = [np.sqrt(az_percent*br) for br in beams_ring_full]
 
@@ -451,7 +475,7 @@ class Contours(object):
 
         return av_on_inds, av_error    
 
-    
+    @staticmethod
     def make_filaments(prop_2D, R_nonan_up_au, R_inner_au, beam_size_au, distance_pc, dpix_arcsec, **kwargs):
         #FIND FILAMENTS
         #adapt_thresh is the width of the element used for the adaptive thresholding mask.
@@ -482,4 +506,3 @@ class Contours(object):
         fil_pos.analyze_skeletons(prune_criteria='length')
         fil_neg.analyze_skeletons(prune_criteria='length')
         return fil_pos, fil_neg
-

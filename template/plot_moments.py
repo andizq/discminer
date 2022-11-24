@@ -1,5 +1,5 @@
 from discminer.core import Data
-from discminer.plottools import get_attribute_cmap, make_up_ax, mod_major_ticks, use_discminer_style, mod_nticks_cbars
+from discminer.plottools import get_discminer_cmap, make_up_ax, mod_major_ticks, use_discminer_style, mod_nticks_cbars
 from discminer.rail import Contours
 
 import numpy as np
@@ -64,7 +64,7 @@ fig, ax = plt.subplots(ncols=3, nrows=1, figsize=(15,6))
 ax_cbar0 = fig.add_axes([0.15, 0.14, 0.450, 0.04])
 ax_cbar2 = fig.add_axes([0.68, 0.14, 0.212, 0.04])
     
-cmap_vel = get_attribute_cmap('velocity')
+cmap_vel = get_discminer_cmap('velocity')
 kwargs_im = dict(cmap=cmap_vel, extent=extent, levels=np.linspace(-4.0, 4.0, 48)+vsys)
 kwargs_cc = dict(colors='k', linestyles='-', extent=extent, levels=np.linspace(-2, 2, 9)+vsys, linewidths=0.4)
 kwargs_cbar = dict(orientation='horizontal', pad=0.03, shrink=0.95, aspect=15)

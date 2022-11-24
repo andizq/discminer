@@ -1,6 +1,6 @@
-from .plottools import get_attribute_cmap, make_up_ax, mod_major_ticks, mod_minor_ticks, mask_cmap_interval
+from .plottools import get_discminer_cmap, make_up_ax, mod_major_ticks, mod_minor_ticks, mask_cmap_interval
 from .tools.fit_kernel import fit_gaussian
-from .tools.utils import FrontendUtils, InputError, path_icons
+from .tools.utils import FrontendUtils, InputError
 from .rail import Contours
 from astropy.convolution import Gaussian2DKernel
 from astropy import units as u
@@ -28,9 +28,10 @@ BIGGER_SIZE = 22
 
 _progress_bar = FrontendUtils._progress_bar
 _break_line = FrontendUtils._break_line
+path_icons = FrontendUtils.path_icons
 
 class Cube(object):
-    def __init__(self, data, header, vchannels, beam=None, filename="./cube.fits"):
+    def __init__(self, data, header, vchannels, dpc, beam=None, filename="./cube.fits"):
         """
         Initialise Cube object.
         
@@ -57,9 +58,10 @@ class Cube(object):
         self.vchannels = copy.copy(vchannels)
         self.beam = beam
         self.wcs = WCS(self.header)
-        self.fileroot = os.path.expanduser(filename).split(".fits")[0]
         # Assuming (nchan, nx, nx); nchan should be equal to cube_vel.spectral_axis.size
         self.nchan, self.nx, self.ny = np.shape(data) #nx: nrows, ny: ncols
+        self.filename = filename
+        self.dpc = dpc
 
         if isinstance(beam, Beam):
             self._init_beam_kernel()  # Get 2D Gaussian kernel from beam
@@ -71,18 +73,37 @@ class Cube(object):
         self._interactive = self._cursor
         self._interactive_path = self._curve
 
+    @property
+    def filename(self): 
+        return self._filename
+          
+    @filename.setter 
+    def filename(self, name): 
+        self.fileroot = os.path.expanduser(name).split(".fits")[0]        
+        
     def _init_beam_kernel(self):
         """
         Compute 2D Gaussian kernel in pixels from beam info.
 
+        References
+        ----------
+           * https://en.wikipedia.org/wiki/Gaussian_function
+
+           * https://science.nrao.edu/facilities/vla/proposing/TBconv  
         """
         sigma2fwhm = np.sqrt(8 * np.log(2))
-        # pixel size in CUNIT2 units
-        pix_scale = np.abs(self.header["CDELT2"]) * u.Unit(self.header["CUNIT2"])
+        pix_scale = np.abs(self.header["CDELT2"]) * u.Unit(self.header["CUNIT2"])  # pixel size in CUNIT2 units (usually degrees)
         x_stddev = ((self.beam.major / pix_scale) / sigma2fwhm).decompose().value
         y_stddev = ((self.beam.minor / pix_scale) / sigma2fwhm).decompose().value
         beam_angle = (90 * u.deg + self.beam.pa).to(u.radian).value
         self.beam_kernel = Gaussian2DKernel(x_stddev, y_stddev, beam_angle)
+        # area of gaussian beam in pixels**2
+        self.beam_area = 2*np.pi*x_stddev*y_stddev
+        # area of gaussian beam in arcsecs**2
+        bmaj = self.beam.major.to(u.arcsecond).value
+        bmin = self.beam.minor.to(u.arcsecond).value        
+        self.beam_area_arcsecs = 2*np.pi * (bmaj * bmin) / sigma2fwhm**2        
+        #self.beam_area_arcsecs = np.pi * (bmaj * bmin) / (4 * np.log(2))
 
     @staticmethod
     def _channel_picker(channels, warn_hdr=True):
@@ -118,7 +139,7 @@ class Cube(object):
 
         return idchan
     
-    def _writefits(self, logkeys=None, tag="", **kwargs):
+    def writefits(self, logkeys=None, tag="", **kwargs):
         """
         Write fits file
             
@@ -177,13 +198,10 @@ class Cube(object):
 
         I = self.data * u.Unit(self.header["BUNIT"]).to("beam-1 Jy")
         nu = self.header["RESTFRQ"]  # in Hz
-        bmaj = self.beam.major.to(u.arcsecond).value
-        bmin = self.beam.minor.to(u.arcsecond).value
-        # area of gaussian beam
-        beam_area = u.au.to("m") ** 2 * np.pi * (bmaj * bmin) / (4 * np.log(2))
-        # beam solid angle: beam_area/(dist*pc)**2.
-        #  dist**2 cancels out with beamarea's dist**2 from conversion of bmaj, bmin to mks units.
-        beam_solid = beam_area / u.pc.to("m") ** 2
+        # beam_area: C*bmin['']*bmaj[''] * (dist[pc])**2 --> beam area in au**2 units
+        # beam solid angle: beam_area/(dist[m])**2.
+        #  dist**2 cancels out with beamarea's dist[pc]**2 from conversion of bmaj, bmin to mks units.
+        beam_solid = u.au.to("m") ** 2 * self.beam_area_arcsecs / u.pc.to("m") ** 2
         Jy_to_SI = 1e-26
         c_h = apc.h.value
         c_c = apc.c.value
@@ -214,7 +232,7 @@ class Cube(object):
         self.wcs = WCS(self.header)
         self.header[hdrkey] = (True, hdrcard)
         if writefits:
-            self._writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)
+            self.writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)
 
     def downsample(
         self, npix, method=np.median, kwargs_method={}, writefits=True, tag="", **kwargs
@@ -302,7 +320,7 @@ class Cube(object):
             # keeping track of changes to original cube
             self.header[hdrkey] = (True, hdrcard)
             if writefits:
-                self._writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)
+                self.writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)
 
         else:
             print("npix is <= 1, no average was performed...")
@@ -401,7 +419,7 @@ class Cube(object):
         self.wcs = WCS(self.header)
         self.header[hdrkey] = (True, hdrcard)
         if writefits:
-            self._writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)
+            self.writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)
 
             
     def make_moments(self, method='gaussian', writefits=True, overwrite=True, tag="", **kwargs_method):
@@ -895,8 +913,8 @@ class Cube(object):
                 int_unit=int_unit,
                 pos_unit=pos_unit,
                 vel_unit=vel_unit,
+                surface=surface,                
                 show_beam=show_beam,
-                surface=surface,
                 **kwargs
             )
 
@@ -934,10 +952,10 @@ class Cube(object):
         trash_img = plt.imread(path_icons + "button_trash.jpg")
         surface_img = plt.imread(path_icons + "button_surface.png")
 
-        axbcursor = plt.axes([0.05, 0.779, 0.05, 0.05])
-        axbbox = plt.axes([0.05, 0.72, 0.05, 0.05])
-        axbpath = plt.axes([0.05, 0.661, 0.05, 0.05], frameon=True, aspect="equal")
-        axbtrash = plt.axes([0.05, 0.60, 0.05, 0.05], frameon=True, aspect="equal")
+        axbcursor = plt.axes([0.05, 0.829, 0.05, 0.05])
+        axbbox = plt.axes([0.05, 0.77, 0.05, 0.05])
+        axbpath = plt.axes([0.05, 0.711, 0.05, 0.05], frameon=True, aspect="equal")
+        axbtrash = plt.axes([0.05, 0.65, 0.05, 0.05], frameon=True, aspect="equal")
 
         bcursor = Button(axbcursor, "", image=cursor_img)
         bcursor.on_clicked(go2cursor)
@@ -949,7 +967,7 @@ class Cube(object):
         btrash.on_clicked(go2trash)
 
         if len(surface["args"]) > 0:
-            axbsurf = plt.axes([0.005, 0.759, 0.07, 0.07], frameon=True, aspect="equal")
+            axbsurf = plt.axes([0.005, 0.809, 0.07, 0.07], frameon=True, aspect="equal")
             bsurf = Button(axbsurf, "", image=surface_img)
             bsurf.on_clicked(go2surface)
 
@@ -982,10 +1000,13 @@ class Cube(object):
         axcbar = plt.axes([0.63, y0, 0.015, y1 - y0])
         max_data = np.nanmax([self.data] + [comp.data for comp in compare_cubes])
         ax[0].set_xlabel(pos_unit)
+        ax[1].set_xlabel(pos_unit)
         ax[0].set_ylabel(pos_unit)
         ax[2].set_xlabel("l.o.s velocity [%s]" % vel_unit)
         mod_major_ticks(ax[0], axis="both", nbins=5)
+        mod_major_ticks(ax[1], axis="both", nbins=5)        
         ax[0].tick_params(direction="out")
+        ax[1].tick_params(direction="out")        
         ax[2].tick_params(direction="in", right=True, labelright=False, labelleft=False)
         axcbar.tick_params(direction="out")
         ax[2].set_ylabel(int_unit, labelpad=15)
@@ -1465,8 +1486,8 @@ class Cube(object):
                 int_unit=int_unit,
                 pos_unit=pos_unit,
                 vel_unit=vel_unit,
-                show_beam=show_beam,
                 surface=surface,
+                show_beam=show_beam,                
                 **kwargs
             )
 
@@ -1487,6 +1508,7 @@ class Cube(object):
                 int_unit=int_unit,
                 pos_unit=pos_unit,
                 vel_unit=vel_unit,
+                surface=surface,
                 show_beam=show_beam,
                 **kwargs
             )
@@ -1497,18 +1519,18 @@ class Cube(object):
             fig.canvas.flush_events()
             
         return_img = plt.imread(path_icons + "button_return.png")
-        axbretu = plt.axes([0.043, 0.661, 0.0635, 0.0635], frameon=True, aspect="equal")
+        axbretu = plt.axes([0.043, 0.711, 0.0635, 0.0635], frameon=True, aspect="equal")
         bretu = Button(axbretu, "", image=return_img, color="white", hovercolor="lime")
         bretu.on_clicked(go2show)
 
         trash_img = plt.imread(path_icons + "button_trash.jpg")
-        axbtrash = plt.axes([0.05, 0.60, 0.05, 0.05], frameon=True, aspect="equal")
+        axbtrash = plt.axes([0.05, 0.65, 0.05, 0.05], frameon=True, aspect="equal")
         btrash = Button(axbtrash, "", image=trash_img, color="white", hovercolor="lime")
         btrash.on_clicked(go2trash)
 
         surface_img = plt.imread(path_icons + "button_surface.png")
         if len(surface["args"]) > 0:
-            axbsurf = plt.axes([0.005, 0.759, 0.07, 0.07], frameon=True, aspect="equal")
+            axbsurf = plt.axes([0.005, 0.809, 0.07, 0.07], frameon=True, aspect="equal")
             bsurf = Button(axbsurf, "", image=surface_img)
             bsurf.on_clicked(go2surface)
 
@@ -1601,7 +1623,8 @@ class Cube(object):
         
     def make_channel_maps(self, channels={'interval': None, 'indices': None}, ncols=5,
                           unit_intensity=None, unit_coordinates=None, fmt_cbar='%3d',
-                          attribute='intensity', projection='wcs', mask_under=None, **kwargs_contourf):
+                          observable='intensity', kind='attribute',
+                          projection='wcs', mask_under=None, **kwargs_contourf):
         
         try:
             vmin = kwargs_contourf['levels'][0]
@@ -1610,9 +1633,9 @@ class Cube(object):
         except KeyError:
             vmin = np.nanmin(self.data)
             vmax = np.nanmax(self.data)
-            if attribute=='intensity':
+            if kind=='attribute':
                 vmin, vmax = 0.0, 0.8*vmax
-            else:
+            elif kind=='residuals':
                 max_val = np.max(np.abs([vmin, vmax]))
                 vmin, vmax = -0.8*max_val, 0.8*max_val
 
@@ -1630,12 +1653,12 @@ class Cube(object):
             unit_coordinates = ' [%s]'%unit_coordinates
 
             
-        cmap_chan = get_attribute_cmap(attribute) #See default cmap for each attribute in cart.py
+        cmap_chan = get_discminer_cmap(observable, kind=kind) #See default cmap for each observable in plottools.py
         if mask_under is not None:
-            if attribute=='intensity':
+            if kind=='attribute':
                 mask_up = mask_under
                 mask_down = 0
-            else:
+            elif kind=='residuals':
                 mask_up = mask_under
                 mask_down = -mask_under
             cmap_chan = mask_cmap_interval(cmap_chan, [vmin, vmax], [mask_down, mask_up], mask_color=(1,1,1,0), append=True)
@@ -1748,7 +1771,11 @@ class Cube(object):
         cbar = plt.colorbar(im_cbar, cax=axc_cbar, format=fmt_cbar, orientation='vertical', 
                             ticks=np.linspace(im_cbar.levels[0], im_cbar.levels[-1], 5))
 
-        cbar.set_label(attribute.capitalize()+'%s'%unit_intensity, fontsize=SMALL_SIZE+0, rotation=-90, labelpad=20)
+        if kind=='attribute':
+            clabel = observable.capitalize()+'%s'%unit_intensity
+        elif kind=='residuals':
+            clabel = kind.capitalize()+'%s'%unit_intensity
+        cbar.set_label(clabel, fontsize=SMALL_SIZE+0, rotation=-90, labelpad=20)
         cbar.ax.tick_params(which='major', direction='in', width=1.7, size=3.8, pad=2, labelsize=SMALL_SIZE-1)
         cbar.ax.tick_params(which='minor', direction='in', width=1.7, size=2.3)
         mod_minor_ticks(cbar.ax)

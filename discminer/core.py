@@ -59,11 +59,8 @@ class Data(Cube):
             raise InputError(cube_vel,
                              'The input datacube is not valid. Only the following spectral_cube instances are supported: SpectralCube, VaryingResolutionSpectralCube.')
             
-        self.filename = filename
-        self.beam = beam
-        self.dpc = dpc
         #self._init_cube()
-        super().__init__(data, header, vchannels, beam=beam, filename=filename)
+        super().__init__(data, header, vchannels, dpc, beam=beam, filename=filename)
         
     def _init_cube(self):
         super().__init__(
@@ -121,22 +118,22 @@ class Model():
         self.dpc = datacube.dpc
         self.Rmax = Rmax
         self.prototype = prototype
-        if isinstance(cube, Cube):
-            self.datacube = cube
-            self.header = cube.header
-            self.vchannels = cube.vchannels
-            self.beam = cube.beam            
+        if isinstance(datacube, Cube):
+            self.datacube = datacube
+            self.header = datacube.header
+            self.vchannels = datacube.vchannels
+            self.beam = datacube.beam            
             self.make_grid()
 
         if isinstance(Rmin, numbers.Real):
-            if cube.beam is not None:
-                beam_au = (dpc*np.tan(cube.beam.major.to(u.radian))).to(u.au)
+            if datacube.beam is not None:
+                beam_au = (self.dpc*np.tan(datacube.beam.major.to(u.radian))).to(u.au)
                 self.Rmin = Rmin*beam_au
             else: self.Rmin = 0.0*u.Unit(u.au)
         else:
             self.Rmin = self.Rmin.to(u.au)
             
-        #elif isinstance(cube, grid):
+        #elif isinstance(datacube, grid):
         #   self.beam = beam
         #   make_header()
         #   make_channels()

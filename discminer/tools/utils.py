@@ -3,8 +3,9 @@ import sys
 import numpy as np
 from astropy import units as u
 from astropy import constants as apc
+from .. import constants as sfc
+from .. import units as sfu
 
-path_icons = os.path.dirname(os.path.realpath(__file__))+'/icons/'
 
 class InputError(Exception):
     """Exception raised for input errors.
@@ -25,7 +26,7 @@ class FrontendUtils(object):
     """
     Make things look nicer
     """    
-    path_icons = os.path.dirname(os.path.realpath(__file__))+'/icons/'
+    path_icons = os.path.dirname(os.path.realpath(__file__))+'/../icons/'
 
     @staticmethod
     def _progress_bar(percent=0, width=50):
