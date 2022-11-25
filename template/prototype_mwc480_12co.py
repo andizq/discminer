@@ -158,9 +158,13 @@ modelcube.writefits() #write model cube into FITS file
 #RESIDUAL CHANNELS
 noise_mean = np.nanmean(noise)
 residualscube = Cube(datacube.data-modelcube.data, datacube.header, datacube.vchannels, dpc, beam=datacube.beam)
-fig, ax, im, cbar = residualscube.make_channel_maps(channels={'interval': [60, 70]}, ncols=5, kind='residuals',
-                                                    projection=None, extent=extent,
-                                                    unit_intensity='Kelvin', unit_coordinates='au',
+fig, ax, im, cbar = residualscube.make_channel_maps(channels={'interval': [60, 70]}, ncols=5,
+                                                    kind='residuals',
+                                                    projection=None, 
+                                                    unit_intensity='Kelvin',
+                                                    unit_coordinates='au',
+                                                    xlims = (-xlim, xlim),
+                                                    ylims = (-xlim, xlim),
                                                     mask_under=3*noise_mean,
                                                     levels=np.linspace(-29, 29, 32))
 for axi in ax[0]:
@@ -179,6 +183,7 @@ plt.close()
 residualscube.filename = 'cube_residuals_mwc480.fits'
 residualscube.writefits() 
 
+sys.exit()
 #**********************
 #MAKE MOMENT MAPS
 #**********************

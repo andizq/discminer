@@ -1,4 +1,9 @@
-from .plottools import get_discminer_cmap, make_up_ax, mod_major_ticks, mod_minor_ticks, mask_cmap_interval
+from .plottools import (get_discminer_cmap,
+                        make_up_ax,
+                        mod_major_ticks,
+                        mod_minor_ticks,
+                        mask_cmap_interval)
+
 from .tools.fit_kernel import fit_gaussian
 from .tools.utils import FrontendUtils, InputError
 from .rail import Contours
@@ -18,7 +23,6 @@ import os
 from radio_beam import Beam
 import warnings
 
-#from .plottools import *
         
 SMALL_SIZE = 10
 MEDIUM_SIZE = 15
@@ -62,6 +66,7 @@ class Cube(object):
         self.nchan, self.nx, self.ny = np.shape(data) #nx: nrows, ny: ncols
         self.filename = filename
         self.dpc = dpc
+        self.pix_size = np.abs(self.header["CDELT1"]) * u.Unit(self.header["CUNIT1"])  # pixel size in CUNIT1 units (usually degrees)
 
         if isinstance(beam, Beam):
             self._init_beam_kernel()  # Get 2D Gaussian kernel from beam
@@ -92,9 +97,8 @@ class Cube(object):
            * https://science.nrao.edu/facilities/vla/proposing/TBconv  
         """
         sigma2fwhm = np.sqrt(8 * np.log(2))
-        pix_scale = np.abs(self.header["CDELT2"]) * u.Unit(self.header["CUNIT2"])  # pixel size in CUNIT2 units (usually degrees)
-        x_stddev = ((self.beam.major / pix_scale) / sigma2fwhm).decompose().value
-        y_stddev = ((self.beam.minor / pix_scale) / sigma2fwhm).decompose().value
+        x_stddev = ((self.beam.major / self.pix_size) / sigma2fwhm).decompose().value
+        y_stddev = ((self.beam.minor / self.pix_size) / sigma2fwhm).decompose().value
         beam_angle = (90 * u.deg + self.beam.pa).to(u.radian).value
         self.beam_kernel = Gaussian2DKernel(x_stddev, y_stddev, beam_angle)
         # area of gaussian beam in pixels**2
@@ -500,20 +504,32 @@ class Cube(object):
     def _surface(self, ax, *args, **kwargs):
         return Contours.emission_surface(ax, *args, **kwargs)
 
-    def _plot_beam(self, ax):
-        x_fwhm = self.beam_kernel.model.x_fwhm
-        y_fwhm = self.beam_kernel.model.y_fwhm
-        ny_pix, nx_pix = np.shape(self.data[0])
+    def plot_beam(self, ax, projection=None, **kwargs_ellipse):
+        kwargs=dict(lw=1,fill=True,fc="gray",ec="k")
+        kwargs.update(kwargs_ellipse)
+            
+        if projection is None: #Assume plot in units of au
+            dpc = self.dpc.to('pc').value
+            bmaj = self.beam.major.to(u.arcsecond).value
+            bmin = self.beam.minor.to(u.arcsecond).value
+            bmaj*=dpc
+            bmin*=dpc
+        elif projection=='wcs': #plot in units of pixels (using wcs is merely decorative)
+            bmaj = self.beam_kernel.model.x_fwhm
+            bmin = self.beam_kernel.model.y_fwhm
+            
+        xlim, ylim = ax.get_xlim(), ax.get_ylim()
+        dx = np.abs(xlim[1]-xlim[0])
+        dy = np.abs(ylim[1]-ylim[0])
+        xbeam, ybeam = xlim[0]+0.07*dx, ylim[0]+0.07*dy
+
         ellipse = patches.Ellipse(
-            xy=(0.05, 0.05),
+            xy=(xbeam, ybeam),
             angle=90 + self.beam.pa.value,
-            width=x_fwhm / nx_pix,
-            height=y_fwhm / ny_pix,
-            lw=1,
-            fill=True,
-            fc="gray",
-            ec="k",
-            transform=ax.transAxes,
+            width=bmaj,
+            height=bmin,
+            transform=ax.transData,
+            **kwargs
         )
         ax.add_artist(ellipse)
 
@@ -781,9 +797,6 @@ class Cube(object):
         cmapc = copy.copy(plt.get_cmap(cmap))
         cmapc.set_bad(color=(0.9, 0.9, 0.9))
 
-        if show_beam and self.beam_kernel:
-            self._plot_beam(ax[0])
-
         if cube_init == 0:
             img_data = self.data[chan_init]
         else:
@@ -806,6 +819,9 @@ class Cube(object):
             transform=ax[1].transAxes,
         )
 
+        if show_beam and self.beam_kernel:
+            self.plot_beam(ax[0])
+        
         if cursor_grid:
             cg = Cursor(ax[0], useblit=True, color="lime", linewidth=1.5)
 
@@ -1017,9 +1033,6 @@ class Cube(object):
         cmap = copy.copy(plt.get_cmap(cmap))
         cmap.set_bad(color=(0.9, 0.9, 0.9))
 
-        if show_beam and self.beam_kernel:
-            self._plot_beam(ax[0])
-
         img = ax[0].imshow(
             self.data[chan_init],
             cmap=cmap,
@@ -1050,6 +1063,10 @@ class Cube(object):
             color="black",
             transform=ax[2].transAxes,
         )
+
+        if show_beam and self.beam_kernel:
+            self.plot_beam(ax[0])
+            self.plot_beam(ax[1])
 
         if cursor_grid:
             cg = Cursor(ax[0], useblit=True, color="lime", linewidth=1.5)
@@ -1333,7 +1350,7 @@ class Cube(object):
         cmapc.set_bad(color=(0.9, 0.9, 0.9))
 
         if show_beam and self.beam_kernel:
-            self._plot_beam(ax[0])
+            self.plot_beam(ax[0])
 
         if cube_init == 0:
             img_data = self.data[chan_init]
@@ -1623,7 +1640,7 @@ class Cube(object):
         
     def make_channel_maps(self, channels={'interval': None, 'indices': None}, ncols=5,
                           unit_intensity=None, unit_coordinates=None, fmt_cbar='%3d',
-                          observable='intensity', kind='attribute',
+                          observable='intensity', kind='attribute', xlims=None, ylims=None,
                           projection='wcs', mask_under=None, **kwargs_contourf):
         
         try:
@@ -1651,7 +1668,6 @@ class Cube(object):
             unit_coordinates = ''
         else:
             unit_coordinates = ' [%s]'%unit_coordinates
-
             
         cmap_chan = get_discminer_cmap(observable, kind=kind) #See default cmap for each observable in plottools.py
         if mask_under is not None:
@@ -1668,8 +1684,14 @@ class Cube(object):
 
         if projection=='wcs':
             plot_projection=self.wcs.celestial
-        else:
+        else: #Assume plot in au
             plot_projection=None
+            pix_rad = self.pix_size.to(u.radian)
+            pix_au = (self.dpc*np.tan(pix_rad)).to(u.au)
+            nx = self.header['NAXIS1']
+            xsky = ysky = ((nx-1) * pix_au/2.0).value
+            extent= np.array([-xsky, xsky, -ysky, ysky])
+            kwargs_cf.update(dict(extent=extent))
             
         idchan = self._channel_picker(channels, warn_hdr=False) #Warning on hdr not relevant here
         plot_data = self.data[idchan]
@@ -1702,17 +1724,8 @@ class Cube(object):
         #*****************
         #BEAM
         #*****************        
-        if self.beam is not None:
-            xbeam, ybeam = 0.05, 0.05
-            x_fwhm = self.beam_kernel.model.x_fwhm/self.nx
-            y_fwhm = self.beam_kernel.model.y_fwhm/self.nx
-
-        def make_beam(ax):
-            ellipse = matplotlib.patches.Ellipse(xy=(xbeam,ybeam), angle=90+self.beam.pa.value,
-                                                 width=x_fwhm, height=y_fwhm, lw=0.5, fill=True,
-                                                 fc='cyan', ec='k', transform=ax.transAxes)
-            ax.add_artist(ellipse)
-            
+        kwargs_beam = dict(lw=0.5, fill=True, fc='cyan', ec='k')
+        
         #*****************
         #PLOT
         #*****************        
@@ -1755,7 +1768,11 @@ class Cube(object):
                 mod_major_ticks(axji, axis='x', nbins=3)
                 mod_major_ticks(axji, axis='y', nbins=3)
 
-                if self.beam is not None: make_beam(axji)
+                axji.set_xlim(xlims)
+                axji.set_ylim(ylims)
+                
+                if self.beam is not None:
+                    self.plot_beam(axji, projection=projection, **kwargs_beam)
                 
                 if ichan==plot_nchan-1:
                     break

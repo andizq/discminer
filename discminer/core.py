@@ -148,7 +148,7 @@ class Model():
         #Cube.__init__(data, self.header, self.vchannels, beam=self.beam, filename=filename)    
 
     def make_grid(self, write_extent=True):
-        dpix_rad = np.abs(self.header['CDELT2'])*u.Unit(self.header['CUNIT1']).to(u.radian)
+        dpix_rad = np.abs(self.header['CDELT1'])*u.Unit(self.header['CUNIT1']).to(u.radian)
         dpix_au = (self.dpc*np.tan(dpix_rad)).to(u.au)
         nx = self.header['NAXIS1']
         ny = self.header['NAXIS2']
