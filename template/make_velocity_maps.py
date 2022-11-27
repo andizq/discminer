@@ -15,7 +15,7 @@ use_discminer_style()
 #****************
 file_data = 'MWC_480_CO_220GHz.robust_0.5.JvMcorr.image.pbcor_clipped_downsamp_2pix_convtb.fits'
 dpc = 162*u.pc
-Rdisc = 700*u.au
+Rmax = 700*u.au
 vsys = 5.099463 #from best-fit model
 
 #********************
@@ -58,7 +58,6 @@ centroid_residuals = centroid_data - centroid_model
 
 #**************************
 #MAKE PLOT
-#fig, ax, ax_cbar0, ax_cbar2 = make_fig_ax_intro()
 
 fig, ax = plt.subplots(ncols=3, nrows=1, figsize=(15,6))
 ax_cbar0 = fig.add_axes([0.15, 0.14, 0.450, 0.04])
@@ -92,8 +91,8 @@ ax[0].set_title('MWC 480, $^{12}$CO', pad=40, fontsize=17)
 ax[1].set_title('Discminer Model', pad=40, fontsize=17)
 ax[2].set_title('Residuals', pad=40, fontsize=17)
 
-cbar0.set_label(r'Centroid Velocity [km s$^{-1}$]', fontsize=14)#, **kwargs_cbar_label)
-cbar2.set_label(r'Residuals [km s$^{-1}$]', fontsize=14)#, **kwargs_cbar_label)
+cbar0.set_label(r'Centroid Velocity [km s$^{-1}$]', fontsize=14)
+cbar2.set_label(r'Residuals [km s$^{-1}$]', fontsize=14)
 
 #mod_nticks_cbars([cbar0], nbins=8)
 #mod_nticks_cbars([cbar2], nbins=5)
@@ -105,18 +104,15 @@ cbar2.set_label(r'Residuals [km s$^{-1}$]', fontsize=14)#, **kwargs_cbar_label)
 for axi in ax:
     make_up_ax(axi, xlims=(-xlim, xlim), ylims=(-xlim, xlim), labelsize=11)
     mod_major_ticks(axi, axis='both', nbins=8)
+    datacube.plot_beam(axi, fc='lime')
     axi.set_aspect(1)
-    #plot_beam(axi, Rbeam=Rbeam)
     
 for axi in ax[1:]: axi.tick_params(labelleft=False)
 
 for i,axi in enumerate(ax):
-    #if i==2: continue
-    #if i==2: make_contour_substructures(axi)
-
-    Contours.emission_surface(axi, R, phi, extent=extent, R_lev=np.linspace(0.1, 0.97, 10)*Rdisc.to('m').value,
+    Contours.emission_surface(axi, R, phi, extent=extent, R_lev=np.linspace(0.1, 0.97, 10)*Rmax.to('m').value,
                               kwargs_R=dict(linestyles=':', linewidths=0.4), kwargs_phi=dict(linestyles=':', linewidths=0.4))
     
 plt.savefig('centroid.png', bbox_inches='tight', dpi=200)
-#plt.show()
+plt.show()
 plt.close()

@@ -132,14 +132,13 @@ model.params['height_lower']['q'] = q_lower
 #**************************
 #MAKE MODEL (2D ATTRIBUTES)
 #**************************
-modelcube = model.make_model(make_convolve=True) #Line profile attributes projected on the sky
-R, phi, z, R_nonan, phi_nonan, z_nonan = model.get_projected_coords() #Disc coordinates from upper and lower emission surfaces as projected on the sky
+modelcube = model.make_model(make_convolve=True) #Returns model cube and computes disc coordinates projected on the sky 
 
 #**********************
 #VISUALISE CHANNEL MAPS
 #**********************
-modelcube.show(compare_cubes=[datacube], extent=extent, int_unit='Intensity [K]', show_beam=True, surface={'args': (R, phi), 'kwargs': {'extent': extent}})
-modelcube.show_side_by_side(datacube, extent=extent, int_unit='Intensity [K]', show_beam=True, surface={'args': (R, phi), 'kwargs': {'extent': extent}})
+modelcube.show(compare_cubes=[datacube], extent=extent, int_unit='Intensity [K]', show_beam=True, surface_from=model)
+modelcube.show_side_by_side(datacube, extent=extent, int_unit='Intensity [K]', show_beam=True,  surface_from=model)
 
 #DATA CHANNELS
 fig, ax, im, cbar = datacube.make_channel_maps(channels={'interval': [60, 70]}, ncols=5)
@@ -147,7 +146,6 @@ plt.savefig('testchans_data.png', bbox_inches = 'tight', dpi=100)
 plt.close()
 
 #MODEL CHANNELS
-#modelcube = Cube(cube.data, datacube.header, datacube.vchannels, beam=datacube.beam, filename='cube_model.fits')
 fig, ax, im, cbar = modelcube.make_channel_maps(channels={'interval': [60, 70]}, ncols=5, levels=im[0].levels)
 plt.savefig('testchans_model.png', bbox_inches = 'tight', dpi=100)
 plt.close()
@@ -168,22 +166,22 @@ fig, ax, im, cbar = residualscube.make_channel_maps(channels={'interval': [60, 7
                                                     mask_under=3*noise_mean,
                                                     levels=np.linspace(-29, 29, 32))
 for axi in ax[0]:
-    Contours.emission_surface(
-        axi, R, phi, extent=extent,
-        kwargs_R={'colors': '0.4', 'linewidths': 0.3},
-        kwargs_phi={'colors': '0.4', 'linewidths': 0.5}
+    model.make_emission_surface(
+        axi,
+        kwargs_R={'colors': '0.4', 'linewidths': 0.4},
+        kwargs_phi={'colors': '0.4', 'linewidths': 0.3}
     )
-
+    
 for axi in ax[1]:
     model.make_disc_axes(axi)
-    
+
+
 plt.savefig('testchans_residuals.png', bbox_inches = 'tight', dpi=200)
 plt.close()
 
 residualscube.filename = 'cube_residuals_mwc480.fits'
 residualscube.writefits() 
 
-sys.exit()
 #**********************
 #MAKE MOMENT MAPS
 #**********************
