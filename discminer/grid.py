@@ -60,6 +60,7 @@ def grid(xmax, nx, indexing="xy", verbose=True):
         "xmax": xmax,
         "ncells": nx ** 2,
         "step": step,
+        "extent": np.array([-xmax, xmax, -xmax, xmax])*u.m.to(u.au)
     }
 
 class GridTools:
@@ -100,10 +101,10 @@ class GridTools:
         return x_pro, y_pro, z_pro
 
     @staticmethod
-    def get_sky_from_disc_coords(R, az, z, incl, PA):
+    def get_sky_from_disc_coords(R, az, z, incl, PA, xc=0, yc=0):
         xp = R*np.cos(az)
         yp = R*np.sin(az)
         zp = z
-        xp, yp, zp = Tools._project_on_skyplane(xp, yp, zp, np.cos(incl), np.sin(incl))
-        xp, yp = Tools._rotate_sky_plane(xp, yp, PA)
-        return xp, yp, zp #Missing +xc, +yc
+        xp, yp, zp = GridTools._project_on_skyplane(xp, yp, zp, np.cos(incl), np.sin(incl))
+        xp, yp = GridTools._rotate_sky_plane(xp, yp, PA)
+        return xp+xc, yp+yc, zp

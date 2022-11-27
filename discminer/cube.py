@@ -108,7 +108,8 @@ class Cube(object):
         bmin = self.beam.minor.to(u.arcsecond).value        
         self.beam_area_arcsecs = 2*np.pi * (bmaj * bmin) / sigma2fwhm**2        
         #self.beam_area_arcsecs = np.pi * (bmaj * bmin) / (4 * np.log(2))
-
+        self.beam_size = bmaj*self.dpc.to('pc').value * u.au
+        
     @staticmethod
     def _channel_picker(channels, warn_hdr=True):
         """
@@ -501,8 +502,8 @@ class Cube(object):
         print("Setting interactive_path function to", func)
         self._interactive_path = func
 
-    def _surface(self, ax, *args, **kwargs):
-        return Contours.emission_surface(ax, *args, **kwargs)
+    def _surface(self, ax, surface_from, **kwargs):
+        surface_from.make_emission_surface(ax, **kwargs)
 
     def plot_beam(self, ax, projection=None, **kwargs_ellipse):
         kwargs=dict(lw=1,fill=True,fc="gray",ec="k")
@@ -756,19 +757,20 @@ class Cube(object):
         return cid
 
     def show(
-        self,
-        extent=None,
-        chan_init=0,
-        cube_init=0,
-        compare_cubes=[],
-        cursor_grid=True,
-        cmap="gnuplot2_r",
-        int_unit=r"Intensity [mJy beam$^{-1}$]",
-        pos_unit="Offset [au]",
-        vel_unit=r"km s$^{-1}$",
-        show_beam=False,
-        surface={"args": (), "kwargs": {}},
-        **kwargs
+            self,
+            extent=None,
+            chan_init=0,
+            cube_init=0,
+            compare_cubes=[],
+            cursor_grid=True,
+            cmap="gnuplot2_r",
+            int_unit=r"Intensity [mJy beam$^{-1}$]",
+            pos_unit="Offset [au]",
+            vel_unit=r"km s$^{-1}$",
+            show_beam=True,
+            surface_from=None,
+            kwargs_surface={},
+            **kwargs
     ):
 
         self._check_cubes_shape(compare_cubes)
@@ -929,8 +931,9 @@ class Cube(object):
                 int_unit=int_unit,
                 pos_unit=pos_unit,
                 vel_unit=vel_unit,
-                surface=surface,                
-                show_beam=show_beam,
+                show_beam=show_beam,                
+                surface_from=surface_from,
+                kwargs_surface=kwargs_surface,                
                 **kwargs
             )
 
@@ -952,13 +955,14 @@ class Cube(object):
                 int_unit=int_unit,
                 pos_unit=pos_unit,
                 vel_unit=vel_unit,
-                surface=surface,
-                show_beam=show_beam,
+                show_beam=show_beam,                
+                surface_from=surface_from,
+                kwargs_surface=kwargs_surface,                
                 **kwargs
             )
 
         def go2surface(event):
-            self._surface(ax[0], *surface["args"], **surface["kwargs"])
+            self._surface(ax[0], surface_from, **kwargs_surface)
             fig.canvas.draw()
             fig.canvas.flush_events()
 
@@ -982,7 +986,7 @@ class Cube(object):
         btrash = Button(axbtrash, "", image=trash_img, color="white", hovercolor="lime")
         btrash.on_clicked(go2trash)
 
-        if len(surface["args"]) > 0:
+        if surface_from is not None:
             axbsurf = plt.axes([0.005, 0.809, 0.07, 0.07], frameon=True, aspect="equal")
             bsurf = Button(axbsurf, "", image=surface_img)
             bsurf.on_clicked(go2surface)
@@ -990,18 +994,19 @@ class Cube(object):
         plt.show(block=True)
 
     def show_side_by_side(
-        self,
-        cube1,
-        extent=None,
-        chan_init=0,
-        cursor_grid=True,
-        cmap="gnuplot2_r",
-        int_unit=r"Intensity [mJy beam$^{-1}$]",
-        pos_unit="Offset [au]",
-        vel_unit=r"km s$^{-1}$",
-        show_beam=False,
-        surface={"args": (), "kwargs": {}},
-        **kwargs
+            self,
+            cube1,
+            extent=None,
+            chan_init=0,
+            cursor_grid=True,
+            cmap="gnuplot2_r",
+            int_unit=r"Intensity [mJy beam$^{-1}$]",
+            pos_unit="Offset [au]",
+            vel_unit=r"km s$^{-1}$",
+            show_beam=True,
+            surface_from=None,
+            kwargs_surface={},
+            **kwargs
     ):
 
         compare_cubes = [cube1]
@@ -1138,14 +1143,15 @@ class Cube(object):
                 int_unit=int_unit,
                 pos_unit=pos_unit,
                 vel_unit=vel_unit,
-                surface=surface,
-                show_beam=show_beam,
+                show_beam=show_beam,                
+                surface_from=surface_from,
+                kwargs_surface=kwargs_surface,                
                 **kwargs
             )
 
         def go2surface(event):
-            self._surface(ax[0], *surface["args"], **surface["kwargs"])
-            self._surface(ax[1], *surface["args"], **surface["kwargs"])
+            self._surface(ax[0], surface_from, **kwargs_surface)
+            self._surface(ax[1], surface_from, **kwargs_surface)            
             fig.canvas.draw()
             fig.canvas.flush_events()
 
@@ -1163,7 +1169,7 @@ class Cube(object):
         btrash = Button(axbtrash, "", image=trash_img, color="white", hovercolor="lime")
         btrash.on_clicked(go2trash)
 
-        if len(surface["args"]) > 0:
+        if surface_from is not None:
             axbsurf = plt.axes([0.005, 0.759, 0.07, 0.07], frameon=True, aspect="equal")
             bsurf = Button(axbsurf, "", image=surface_img)
             bsurf.on_clicked(go2surface)

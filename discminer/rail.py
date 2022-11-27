@@ -9,32 +9,256 @@ from .grid import GridTools
 from . import constants as sfc
 from . import units as sfu
 import matplotlib.pyplot as plt
+import matplotlib
 import numpy as np
 import numbers
 
+
 get_sky_from_disc_coords = GridTools.get_sky_from_disc_coords
 
+class Rail(object):
+    def __init__(self, model):
+        _rail_coords = model.projected_coords
+        X, Y = model.skygrid['meshgrid']        
+        self.X = X/sfu.au
+        self.Y = Y/sfu.au
+
+        self.R = _rail_coords['R']
+        self.phi = _rail_coords['phi']
+        self.R_nonan = _rail_coords['R_nonan']                
+        self.extent = model.skygrid['extent']
+        
+    def prop_along_coords(self, prop, coord_levels, coord_ref,
+                          ax=None,
+                          ax2=None,
+                          acc_threshold=10, #0.05
+                          max_prop_threshold=np.inf,
+                          color_bounds=[200, 400],
+                          colors=['red', 'dodgerblue', (0,1,0)],
+                          lws=[0.3, 0.3, 0.3], lw_ax2_factor=1,
+                          fold=False,
+                          fold_func=np.subtract):
+        """
+        Compute radial/azimuthal contours according to the model disc geometry 
+        to get and plot information from the input 2D property ``prop``.    
+
+        Parameters
+        ----------
+        ax : `matplotlib.axes` instance, optional
+           ax instance to make the plot. 
+
+        prop : array_like, shape (nx, ny)
+           Input 2D field to extract information along the computed contours.
+        
+        coords : list, shape (2,)
+           coords[0] [array_like, shape (nx, ny)], is the coordinate 2D map onto which contours will be computed using the input ``coord_levels``;
+           coords[1] [array_like, shape (nx, ny)], is the coordinate 2D map against which the ``prop`` values are plotted. The output plot is prop vs coords[1]       
+           
+        coord_ref : scalar
+           Reference coordinate (referred to ``coords[0]``) to highlight among the other contours.
+           
+        coord_levels : array_like, shape (nlevels,)
+           Contour levels to be extracted from ``coords[0]``.
+        
+        ax2 : `matplotlib.axes` instance (or list of instances), optional
+           Additional ax(s) instance(s) to plot the location of contours in the disc. 
+           If provided, ``X`` and ``Y`` must also be passed.
+           
+        X : array_like, shape (nx, ny), optional
+           Meshgrid of the model x coordinate (see `numpy.meshgrid`). Required if ax2 instance(s) is provided.
+
+        Y : array_like, shape (nx, ny), optional
+           Meshgrid of the model y coordinate (see `numpy.meshgrid`). Required if ax2 instance(s) is provided.
+                   
+        acc_threshold : float, optional 
+           Threshold to accept points on contours at a given coords[0] level. If coord level obtained for a pixel is such that np.abs(level_pixel-level_reference)<acc_threshold the pixel value is accepted
+
+        max_prop_threshold : float, optional 
+           Threshold to accept points of contours. Rejects residuals of the contour if they are < max_prop_threshold. Useful to reject hot pixels.
+
+        color_bounds : array_like, shape (nbounds,), optional
+           Colour bounds with respect to the reference contour coord_ref.
+           
+        colors : array_like, shape (nbounds+2,), optional
+           Contour colors. (i=0) is reserved for the reference contour coord_ref, 
+           (i>0) for contour colors according to the bounds in color_bounds. 
+           
+        lws : array_like, shape (nbounds+2), optional
+           Contour linewidths. Similarly, (i=0) is reserved for coord_ref and 
+           (i>0) for subsequent bounds.
+
+        fold : bool, optional
+           If True, subtract residuals by folding along the projected minor axis of the disc. Currently working for azimuthal contours only.
+           
+        fold_func : function, optional
+           If fold, this function is used to operate between folded quadrants. Defaults to np.subtract.
+        """
+        from skimage import measure 
+
+        _rail_phi = self.phi['upper'] #np.where(self.phi['upper'] < 0.98*np.pi, self.phi['upper'], np.nan)
+        coords_azimuthal = [self.R_nonan['upper']/sfu.au, np.degrees(_rail_phi)]
+        coords_radial = []
+        
+        X, Y = self.X, self.Y
+        coords = coords_azimuthal
+
+        color_bounds = np.insert([0, np.inf], 1, color_bounds)
+        nbounds = len(color_bounds)
+        
+        coord_list, lev_list, resid_list, color_list = [], [], [], []
+        if np.sum(coord_levels==coord_ref)==0: coord_levels = np.append(coord_levels, coord_ref)
+        for lev in coord_levels:
+            contour = measure.find_contours(coords[0], lev) #, fully_connected='high', positive_orientation='high')
+            if len(contour)==0:
+                print ('no contours found for phi =', lev)
+                continue
+            ind_good = np.argmin([np.abs(lev-coords[0][tuple(np.round(contour[i][0]).astype(np.int))]) for i in range(len(contour))]) #getting ind of closest contour to lev
+            inds_cont = np.round(contour[ind_good]).astype(np.int)
+            inds_cont = [tuple(f) for f in inds_cont]
+            first_cont = np.array([coords[0][i] for i in inds_cont])
+            second_cont = np.array([coords[1][i] for i in inds_cont])
+            prop_cont = np.array([prop[i] for i in inds_cont])
+            corr_inds = np.abs(first_cont-lev) < acc_threshold
+            if lev == coord_ref: zorder=10
+            else: zorder=np.random.randint(0,10)
+
+            #lw = lws[-1]
+            #color = colors[-1]
+            for i,bound in enumerate(color_bounds):
+                if lev == coord_ref: 
+                    lw = 2.0
+                    color = 'k'
+                    zorder = 10
+                    break
+                elif i!=(nbounds-1):
+                    if color_bounds[i] < lev < color_bounds[i+1]:
+                        lw = lws[i]
+                        color = colors[i]                                            
+                        break
+                else:
+                    lw = lws[i]
+                    color = colors[i]                    
+                    break
+                
+            
+
+            if fold:
+                #if lev < color_bounds[0]: continue
+                ref_pos = 90 #Reference axis for positive angles
+                ref_neg = -90
+                angles = second_cont[corr_inds]
+                prop_ = prop_cont[corr_inds]
+                angles_pos = angles[angles>=0]
+                angles_neg = angles[angles<0]
+                relative_diff_pos = ref_pos - angles_pos
+                relative_diff_neg = ref_neg - angles_neg
+                angle_diff_pos, prop_diff_pos = [], []
+                angle_diff_neg, prop_diff_neg = [], []
+
+                for i,diff in enumerate(relative_diff_pos):
+                    #Finding where the difference matches that of the current analysis angle
+                    #The -1 flips the sign so that the number on the other side of the symmetry axis is found                
+                    ind = np.argmin(np.abs(-1*relative_diff_pos - diff))  
+                    mirror_ind = angles==angles_pos[ind]
+                    current_ind = angles==angles_pos[i]
+                    prop_diff = fold_func(prop_[current_ind][0], prop_[mirror_ind][0])
+                    angle_diff_pos.append(angles_pos[i])
+                    prop_diff_pos.append(prop_diff)
+                angle_diff_pos = np.asarray(angle_diff_pos)
+                prop_diff_pos = np.asarray(prop_diff_pos)
+
+                if len(angle_diff_pos)>1:
+                    ind_sort_pos = np.argsort(angle_diff_pos)
+                    plot_ang_diff_pos = angle_diff_pos[ind_sort_pos]
+                    plot_prop_diff_pos = prop_diff_pos[ind_sort_pos]
+                    ind_prop_pos = np.abs(plot_prop_diff_pos)<max_prop_threshold
+                    ax.plot(plot_ang_diff_pos[ind_prop_pos], plot_prop_diff_pos[ind_prop_pos], color=color, lw=lw, zorder=zorder)
+                    coord_list.append(plot_ang_diff_pos[ind_prop_pos])
+                    resid_list.append(plot_prop_diff_pos[ind_prop_pos])
+                    color_list.append(color)
+                    lev_list.append(lev)
+                else: 
+                    plot_ang_diff_pos = []
+                    plot_prop_diff_pos = []
+
+                for i,diff in enumerate(relative_diff_neg):
+                    ind = np.argmin(np.abs(-1*relative_diff_neg - diff))
+                    mirror_ind = angles==angles_neg[ind]
+                    current_ind = angles==angles_neg[i]
+                    prop_diff = fold_func(prop_[current_ind][0], prop_[mirror_ind][0])
+                    angle_diff_neg.append(angles_neg[i])
+                    prop_diff_neg.append(prop_diff)
+                angle_diff_neg = np.asarray(angle_diff_neg)
+                prop_diff_neg = np.asarray(prop_diff_neg)
+
+                if len(angle_diff_neg)>1:
+                    ind_sort_neg = np.argsort(np.abs(angle_diff_neg))
+                    plot_ang_diff_neg = angle_diff_neg[ind_sort_neg]
+                    plot_prop_diff_neg = prop_diff_neg[ind_sort_neg]
+                    ind_prop_neg = np.abs(plot_prop_diff_neg)<max_prop_threshold
+                    ax.plot(plot_ang_diff_neg[ind_prop_neg], plot_prop_diff_neg[ind_prop_neg], color=color, lw=lw, zorder=zorder)
+                    coord_list.append(plot_ang_diff_neg[ind_prop_neg])
+                    resid_list.append(plot_prop_diff_neg[ind_prop_neg])
+                    color_list.append(color)
+                    lev_list.append(lev)
+                else: 
+                    plot_ang_diff_neg = []
+                    plot_prop_diff_neg = []
+
+                """
+                if len(angle_diff_pos)>1 or len(angle_diff_neg)>1:
+                    coord_list.append(np.append(plot_ang_diff_pos, plot_ang_diff_neg))
+                    resid_list.append(np.append(plot_prop_diff_pos, plot_prop_diff_neg))
+                    color_list.append(color)
+                    lev_list.append(lev)
+                """
+            else:
+                ind_sort = np.argsort(second_cont[corr_inds]) #sorting by azimuth/radius to avoid 'joint' boundaries in plot
+                coord_list.append(second_cont[corr_inds][ind_sort])
+                resid_list.append(prop_cont[corr_inds][ind_sort])
+                color_list.append(color)
+                lev_list.append(lev)
+
+                if ax is not None:
+                    ax.plot(second_cont[corr_inds][ind_sort], prop_cont[corr_inds][ind_sort], color=color, lw=lw, zorder=zorder)
+
+            if ax2 is not None:
+                x_cont = np.array([X[i] for i in inds_cont])
+                y_cont = np.array([Y[i] for i in inds_cont])
+            if isinstance(ax2, matplotlib.axes._subplots.Axes): 
+                ax2.plot(x_cont[corr_inds], y_cont[corr_inds], color=color, lw=lw*lw_ax2_factor)
+            elif isinstance(ax2, list):
+                for axi in ax2: 
+                    if isinstance(axi, matplotlib.axes._subplots.Axes): axi.plot(x_cont[corr_inds], y_cont[corr_inds], color=color, lw=lw*lw_ax2_factor)
+
+        self._lev_list = lev_list
+        self._coord_list = coord_list
+        self._resid_list = resid_list
+        self._color_list = color_list
+
+        return [np.asarray(tmp) for tmp in [lev_list, coord_list, resid_list, color_list]]
+
+                
 class Contours(object):
     @staticmethod
-    def emission_surface(ax, R, phi, R_lev=None, phi_lev=None, extent=None,
+    def emission_surface(ax, R, phi, extent, R_lev=None, phi_lev=None,
                          proj_offset=None, X=None, Y=None, which='both',
                          kwargs_R={}, kwargs_phi={}):
-        kwargs_phif = dict(linestyles=':', linewidths=1.0, colors='k')
-        kwargs_Rf = dict(linewidths=1.4, colors='k')
+        kwargs_phif = dict(linestyles=':', linewidths=0.5, colors='k')
+        kwargs_Rf = dict(linestyles=':', linewidths=0.5, colors='k')
         kwargs_phif.update(kwargs_phi)        
         kwargs_Rf.update(kwargs_R)
 
         near_nonan = ~np.isnan(R['upper'])
 
-        Rmax = np.max(R['upper'][near_nonan])
-        if extent is None:
-            extent = np.array([-Rmax, Rmax, -Rmax, Rmax])/sfu.au
+        Rmax = np.nanmax(R['upper'])
+
         kwargs_phif.update({'extent': extent})
         kwargs_Rf.update({'extent': extent})
 
         if R_lev is None: R_lev = np.linspace(0.06, 0.97, 4)*Rmax
         else: R_lev = np.sort(R_lev)
-        if phi_lev is None: phi_lev = np.linspace(-np.pi*0.95, np.pi, 11, endpoint=False)
+        if phi_lev is None: phi_lev = np.radians(np.arange(-170, 171, 20))
 
         #Splitting phi into pos and neg to try and avoid ugly contours close to -pi and pi
         phi_lev_neg = phi_lev[phi_lev<0] 
@@ -71,197 +295,22 @@ class Contours(object):
                 
     #The following method can be optimised if the contour finding process is separated from the plotting
     # by returning coords_list and inds_cont first, which will allow the user use the same set of contours to plot different props.
+
     @staticmethod
-    def prop_along_coords(ax, prop, coords, coord_ref, coord_levels, 
-                          ax2=None, X=None, Y=None, 
-                          PA=0,
-                          acc_threshold=0.05,
-                          max_prop_threshold=np.inf,
-                          color_bounds=[np.pi/5, np.pi/2],
-                          colors=['k', 'dodgerblue', (0,1,0), (1,0,0)],
-                          lws=[2, 0.5, 0.2, 0.2], lw_ax2_factor=1,
-                          subtract_quadrants=False,
-                          subtract_func=np.subtract):
-        """
-        Compute radial/azimuthal contours according to the model disc geometry 
-        to get and plot information from the input 2D property ``prop``.    
+    def disc_axes(ax, Rmax, incl, PA, z_list, xc=0, yc=0):
+        kwargs_axes = dict(color='k', ls=':', lw=1.5,
+                           dash_capstyle='round', dashes=(0.5, 1.5), alpha=0.7)        
+        R_daxes = np.linspace(0, Rmax, 50)            
+        phi_daxes_0 = np.zeros(50)
+        phi_daxes_90 = np.zeros(50)+np.pi/2
+        phi_daxes_180 = np.zeros(50)+np.pi
+        phi_daxes_270 = np.zeros(50)-np.pi/2
 
-        Parameters
-        ----------
-        ax : `matplotlib.axes` instance, optional
-           ax instance to make the plot. 
-
-        prop : array_like, shape (nx, ny)
-           Input 2D field to extract information along the computed contours.
+        make_ax = lambda x, y: ax.plot(x, y, **kwargs_axes)
         
-        coords : list, shape (2,)
-           coords[0] [array_like, shape (nx, ny)], is the coordinate 2D map onto which contours will be computed using the input ``coord_levels``;
-           coords[1] [array_like, shape (nx, ny)], is the coordinate 2D map against which the ``prop`` values are plotted. The output plot is prop vs coords[1]       
-           
-        coord_ref : scalar
-           Reference coordinate (referred to ``coords[0]``) to highlight among the other contours.
-           
-        coord_levels : array_like, shape (nlevels,)
-           Contour levels to be extracted from ``coords[0]``.
-        
-        ax2 : `matplotlib.axes` instance (or list of instances), optional
-           Additional ax(s) instance(s) to plot the location of contours in the disc. 
-           If provided, ``X`` and ``Y`` must also be passed.
-           
-        X : array_like, shape (nx, ny), optional
-           Meshgrid of the model x coordinate (see `numpy.meshgrid`). Required if ax2 instance(s) is provided.
-
-        Y : array_like, shape (nx, ny), optional
-           Meshgrid of the model y coordinate (see `numpy.meshgrid`). Required if ax2 instance(s) is provided.
-        
-        PA : scalar, optional
-           Reference position angle.
-           
-        acc_threshold : float, optional 
-           Threshold to accept points on contours at constant coords[0]. If obtained level at a point is such that np.abs(level-level_reference)<acc_threshold the point is accepted
-
-        max_prop_threshold : float, optional 
-           Threshold to accept points of contours. Rejects residuals of the contour if they are < max_prop_threshold. Useful to reject hot pixels.
-
-        color_bounds : array_like, shape (nbounds,), optional
-           Colour bounds with respect to the reference contour coord_ref.
-           
-        colors : array_like, shape (nbounds+2,), optional
-           Contour colors. (i=0) is reserved for the reference contour coord_ref, 
-           (i>0) for contour colors according to the bounds in color_bounds. 
-           
-        lws : array_like, shape (nbounds+2), optional
-           Contour linewidths. Similarly, (i=0) is reserved for coord_ref and 
-           (i>0) for subsequent bounds.
-
-        subtract_quadrants : bool, optional
-           If True, subtract residuals by folding along the projected minor axis of the disc. Currently working for azimuthal contours only.
-           
-        subtract_func : function, optional
-           If subtract_quadrants, this function is used to operate between folded quadrants. Defaults to np.subtract.
-        """
-        from skimage import measure 
-
-        coord_list, lev_list, resid_list, color_list = [], [], [], []
-        if np.sum(coord_levels==coord_ref)==0: coord_levels = np.append(coord_levels, coord_ref)
-        for lev in coord_levels:
-            contour = measure.find_contours(coords[0], lev) #, fully_connected='high', positive_orientation='high')
-            if len(contour)==0:
-                print ('no contours found for phi =', lev)
-                continue
-            ind_good = np.argmin([np.abs(lev-coords[0][tuple(np.round(contour[i][0]).astype(np.int))]) for i in range(len(contour))]) #getting ind of closest contour to lev
-            inds_cont = np.round(contour[ind_good]).astype(np.int)
-            inds_cont = [tuple(f) for f in inds_cont]
-            first_cont = np.array([coords[0][i] for i in inds_cont])
-            second_cont = np.array([coords[1][i] for i in inds_cont])
-            prop_cont = np.array([prop[i] for i in inds_cont])
-            corr_inds = np.abs(first_cont-lev) < acc_threshold
-            if lev == coord_ref: zorder=10
-            else: zorder=np.random.randint(0,10)
-
-            lw = lws[-1]
-            color = colors[-1]
-            for i,bound in enumerate(color_bounds):
-                if lev == coord_ref: 
-                    lw = lws[0]
-                    color = colors[0]
-                    zorder = 10
-                    break
-                if np.abs(coord_ref - lev) < bound:
-                    lw = lws[i+1]
-                    color = colors[i+1]
-                    break
-
-            if subtract_quadrants:
-                #if lev < color_bounds[0]: continue
-                ref_pos = PA+90 #Reference axis for positive angles
-                ref_neg = PA-90
-                angles = second_cont[corr_inds]
-                prop_ = prop_cont[corr_inds]
-                angles_pos = angles[angles>=0]
-                angles_neg = angles[angles<0]
-                relative_diff_pos = ref_pos - angles_pos
-                relative_diff_neg = ref_neg - angles_neg
-                angle_diff_pos, prop_diff_pos = [], []
-                angle_diff_neg, prop_diff_neg = [], []
-
-                for i,diff in enumerate(relative_diff_pos):
-                    #Finding where the difference matches that of the current analysis angle
-                    #The -1 flips the sign so that the number on the other side of the symmetry axis is found                
-                    ind = np.argmin(np.abs(-1*relative_diff_pos - diff))  
-                    mirror_ind = angles==angles_pos[ind]
-                    current_ind = angles==angles_pos[i]
-                    prop_diff = subtract_func(prop_[current_ind][0], prop_[mirror_ind][0])
-                    angle_diff_pos.append(angles_pos[i])
-                    prop_diff_pos.append(prop_diff)
-                angle_diff_pos = np.asarray(angle_diff_pos)
-                prop_diff_pos = np.asarray(prop_diff_pos)
-
-                if len(angle_diff_pos)>1:
-                    ind_sort_pos = np.argsort(angle_diff_pos)
-                    plot_ang_diff_pos = angle_diff_pos[ind_sort_pos]
-                    plot_prop_diff_pos = prop_diff_pos[ind_sort_pos]
-                    ind_prop_pos = np.abs(plot_prop_diff_pos)<max_prop_threshold
-                    ax.plot(plot_ang_diff_pos[ind_prop_pos], plot_prop_diff_pos[ind_prop_pos], color=color, lw=lw, zorder=zorder)
-                    coord_list.append(plot_ang_diff_pos[ind_prop_pos])
-                    resid_list.append(plot_prop_diff_pos[ind_prop_pos])
-                    color_list.append(color)
-                    lev_list.append(lev)
-                else: 
-                    plot_ang_diff_pos = []
-                    plot_prop_diff_pos = []
-
-                for i,diff in enumerate(relative_diff_neg):
-                    ind = np.argmin(np.abs(-1*relative_diff_neg - diff))
-                    mirror_ind = angles==angles_neg[ind]
-                    current_ind = angles==angles_neg[i]
-                    prop_diff = subtract_func(prop_[current_ind][0], prop_[mirror_ind][0])
-                    angle_diff_neg.append(angles_neg[i])
-                    prop_diff_neg.append(prop_diff)
-                angle_diff_neg = np.asarray(angle_diff_neg)
-                prop_diff_neg = np.asarray(prop_diff_neg)
-
-                if len(angle_diff_neg)>1:
-                    ind_sort_neg = np.argsort(np.abs(angle_diff_neg))
-                    plot_ang_diff_neg = angle_diff_neg[ind_sort_neg]
-                    plot_prop_diff_neg = prop_diff_neg[ind_sort_neg]
-                    ind_prop_neg = np.abs(plot_prop_diff_neg)<max_prop_threshold
-                    ax.plot(plot_ang_diff_neg[ind_prop_neg], plot_prop_diff_neg[ind_prop_neg], color=color, lw=lw, zorder=zorder)
-                    coord_list.append(plot_ang_diff_neg[ind_prop_neg])
-                    resid_list.append(plot_prop_diff_neg[ind_prop_neg])
-                    color_list.append(color)
-                    lev_list.append(lev)
-                else: 
-                    plot_ang_diff_neg = []
-                    plot_prop_diff_neg = []
-
-                """
-                if len(angle_diff_pos)>1 or len(angle_diff_neg)>1:
-                    coord_list.append(np.append(plot_ang_diff_pos, plot_ang_diff_neg))
-                    resid_list.append(np.append(plot_prop_diff_pos, plot_prop_diff_neg))
-                    color_list.append(color)
-                    lev_list.append(lev)
-                """
-            else:
-                coord_list.append(second_cont[corr_inds])
-                resid_list.append(prop_cont[corr_inds])
-                color_list.append(color)
-                lev_list.append(lev)
-                ind_sort = np.argsort(second_cont[corr_inds]) #sorting by azimuth to avoid 'joint' boundaries in plot
-                ax.plot(second_cont[corr_inds][ind_sort], 
-                        prop_cont[corr_inds][ind_sort], 
-                        color=color, lw=lw, zorder=zorder)
-
-            if ax2 is not None:
-                x_cont = np.array([X[i] for i in inds_cont])
-                y_cont = np.array([Y[i] for i in inds_cont])
-            if isinstance(ax2, matplotlib.axes._subplots.Axes): 
-                ax2.plot(x_cont[corr_inds], y_cont[corr_inds], color=color, lw=lw*lw_ax2_factor)
-            elif isinstance(ax2, list):
-                for axi in ax2: 
-                    if isinstance(axi, matplotlib.axes._subplots.Axes): axi.plot(x_cont[corr_inds], y_cont[corr_inds], color=color, lw=lw*lw_ax2_factor)
-
-        return [np.asarray(tmp) for tmp in [coord_list, resid_list, color_list, lev_list]]
+        for phi_dax in [phi_daxes_0, phi_daxes_90, phi_daxes_180, phi_daxes_270]:            
+            x_cont, y_cont,_ = GridTools.get_sky_from_disc_coords(R_daxes.value, phi_dax, z_list, incl, PA, xc, yc)
+            make_ax(x_cont, y_cont)
 
     @staticmethod
     def make_substructures(ax, twodim=False, polar=False, gaps=[], rings=[], kinks=[], make_labels=False,

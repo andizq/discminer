@@ -35,6 +35,7 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.convolution import Gaussian2DKernel, convolve
+from astropy import units as u
 from matplotlib import ticker
 from scipy.integrate import quad
 from scipy.interpolate import griddata, interp1d
@@ -45,6 +46,7 @@ from . import constants as sfc
 from . import units as sfu
 from .core import Model
 from .cube import Cube
+from .rail import Contours
 
 #from .cart import Intensity
 
@@ -113,7 +115,7 @@ class Tools:
         zp = z
         xp, yp, zp = Tools._project_on_skyplane(xp, yp, zp, np.cos(incl), np.sin(incl))
         xp, yp = Tools._rotate_sky_plane(xp, yp, PA)
-        return xp+xc, yp+yc, zp #Missing +xc, +yc
+        return xp+xc, yp+yc, zp
 
     @staticmethod #should be a bound method, self.grid is constant except for z_upper, z_lower
     def _compute_prop(grid, prop_funcs, prop_kwargs):
@@ -154,7 +156,6 @@ class Tools:
         If radio_beam Beam instance is provided, pixel size (in SI units) will be extracted from grid obj. Distance (in pc) must be provided.
         #frac_pixels: number of averaged pixels on the data (useful to reduce computing time)
         """
-        from astropy import units as u
         from astropy.io import fits
         from radio_beam import Beam
         sigma2fwhm = np.sqrt(8*np.log(2))
@@ -1178,7 +1179,9 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
         self.mesh = skygrid['meshgrid'] #disc grid will be interpolated onto this sky grid in make_model(). Must match data shape for mcmc. 
         self.grid = grid
         self.skygrid = skygrid
-        
+        self.extent = skygrid['extent']
+        self.projected_coords = None #to be computed by get_projected_coords
+    
         self.R_1d = None #will be modified if selfgravity is considered
 
         if subpixels and isinstance(subpixels, int):
@@ -1429,12 +1432,41 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
             plt.savefig('mc_corner_%s_%dwalkers_%dsteps.png'%(tag, nwalkers, nsteps))
             plt.close()
 
+    def _get_attribute_func(self, attribute):
+        return {
+            'intensity': self.intensity_func,
+            'linewidth': self.linewidth_func,
+            'lineslope': self.lineslope_func,
+            'velocity': self.velocity_func,
+        }[attribute]
+    
+    def get_attribute_map(self, coords, attribute, surface='upper'):
+
+        for key in coords:
+            if isinstance(coords[key], u.Quantity):
+                if key=='R': coords[key] = coords[key].to('m').value
+                if key=='phi': coords[key] = coords[key].to('radian').value
+                if key=='z': coords[key] = coords[key].to('m').value
+
+        if 'z' not in coords.keys():
+            if surface=='upper':
+                z_map = self.z_upper_func(coords, **self.params['height_upper'])
+            elif surface=='lower':
+                z_map = self.z_lower_func(coords, **self.params['height_lower'])
+            else:
+                raise InputError(surface, "Only 'upper' or 'lower' are valid surfaces.")
+            print ("Updating input coords dictionary with %s surface height values..."%surface)
+            coords.update({'z': z_map})
+            
+        attribute_func = self._get_attribute_func(attribute)
+        return attribute_func(coords, **self.params[attribute])
+
     @staticmethod
     def orientation(incl=np.pi/4, PA=0.0, xc=0.0, yc=0.0):
         xc = xc*sfu.au
         yc = yc*sfu.au
         return incl, PA, xc, yc
-
+    
     def get_projected_coords(self, z_mirror=False, writebinaries=True, 
                              R_nan_val=0, phi_nan_val=10*np.pi, z_nan_val=0):
             
@@ -1490,25 +1522,30 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
         if phi_nan_val is not None: phi_nonan = {side: np.where(np.isnan(phi[side]), phi_nan_val, phi[side]) for side in ['upper', 'lower']}
         if z_nan_val is not None: z_nonan = {side: np.where(np.isnan(z[side]), z_nan_val, z[side]) for side in ['upper', 'lower']}
         _break_line()
-            
+
+        self.projected_coords = {'R': R,
+                                 'phi': phi,
+                                 'z': z,
+                                 'R_nonan': R_nonan,
+                                 'phi_nonan': phi_nonan,
+                                 'z_nonan': z_nonan
+        }
+
+        #return self.projected_coords
         return R, phi, z, R_nonan, phi_nonan, z_nonan
 
-    def make_disc_axes(self, ax, Rmax=None, surface='upper'): #can be generalised and put outside this class, would require incl, PA and z_func as args.
+#can be generalised and put outside this class, would require incl, PA and z_func as args.    
+    def make_disc_axes(self, ax, Rmax=None, surface='upper'): 
         if Rmax is None:
             Rmax = self.Rmax.to('au')
         else:
             Rmax = Rmax.to('au')
-
-        R_daxes = np.linspace(0, Rmax, 50)            
-        phi_daxes_0 = np.zeros(50)
-        phi_daxes_90 = np.zeros(50)+np.pi/2
-        phi_daxes_180 = np.zeros(50)+np.pi
-        phi_daxes_270 = np.zeros(50)-np.pi/2
-
+        R_daxes = np.linspace(0, Rmax, 50)
+        
         incl, PA, xc, yc = General2d.orientation(**self.params['orientation'])
         xc /= sfu.au
         yc /= sfu.au        
-
+        
         if surface=='upper':
             z_daxes = self.z_upper_func({'R': R_daxes.to('m').value}, **self.params['height_upper'])/sfu.au 
         elif surface=='lower':
@@ -1516,13 +1553,21 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
         else:
             raise InputError(surface, "Only 'upper' or 'lower' are valid surfaces.")
 
-        kwargs_axes = dict(color='k', ls=':', lw=1.5, dash_capstyle='round', dashes=(0.5, 1.5), alpha=0.7)        
-        make_ax = lambda x, y: ax.plot(x, y, **kwargs_axes)
+        Contours.disc_axes(ax, Rmax, incl, PA, z_daxes, xc=xc, yc=yc)
+
+    def make_emission_surface(self, ax, R_lev=None, phi_lev=None,
+                              proj_offset=None, which='both',
+                              kwargs_R={}, kwargs_phi={}):
+        R = self.projected_coords['R']
+        phi = self.projected_coords['phi']
+        X, Y = self.skygrid['meshgrid']
+        Contours.emission_surface(
+            ax, R, phi, self.extent, X=X, Y=Y,
+            R_lev=R_lev, phi_lev=phi_lev, proj_offset=proj_offset,
+            which=which, kwargs_R=kwargs_R, kwargs_phi=kwargs_phi
+        )
         
-        for phi_dax in [phi_daxes_0, phi_daxes_90, phi_daxes_180, phi_daxes_270]:            
-            x_cont, y_cont,_ = Tools.get_sky_from_disc_coords(R_daxes.value, phi_dax, z_daxes, incl, PA, xc, yc)
-            make_ax(x_cont, y_cont)
-    
+            
     def make_model(self, z_mirror=False, **kwargs_get_cube):                   
         if self.prototype: 
             _break_line()
@@ -1628,6 +1673,8 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
             
         #*************************************
         if self.prototype:
+            self.get_projected_coords(z_mirror=z_mirror)
+            #Rail.__init__(self, self.projected_coords, self.skygrid)
             return self.get_cube(self.vchannels, *props, header=self.header, dpc=self.dpc, **kwargs_get_cube)
         else:
             return props
