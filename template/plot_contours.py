@@ -112,29 +112,28 @@ centroid_residuals = centroid_data - centroid_model
 #centroid_residuals = np.abs(centroid_data-vsys) - np.abs(centroid_model-vsys)
 #**************************
 #MAKE PLOT
-rail = Rail(model)
+
 beam_au = datacube.beam_size.to('au').value
-R_prof = np.arange(beam_au, 0.8*Rmax.to('au').value, beam_au/4)
+R_prof = np.arange(2*beam_au, 0.8*Rmax.to('au').value, beam_au/4)
+
+rail = Rail(model, centroid_residuals, R_prof)
 
 fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(14,6))
 ax2 = fig.add_axes([0.85,0.6,0.3*6/14,0.3])
 
 R_ref = 245
-R_list, phi_list, resid_list, color_list = rail.prop_along_coords(centroid_residuals,
-                                                                  R_prof, R_ref,
-                                                                  ax=ax,
-                                                                  ax2=ax2)
+R_list, phi_list, resid_list, color_list = rail.prop_along_coords(coord_ref=R_ref, ax=ax, ax2=ax2)
 
 tick_angles = np.arange(-150, 180, 30)
 ax.set_xticks(tick_angles)
 ax.set_xlabel(r'Azimuth [deg]')
 ax.set_ylabel('Centroid Residuals [km/s]')
-ylim = 0.5
 ax.set_xlim(-180,180)
-ax.set_ylim(-ylim, ylim)
+ax.set_ylim(-0.3, 0.3)
 ax.grid()
 
 model.make_emission_surface(ax2)
+model.make_disc_axes(ax2)
 make_up_ax(ax, labeltop=False)
 make_up_ax(ax2, labelbottom=False, labelleft=False, labeltop=True)
 ax.tick_params(labelbottom=True, top=True, right=True, which='both', direction='in')

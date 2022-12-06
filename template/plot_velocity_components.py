@@ -5,6 +5,7 @@ from discminer.disc2d import General2d
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.signal import savgol_filter
 
 from astropy import units as u
 from astropy.io import fits
@@ -109,36 +110,48 @@ centroid_model = fits.getdata('velocity_model.fits')
 centroid_data = np.where(mask, np.nan, centroid_data)
 centroid_model = np.where(mask, np.nan, centroid_model)
 centroid_residuals = centroid_data - centroid_model
-#centroid_residuals = np.abs(centroid_data-vsys) - np.abs(centroid_model-vsys)
+centroid_residuals_abs = np.abs(centroid_data-vsys) - np.abs(centroid_model-vsys)
 #**************************
 #MAKE PLOT
-rail = Rail(model)
+
 beam_au = datacube.beam_size.to('au').value
-R_prof = np.arange(beam_au, 0.8*Rmax.to('au').value, beam_au/4)
+R_prof = np.arange(1*beam_au, 0.8*Rmax.to('au').value, beam_au/4) #
 
-fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(14,6))
-ax2 = fig.add_axes([0.85,0.6,0.3*6/14,0.3])
+rail_vz = Rail(model, centroid_residuals, R_prof)
+vel_z, vel_z_error = rail_vz.get_average()
+div_factor = -np.cos(np.abs(incl))
 
-R_ref = 245
-R_list, phi_list, resid_list, color_list = rail.prop_along_coords(centroid_residuals,
-                                                                  R_prof, R_ref,
-                                                                  ax=ax,
-                                                                  ax2=ax2)
+vel_z /= div_factor
+vel_z_error /= div_factor 
 
-tick_angles = np.arange(-150, 180, 30)
-ax.set_xticks(tick_angles)
-ax.set_xlabel(r'Azimuth [deg]')
-ax.set_ylabel('Centroid Residuals [km/s]')
-ylim = 0.5
-ax.set_xlim(-180,180)
-ax.set_ylim(-ylim, ylim)
-ax.grid()
+rail_phi = Rail(model, centroid_residuals_abs, R_prof)
+vel_phi, vel_phi_error = rail_phi.get_average()
+div_factor = (2*np.sin(np.abs(incl)))/np.pi
 
-model.make_emission_surface(ax2)
-make_up_ax(ax, labeltop=False)
-make_up_ax(ax2, labelbottom=False, labelleft=False, labeltop=True)
-ax.tick_params(labelbottom=True, top=True, right=True, which='both', direction='in')
+vel_phi /= div_factor
+vel_phi_error /= div_factor 
 
-plt.savefig('azimuthal_centroid_residuals.png', bbox_inches='tight', dpi=200)
+fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(14,4))
+ysav_z = savgol_filter(vel_z, 5, 3)
+ysav_z_deriv = savgol_filter(vel_z, 5, 3, deriv=1)
+ax.plot(R_prof, ysav_z, c='k', lw=3, label=r'$z$-component', zorder=12)
+ax.fill_between(R_prof, vel_z+vel_z_error, vel_z-vel_z_error, color='k', alpha=0.15, zorder=9)
+
+ysav_phi = savgol_filter(vel_phi, 5, 3)
+ysav_phi_deriv = savgol_filter(vel_phi, 5, 3, deriv=1)
+ax.plot(R_prof, ysav_phi, c='dodgerblue', lw=3, label=r'$\phi$-component', zorder=12)
+ax.fill_between(R_prof, vel_phi+vel_phi_error, vel_phi-vel_phi_error, color='dodgerblue', alpha=0.15, zorder=9)
+
+ax.axhline(0, lw=2, ls='--', color='0.7')
+Contours.make_substructures(ax, gaps=[76, 149], rings=[98, 165], kinks=[245])
+
+ax.set_xlabel('Radius [au]')
+ax.set_ylabel(r'$\delta\upsilon$ [km/s]')
+ax.set_ylim(-0.13, 0.13)
+mod_major_ticks(ax, axis='x', nbins=10)
+ax.legend(frameon=False, fontsize=12)
+
+plt.savefig('velocity_components.png', bbox_inches='tight', dpi=200)
 plt.show()
-plt.close()
+
+

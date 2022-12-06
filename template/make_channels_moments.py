@@ -38,7 +38,7 @@ vchannels = datacube.vchannels
 #****************************
 #INIT MODEL AND PRESCRIPTIONS
 #****************************
-model = General2d(datacube, Rmax, prototype = True)
+model = General2d(datacube, Rmax, Rmin=0, prototype=True)
 # Prototype? If False discminer assumes you'll run an MCMC fit
 
 def intensity_powerlaw_rout(coord, I0=30.0, R0=100, p=-0.4, z0=100, q=0.3, Rout=500):

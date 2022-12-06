@@ -5,6 +5,7 @@ from discminer.disc2d import General2d
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.signal import savgol_filter
 
 from astropy import units as u
 from astropy.io import fits
@@ -106,39 +107,57 @@ centroid_model = fits.getdata('velocity_model.fits')
 
 #**************************
 #MASK AND COMPUTE RESIDUALS
-centroid_data = np.where(mask, np.nan, centroid_data)
-centroid_model = np.where(mask, np.nan, centroid_model)
-centroid_residuals = centroid_data - centroid_model
-#centroid_residuals = np.abs(centroid_data-vsys) - np.abs(centroid_model-vsys)
+centroid_data = np.abs(np.where(mask, np.nan, centroid_data) - vsys)
+centroid_model = np.abs(np.where(mask, np.nan, centroid_model) - vsys)
+
 #**************************
 #MAKE PLOT
-rail = Rail(model)
+
 beam_au = datacube.beam_size.to('au').value
-R_prof = np.arange(beam_au, 0.8*Rmax.to('au').value, beam_au/4)
+R_prof = np.arange(1*beam_au, 0.8*Rmax.to('au').value, beam_au/4) #
 
-fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(14,6))
-ax2 = fig.add_axes([0.85,0.6,0.3*6/14,0.3])
+fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(14,4))
 
-R_ref = 245
-R_list, phi_list, resid_list, color_list = rail.prop_along_coords(centroid_residuals,
-                                                                  R_prof, R_ref,
-                                                                  ax=ax,
-                                                                  ax2=ax2)
+#DATA CURVE
+rail_phi = Rail(model, centroid_data, R_prof)
+vel_phi, vel_phi_error = rail_phi.get_average()
+div_factor = (2*np.sin(np.abs(incl)))/np.pi
 
-tick_angles = np.arange(-150, 180, 30)
-ax.set_xticks(tick_angles)
-ax.set_xlabel(r'Azimuth [deg]')
-ax.set_ylabel('Centroid Residuals [km/s]')
-ylim = 0.5
-ax.set_xlim(-180,180)
-ax.set_ylim(-ylim, ylim)
-ax.grid()
+vel_phi /= div_factor
+vel_phi_error /= div_factor 
 
-model.make_emission_surface(ax2)
-make_up_ax(ax, labeltop=False)
-make_up_ax(ax2, labelbottom=False, labelleft=False, labeltop=True)
-ax.tick_params(labelbottom=True, top=True, right=True, which='both', direction='in')
+ysav_phi = savgol_filter(vel_phi, 5, 3)
+ax.plot(R_prof, ysav_phi, c='dodgerblue', lw=3.5, label=r'Data curve', zorder=12)
+ax.fill_between(R_prof, vel_phi+vel_phi_error, vel_phi-vel_phi_error, color='dodgerblue', alpha=0.15, zorder=9)
 
-plt.savefig('azimuthal_centroid_residuals.png', bbox_inches='tight', dpi=200)
+#MODEL CURVE
+rail_phi = Rail(model, centroid_model, R_prof)
+vel_phi, vel_phi_error = rail_phi.get_average()
+div_factor = (2*np.sin(np.abs(incl)))/np.pi
+
+vel_phi /= div_factor
+vel_phi_error /= div_factor 
+
+ysav_phi = savgol_filter(vel_phi, 5, 3)
+ax.plot(R_prof, ysav_phi, c='tomato', lw=3, label=r'Model curve', zorder=11)
+#ax.fill_between(R_prof, vel_phi+vel_phi_error, vel_phi-vel_phi_error, color='tomato', alpha=0.15, zorder=9)
+
+#PERFECT KEPLERIAN
+coords = {'R': R_prof*au_to_m}
+velocity_upper = model.get_attribute_map(coords, 'velocity', surface='upper') * model.params['velocity']['vel_sign']
+ax.plot(R_prof, velocity_upper, c='k', lw=2, ls='--', label=r'Keplerian (%.2f Msun)'%Mstar)
+
+#DECORATIONS
+ax.axhline(0, lw=2, ls='--', color='0.7')
+Contours.make_substructures(ax, gaps=[76, 149], rings=[98, 165], kinks=[245])
+
+ax.set_xlabel('Radius [au]')
+ax.set_ylabel(r'Rotation velocity [km/s]')
+ax.set_ylim(1.0, 8.0)
+mod_major_ticks(ax, axis='x', nbins=10)
+ax.legend(frameon=False, fontsize=12)
+
+plt.savefig('rotation_curve.png', bbox_inches='tight', dpi=200)
 plt.show()
-plt.close()
+
+
