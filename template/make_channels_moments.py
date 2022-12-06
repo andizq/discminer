@@ -73,7 +73,7 @@ model.intensity_func = intensity_powerlaw_rout
 #Useful definitions for plots
 xmax = model.skygrid['xmax'] 
 xlim = 1.15*xmax/au_to_m
-extent= np.array([-xmax, xmax, -xmax, xmax])/au_to_m
+#extent= np.array([-xmax, xmax, -xmax, xmax])/au_to_m
   
 #**************
 #PROTOTYPE PARS
@@ -139,9 +139,8 @@ datacube.convert_to_tb()
 #**********************
 #VISUALISE CHANNEL MAPS
 #**********************
-modelcube.show(compare_cubes=[datacube], extent=extent, int_unit='Intensity [K]', show_beam=True, surface_from=model)
-modelcube.show_side_by_side(datacube, extent=extent, int_unit='Intensity [K]', show_beam=True,  surface_from=model)
-
+modelcube.show(compare_cubes=[datacube], extent=model.extent, int_unit='Intensity [K]', show_beam=True, surface_from=model)
+modelcube.show_side_by_side(datacube, extent=model.extent, int_unit='Intensity [K]', show_beam=True,  surface_from=model)
 
 #DATA CHANNELS
 fig, ax, im, cbar = datacube.make_channel_maps(channels={'interval': [60, 70]}, ncols=5)
