@@ -12,12 +12,30 @@ import matplotlib.pyplot as plt
 import matplotlib
 import numpy as np
 import numbers
-
+from skimage import measure 
 
 get_sky_from_disc_coords = GridTools.get_sky_from_disc_coords
+hypot_func = lambda x,y: np.sqrt(x**2 + y**2) #Slightly faster than np.hypot<np.linalg.norm<scipydistance. Checked precision up to au**2 order and seemed ok.
 
 class Rail(object):
-    def __init__(self, model):
+    def __init__(self, model, prop, coord_levels):
+        """
+        Initialise Rail class. This class provides useful methods to compute azimuthal/radial contours and/or azimuthal averages from an input ``prop`` map projected on the sky.
+        The methods in this class use the model disc vertical structure to convert sky to disc coordinates, and therefore all quantities returned are referred to the disc reference frame.
+
+        Parameters
+        ----------
+        model : `.disc2d.General2d` instance
+           Model to get the disc vertical structure from.
+
+        prop : array_like, shape (nx, ny)
+           Observable to be analysed, as projected on the sky.
+        
+        coord_levels : array_like, shape (nlevels,)
+           Contour levels to be extracted from ``coords[0]``.
+           
+        """
+        
         _rail_coords = model.projected_coords
         X, Y = model.skygrid['meshgrid']        
         self.X = X/sfu.au
@@ -27,8 +45,17 @@ class Rail(object):
         self.phi = _rail_coords['phi']
         self.R_nonan = _rail_coords['R_nonan']                
         self.extent = model.skygrid['extent']
+        self.beam_size = model.beam_size.to('au').value
+        self.prop = prop
+        self.coord_levels = coord_levels
+
+        self._lev_list = None
+        self._coord_list = None
+        self._resid_list = None
+        self._color_list = None
         
-    def prop_along_coords(self, prop, coord_levels, coord_ref,
+    def prop_along_coords(self,
+                          coord_ref=None,
                           ax=None,
                           ax2=None,
                           acc_threshold=10, #0.05
@@ -44,22 +71,25 @@ class Rail(object):
 
         Parameters
         ----------
+        coord_ref : scalar, optional
+           Reference coordinate (referred to ``coords[0]``). The contour at this coordinate will be highlighted in bold black.
+
         ax : `matplotlib.axes` instance, optional
-           ax instance to make the plot. 
+           ax instance where computed contours are to be shown
 
         prop : array_like, shape (nx, ny)
-           Input 2D field to extract information along the computed contours.
+           Input 2D field to extract information along contours.
         
         coords : list, shape (2,)
            coords[0] [array_like, shape (nx, ny)], is the coordinate 2D map onto which contours will be computed using the input ``coord_levels``;
            coords[1] [array_like, shape (nx, ny)], is the coordinate 2D map against which the ``prop`` values are plotted. The output plot is prop vs coords[1]       
+
+        coord_levels : array_like, shape (nlevels,)
+           Contour levels to be extracted from ``coords[0]``.
            
         coord_ref : scalar
            Reference coordinate (referred to ``coords[0]``) to highlight among the other contours.
-           
-        coord_levels : array_like, shape (nlevels,)
-           Contour levels to be extracted from ``coords[0]``.
-        
+                   
         ax2 : `matplotlib.axes` instance (or list of instances), optional
            Additional ax(s) instance(s) to plot the location of contours in the disc. 
            If provided, ``X`` and ``Y`` must also be passed.
@@ -93,11 +123,11 @@ class Rail(object):
         fold_func : function, optional
            If fold, this function is used to operate between folded quadrants. Defaults to np.subtract.
         """
-        from skimage import measure 
 
+        prop, coord_levels = self.prop, self.coord_levels
         _rail_phi = self.phi['upper'] #np.where(self.phi['upper'] < 0.98*np.pi, self.phi['upper'], np.nan)
         coords_azimuthal = [self.R_nonan['upper']/sfu.au, np.degrees(_rail_phi)]
-        coords_radial = []
+        coords_radial = [] #Missing this, must add the option to allow the user switch between azimuthal or radial contours
         
         X, Y = self.X, self.Y
         coords = coords_azimuthal
@@ -106,7 +136,7 @@ class Rail(object):
         nbounds = len(color_bounds)
         
         coord_list, lev_list, resid_list, color_list = [], [], [], []
-        if np.sum(coord_levels==coord_ref)==0: coord_levels = np.append(coord_levels, coord_ref)
+        if np.sum(coord_levels==coord_ref)==0 and coord_ref is not None: coord_levels = np.append(coord_levels, coord_ref)
         for lev in coord_levels:
             contour = measure.find_contours(coords[0], lev) #, fully_connected='high', positive_orientation='high')
             if len(contour)==0:
@@ -131,7 +161,7 @@ class Rail(object):
                     zorder = 10
                     break
                 elif i!=(nbounds-1):
-                    if color_bounds[i] < lev < color_bounds[i+1]:
+                    if color_bounds[i] <= lev <= color_bounds[i+1]:
                         lw = lws[i]
                         color = colors[i]                                            
                         break
@@ -141,7 +171,6 @@ class Rail(object):
                     break
                 
             
-
             if fold:
                 #if lev < color_bounds[0]: continue
                 ref_pos = 90 #Reference axis for positive angles
@@ -238,7 +267,53 @@ class Rail(object):
 
         return [np.asarray(tmp) for tmp in [lev_list, coord_list, resid_list, color_list]]
 
+    
+    def get_average(self, surface='upper',
+                    av_func=np.nanmean, mask_ang=0, resid_thres='3sigma',
+                    error_func=True, error_unit=1.0, error_thres=np.inf,
+                    **kwargs_along_coords):
+        #mask_ang: +- angles to reject around minor axis (i.e. phi=+-90) 
+        #resid_thres: None, '3sigma', or list of thresholds with size len(lev_list)        
+
+        if self._lev_list is None:
+            self.prop_along_coords(**kwargs_along_coords)
+
+        lev_list, coord_list, resid_list = self._lev_list, self._coord_list, self._resid_list
+        Rgrid = self.R_nonan[surface]/sfu.au
+        X = self.X
+        Y = self.Y
+        beam_size = self.beam_size
+        
+        frac_annulus = 1.0 #if halves, 0.5; if quadrants, 0.25
+        nconts = len(lev_list)
+        if resid_thres is None: resid_thres = [np.inf]*nconts #consider all values for the average
+        elif resid_thres == '3sigma': resid_thres = [3*np.nanstd(resid_list[i]) for i in range(nconts)] #anything higher than 3sigma is rejected from annulus
+        # -np.pi<coord_list<np.pi        
+        ind_accep = [(((coord_list[i]<90-mask_ang) & (coord_list[i]>-90+mask_ang)) |
+                      ((coord_list[i]>90+mask_ang) | (coord_list[i]<-90-mask_ang))) &
+                     (np.abs(resid_list[i]-np.nanmean(resid_list[i]))<resid_thres[i])
+                     for i in range(nconts)]
+
+        av_annulus = np.array([av_func(resid_list[i][ind_accep[i]]) for i in range(nconts)])
+        
+        if error_func is None: av_error = None
+        else:
+            beams_ring_sqrt = np.sqrt([frac_annulus*Contours.beams_along_ring(lev, Rgrid, beam_size, X, Y) for lev in lev_list])
+            if callable(error_func): #if error map provided, compute average error per radius, divided by sqrt of number of beams (see Michiel Hogerheijde notes on errors)
+                av_error = np.zeros(nconts)
+                for i in range(nconts):
+                    x_accep, y_accep, __ = get_sky_from_disc_coords(lev_list[i], coord_list[i][ind_accep[i]]) #MISSING z, incl, PA for the function to work
+                    error_accep = np.array(list(map(error_func, x_accep, y_accep))).T[0]
+                    sigma2_accep = np.where((np.isfinite(error_accep)) & (error_unit*error_accep<error_thres) & (error_accep>0), (error_unit*error_accep)**2, 0)
+                    Np_accep = len(coord_list[i][ind_accep[i]])
+                    av_error[i] = np.sqrt(np.nansum(sigma2_accep)/Np_accep)/beams_ring_sqrt[i]  
+            else: #compute standard error of mean value
+                av_error = np.array([np.std(resid_list[i][ind_accep[i]], ddof=1) for i in range(nconts)])/beams_ring_sqrt
                 
+        return av_annulus, av_error
+
+
+    
 class Contours(object):
     @staticmethod
     def emission_surface(ax, R, phi, extent, R_lev=None, phi_lev=None,

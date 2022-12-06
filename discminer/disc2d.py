@@ -1155,10 +1155,10 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
         self.vchannels = mgrid.vchannels
         self.header = mgrid.header
         self.dpc = mgrid.dpc
-
         
         self.beam = datacube.beam
         self.beam_info = datacube.beam
+        self.beam_size = datacube.beam_size        
         self.beam_area = datacube.beam_area
         self.beam_kernel = datacube.beam_kernel
         

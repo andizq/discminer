@@ -177,7 +177,7 @@ class Cube(object):
         self.fileroot += ktag + tag
         fits.writeto(self.fileroot + ".fits", self.data, header=self.header, **kwargs_io)
 
-    def convert_to_tb(self, planck=True, writefits=True, tag="", **kwargs):
+    def convert_to_tb(self, planck=False, writefits=True, tag="", **kwargs):
         """
         Convert intensity to brightness temperature in units of Kelvin.
 
@@ -1323,8 +1323,9 @@ class Cube(object):
         int_unit=r"Intensity [mJy beam$^{-1}$]",
         pos_unit="au",
         vel_unit=r"km s$^{-1}$",
-        show_beam=False,
-        surface={"args": (), "kwargs": {}},
+        show_beam=True,
+        surface_from=None,
+        kwargs_surface={},
         **kwargs
     ):
 
@@ -1355,9 +1356,6 @@ class Cube(object):
         cmapc = copy.copy(plt.get_cmap(cmap))
         cmapc.set_bad(color=(0.9, 0.9, 0.9))
 
-        if show_beam and self.beam_kernel:
-            self.plot_beam(ax[0])
-
         if cube_init == 0:
             img_data = self.data[chan_init]
         else:
@@ -1376,6 +1374,9 @@ class Cube(object):
             transform=ax[1].transAxes,
         )
 
+        if show_beam and self.beam_kernel:
+            self.plot_beam(ax[0])
+        
         if cursor_grid:
             cg = Cursor(ax[0], useblit=True, color="lime", linewidth=1.5)
         box_img = plt.imread(path_icons + "button_box.png")
@@ -1509,8 +1510,9 @@ class Cube(object):
                 int_unit=int_unit,
                 pos_unit=pos_unit,
                 vel_unit=vel_unit,
-                surface=surface,
-                show_beam=show_beam,                
+                show_beam=show_beam,
+                surface_from=surface_from,
+                kwargs_surface=kwargs_surface,                
                 **kwargs
             )
 
@@ -1531,13 +1533,14 @@ class Cube(object):
                 int_unit=int_unit,
                 pos_unit=pos_unit,
                 vel_unit=vel_unit,
-                surface=surface,
                 show_beam=show_beam,
+                surface_from=surface_from,
+                kwargs_surface=kwargs_surface,                
                 **kwargs
             )
 
         def go2surface(event):
-            self._surface(ax[0], *surface["args"], **surface["kwargs"])
+            self._surface(ax[0], surface_from, **kwargs_surface)
             fig.canvas.draw()
             fig.canvas.flush_events()
             
@@ -1552,7 +1555,7 @@ class Cube(object):
         btrash.on_clicked(go2trash)
 
         surface_img = plt.imread(path_icons + "button_surface.png")
-        if len(surface["args"]) > 0:
+        if surface_from is not None:
             axbsurf = plt.axes([0.005, 0.809, 0.07, 0.07], frameon=True, aspect="equal")
             bsurf = Button(axbsurf, "", image=surface_img)
             bsurf.on_clicked(go2surface)
