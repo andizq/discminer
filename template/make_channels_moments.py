@@ -14,7 +14,7 @@ use_discminer_style()
 #****************
 #SOME DEFINITIONS
 #****************
-file_data = 'MWC_480_CO_220GHz.robust_0.5.JvMcorr.image.pbcor_clipped_downsamp_2pix_convtb.fits'
+file_data = 'MWC_480_CO_220GHz.robust_0.5.JvMcorr.image.pbcor_clipped_downsamp_2pix.fits'
 tag = 'mwc480_12co'
 nwalkers = 256
 nsteps = 10000
@@ -31,7 +31,7 @@ downsamp_fit = 10 # Downsampling used for MCMC fit
 downsamp_factor = (downsamp_fit/downsamp_pro)**2 # Required to correct intensity normalisation for prototype
 
 datacube = Data(file_data, dpc) # Read data and convert to Cube object
-noise = np.std( np.append(datacube.data[:5,:,:], datacube.data[-5:,:,:], axis=0), axis=0)
+
 #mgrid = Model(datacube, dpc, Rdisc) # Make grid from datacube info
 vchannels = datacube.vchannels
 
@@ -133,12 +133,15 @@ model.params['height_lower']['q'] = q_lower
 #MAKE MODEL (2D ATTRIBUTES)
 #**************************
 modelcube = model.make_model(make_convolve=True) #Returns model cube and computes disc coordinates projected on the sky 
+modelcube.convert_to_tb()
+datacube.convert_to_tb()
 
 #**********************
 #VISUALISE CHANNEL MAPS
 #**********************
 modelcube.show(compare_cubes=[datacube], extent=extent, int_unit='Intensity [K]', show_beam=True, surface_from=model)
 modelcube.show_side_by_side(datacube, extent=extent, int_unit='Intensity [K]', show_beam=True,  surface_from=model)
+
 
 #DATA CHANNELS
 fig, ax, im, cbar = datacube.make_channel_maps(channels={'interval': [60, 70]}, ncols=5)
@@ -154,6 +157,7 @@ modelcube.filename = 'cube_model_mwc480.fits'
 modelcube.writefits() #write model cube into FITS file
 
 #RESIDUAL CHANNELS
+noise = np.std( np.append(datacube.data[:5,:,:], datacube.data[-5:,:,:], axis=0), axis=0)
 noise_mean = np.nanmean(noise)
 residualscube = Cube(datacube.data-modelcube.data, datacube.header, datacube.vchannels, dpc, beam=datacube.beam)
 fig, ax, im, cbar = residualscube.make_channel_maps(channels={'interval': [60, 70]}, ncols=5,
@@ -182,6 +186,7 @@ plt.close()
 residualscube.filename = 'cube_residuals_mwc480.fits'
 residualscube.writefits() 
 
+sys.exit()
 #**********************
 #MAKE MOMENT MAPS
 #**********************

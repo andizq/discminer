@@ -11,13 +11,13 @@ Classes: Rosenfeld2d, General2d, Velocity, Intensity, Cube, Tools
 #TODO in make_model(): Allow for warped emitting surfaces, check notes for ideas as to how to solve for multiple intersections between l.o.s and emission surface.
 #TODO in __main__ file: show intro message when python -m disc2d
 #TODO in run_mcmc(): use get() methods instead of allowing the user to use self obj attributes.
-#TODO in General2d: Initialise R_inner and R_disc in General2d
 #TODO in make_model(): Enable 3D velocities too when subpixel algorithm is used
 #TODO in make_model(): Find a smart way (e.g. having a dict per attribute) to pass only the coords needed by a prop attribute, i.e. not all coordinates need to be passed to compute e.g. keplerian velocities.
 #TODO in show(): use text labels on line profiles to distinguish profiles when more than 2 cubes are shown.
 #TODO in make_model(): Save/load bestfit/input parameters in json files. These should store relevant info in separate dicts (e.g. nwalkers, attribute functions). 
-#TODO in run_mcmc(): Implement other minimisation kernels (i.e. Delta_v). Only one kernel currently: difference of intensities on each pixel, on each channel.
-#TODO in core.py: Allow setting up a mock grid to make a prototype model without needing to pass an actual datacube. 
+#TODO in run_mcmc(): Implement other minimisation kernels (i.e. Delta_v). Only one kernel atm: difference of intensities per pixel per channel.
+#TODO in core.py: Allow setting up a mock grid to make a prototype model without requiring an actual datacube. 
+    
 from __future__ import print_function
 
 import copy
@@ -1679,7 +1679,7 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
         else:
             return props
 
-    
+        
 class Rosenfeld2d(Velocity, Intensity, Linewidth, Tools):
     """
     Host class for the Rosenfeld+2013 model which describes the velocity field of a flared disc in 2D. 
