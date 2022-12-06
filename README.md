@@ -21,26 +21,6 @@
   <a href="https://github.com/andizq/discminer/issues/new?assignees=&labels=question&title=question%3A+">Ask a Question</a>
 </div>
 
-### Installation
-
-If you have a github account, type in a terminal:
-
-```bash
-   git clone git@github.com:andizq/discminer.git
-```
-
-if you don't have one:
-
-```bash
-   git clone https://github.com/andizq/discminer.git
-```
-
-Finally, go to the discminer folder and run the ``setup.py`` script in installation mode:
-
-```bash
-   cd discminer
-   python setup.py install
-```
 
 ### Features
 
@@ -68,8 +48,28 @@ Compute azimuthal or radial averages from intensity or kinematical observables.
 
 #### cart
 
-Store model attributes and their default prescriptions.
+Stores model attributes and their default prescriptions.
 
+### Installation
+
+If you have a github account, type in a terminal:
+
+```bash
+git clone git@github.com:andizq/discminer.git
+```
+
+if you don't have one:
+
+```bash
+git clone https://github.com/andizq/discminer.git
+```
+
+Finally, go to the discminer folder and run the ``setup.py`` script in installation mode:
+
+```bash
+cd discminer
+python setup.py install
+```
 
 ### Discminer history
 
