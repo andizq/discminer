@@ -24,25 +24,23 @@
 
 ### Features
 
-- Model intensity channel maps from gas discs using MCMC parameter samplers. 
-- Fit intensity and rotation velocity simultaneously. Stellar mass and inclination are no longer degenerate parameters!
+- Model channel maps from molecular line observations of discs by fitting intensity and rotation velocity simultaneously.
 - Supports different prescriptions for the disc rotation velocity: Keplerian (2D or 3D) + pressure support + self-gravity.   
 - Upper and lower emitting surfaces of your disc can be modelled independently.
-- Easy customisation of model parameterisations as a function of the 3D disc coordinates (azimuthal asymmetries are possible!).
-- Compatible with input of (irregular) emitting surfaces obtained with the geometrical method of Pinte et al. 2018b.
-- Provides tools for the analysis of gas structure and kinematics.
-- It has been tested for circumstellar discs but it may be well suited for galactic discs too.
+- Easy customisation of model parameterisations as function of the 3D disc coordinates (azimuthal asymmetries are possible!).
+- Can use external emitting surfaces obtained with e.g. the geometrical method of Pinte et al. 2018.
+- Provides analysis tools to study the gas disc physical structure and kinematics.
 
 
 ### Mining tools
 
 #### pick
 
-Mine small scale fluctuations in the disc, possibly related to the presence of planets.
+Reveal small scale fluctuations in the disc, possibly related to the presence of planets.
 
-#### hammer
+#### hammer (in prep)
 
-Mine larger scale substructure: produce (de-)projected residual maps and illustrations of the gas structure and attributes.
+Reveal large scale substructures; compute residual maps from line profile properties and investigate coherence of signatures.
 
 #### rail
 
@@ -55,14 +53,14 @@ Store model attributes and their default prescriptions.
 
 ### Discminer history
 
-Discminer began life as the model.disc2d.py library of [sf3dmodels](https://github.com/andizq/sf3dmodels). This repository is dedicated for versions >1.0 of the code. 
+Discminer began life as the model.disc2d.py library of [sf3dmodels](https://github.com/andizq/sf3dmodels).
 
 See changes in `CHANGES.md`.
 
 #### v1.0
 
-- Use astropy units wherever possible. All physical parameters provided by the user must be astropy.units instances.
-- Creation of several mining tools included in the (1) `pick`, (2) `hammer`, (3) `rail` and (4) `cart` modules to (1) mine small scale fluctuations in the disc, possibly related to the presence of planets; (2) mine larger scale substructure: produce residual maps and illustrations of the gas structure and attributes; (3) compute azimuthal averages from observables; (4) store model attributes and their default prescriptions.  
+- Migrating to astropy units.
+- Addition of analysis tools for mining.
 
 #### Collaborators
 
