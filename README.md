@@ -65,6 +65,7 @@ python setup.py install
 - [spectral-cube](https://spectral-cube.readthedocs.io/en/latest/installing.html)
 - [radio-beam](https://radio-beam.readthedocs.io/en/latest/install.html)
 - [emcee](https://emcee.readthedocs.io/en/stable/user/install/)
+- [scikit](https://scikit-image.org/docs/stable/install.html#install-via-pip)
 
 ### Discminer history
 
