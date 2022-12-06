@@ -50,26 +50,21 @@ Compute azimuthal or radial averages from intensity or kinematical observables.
 
 Stores model attributes and their default prescriptions.
 
-### Installation
+## Installation
 
-If you have a github account, type in a terminal:
-
-```bash
-git clone git@github.com:andizq/discminer.git
-```
-
-if you don't have one:
+Type in a terminal:
 
 ```bash
 git clone https://github.com/andizq/discminer.git
-```
-
-Finally, go to the discminer folder and run the ``setup.py`` script in installation mode:
-
-```bash
 cd discminer
 python setup.py install
 ```
+
+### Required dependencies
+
+- [spectral-cube](https://spectral-cube.readthedocs.io/en/latest/installing.html)
+- [radio-beam](https://radio-beam.readthedocs.io/en/latest/install.html)
+- [emcee](https://emcee.readthedocs.io/en/stable/user/install/)
 
 ### Discminer history
 
