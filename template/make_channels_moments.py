@@ -185,7 +185,6 @@ plt.close()
 residualscube.filename = 'cube_residuals_mwc480.fits'
 residualscube.writefits() 
 
-sys.exit()
 #**********************
 #MAKE MOMENT MAPS
 #**********************

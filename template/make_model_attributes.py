@@ -112,7 +112,7 @@ ax3 = fig.add_axes([0.52,0.1,0.4,0.4])
 R_profile = np.linspace(datacube.beam_size, Rmax, 100)
 coords = {'R': R_profile}
 
-linewidth_upper = model.get_attribute_map(coords, 'linewidth', surface='upper')
+linewidth_upper = model.get_attribute_map(coords, 'linewidth', surface='upper') #Fills in coords{'z'} if not found.
 intensity_upper = model.get_attribute_map(coords, 'intensity', surface='upper')
 velocity_upper = model.get_attribute_map(coords, 'velocity', surface='upper') * model.params['velocity']['vel_sign']
 z_upper = coords['z']*u.m.to('au')

@@ -15,7 +15,7 @@ datacube.downsample(2, tag='_2pix') # Downsample cube and add tag at the end of 
 #**********************
 #DATACUBE FOR MCMC FIT
 #**********************
-datacube = Data(file_data+'_clipped.fits')
+datacube = Data(file_data+'_clipped.fits', dpc)
 datacube.downsample(10, tag='_10pix')
 
 

@@ -84,8 +84,6 @@ cbar2.ax.tick_params(labelsize=12)
 mod_nticks_cbars([cbar0], nbins=8)
 mod_nticks_cbars([cbar2], nbins=5)
 
-#for level in kwargs_cc['levels']: cbar0.ax.axvline(level, color=kwargs_cc['colors'], lw=3.0, zorder=1)
-
 ax[0].set_ylabel('Offset [au]', fontsize=15)
 ax[0].set_title('MWC 480, $^{12}$CO', pad=40, fontsize=17)
 ax[1].set_title('Discminer Model', pad=40, fontsize=17)
@@ -93,13 +91,6 @@ ax[2].set_title('Residuals', pad=40, fontsize=17)
 
 cbar0.set_label(r'Centroid Velocity [km s$^{-1}$]', fontsize=14)
 cbar2.set_label(r'Residuals [km s$^{-1}$]', fontsize=14)
-
-#mod_nticks_cbars([cbar0], nbins=8)
-#mod_nticks_cbars([cbar2], nbins=5)
-#for cbar in [cbar0,cbar2]:
-#    cbar.ax.tick_params(which='major', direction='in', width=2.3, size=4.5, pad=7, labelsize=MEDIUM_SIZE-2)
-#    cbar.ax.tick_params(which='minor', direction='in', width=2.3, size=3.2)
-#    mod_minor_ticks(cbar.ax)
 
 for axi in ax:
     make_up_ax(axi, xlims=(-xlim, xlim), ylims=(-xlim, xlim), labelsize=11)
