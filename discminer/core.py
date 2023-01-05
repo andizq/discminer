@@ -131,7 +131,7 @@ class Model():
                 self.Rmin = Rmin*beam_au
             else: self.Rmin = 0.0*u.Unit(u.au)
         else:
-            self.Rmin = self.Rmin.to(u.au)
+            self.Rmin = Rmin.to(u.au)
             
         #elif isinstance(datacube, grid):
         #   self.beam = beam
