@@ -26,12 +26,13 @@ vel_sign = 1 # Rotation direction: -1 or 1
 #*********
 datacube = Data(file_data, dpc) # Read data and convert to Cube object
 vchannels = datacube.vchannels
-R_disc = 300*u.au
+Rmax = 300*u.au
+Rmin = 0*u.au
 
 #****************************
 #INIT MODEL AND PRESCRIPTIONS
 #****************************
-model = General2d(datacube, R_disc, prototype = False)                  
+model = General2d(datacube, Rmax, Rmin=Rmin, prototype=False) #If Rmin is a dimensionless integer discminer assumes Rmin*beam_size, default Rmin=1. 
 
 def intensity_powerlaw_rout(coord, I0=30.0, R0=100*au_to_m, p=-0.4, z0=100*au_to_m, q=0.3, Rout=200):
     if 'R' not in coord.keys(): R = hypot_func(coord['x'], coord['y'])
@@ -86,7 +87,7 @@ model.mc_params['height_lower'] = {'z0': True, 'p': True, 'Rb': True, 'q': True}
 
 model.mc_boundaries['velocity']['vsys'] = (0, 15)
 model.mc_boundaries['intensity']['I0'] = (0, 5)
-model.mc_boundaries['intensity']['Rout'] = (100, 700)
+model.mc_boundaries['intensity']['Rout'] = (100, 300)
 model.mc_boundaries['height_upper']['z0'] = (0, 200)
 model.mc_boundaries['height_upper']['p'] = (0, 5)
 model.mc_boundaries['height_upper']['Rb'] = (0, 1000)
