@@ -1174,7 +1174,7 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
  
         x_true, y_true = grid['x'], grid['y']
         self.x_true, self.y_true = x_true, y_true
-        self.phi_true = grid['phi']
+        self.phi_true = grid['phi'] #From 0 to 2pi, old sf3d version: -pi, pi
         self.R_true = grid['R']         
         self.mesh = skygrid['meshgrid'] #disc grid will be interpolated onto this sky grid in make_model(). Must match data shape for mcmc. 
         self.grid = grid
@@ -1502,7 +1502,7 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
             R[side] = griddata((x_pro, y_pro), self.R_true, (self.mesh[0], self.mesh[1]), method='linear')
             x_grid = griddata((x_pro, y_pro), xt, (self.mesh[0], self.mesh[1]), method='linear')
             y_grid = griddata((x_pro, y_pro), yt, (self.mesh[0], self.mesh[1]), method='linear')
-            phi[side] = np.arctan2(y_grid, x_grid) 
+            phi[side] = np.arctan2(y_grid, x_grid) #-np.pi, np.pi output for user 
             #Since this one is periodic it has to be recalculated, otherwise the interpolation will screw up things at the boundary -np.pi->np.pi
             # When plotting contours there seems to be in any case some sort of interpolation, so there is still problems at the boundary
             #phi[side] = griddata((x_pro, y_pro), self.phi_true, (self.mesh[0], self.mesh[1]), method='linear')
@@ -1674,6 +1674,7 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
         #*************************************
         if self.prototype:
             self.get_projected_coords(z_mirror=z_mirror)
+            self.props = props
             #Rail.__init__(self, self.projected_coords, self.skygrid)
             return self.get_cube(self.vchannels, *props, header=self.header, dpc=self.dpc, **kwargs_get_cube)
         else:

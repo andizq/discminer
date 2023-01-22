@@ -4,7 +4,7 @@ from .plottools import (get_discminer_cmap,
                         mod_minor_ticks,
                         mask_cmap_interval)
 
-from .tools.fit_kernel import fit_gaussian
+from .tools.fit_kernel import fit_gaussian, fit_twocomponent
 from .tools.utils import FrontendUtils, InputError
 from .rail import Contours
 from astropy.convolution import Gaussian2DKernel
@@ -453,7 +453,9 @@ class Cube(object):
         
         if method=='gaussian':
             _break_line()
-            moments = fit_gaussian(self.data, self.vchannels, **kwargs_method)
+            kwargs_m = dict(lw_chans=1.0, sigma_fit=None)
+            kwargs_m.update(kwargs_method)            
+            moments = fit_gaussian(self, **kwargs_m)
 
             if writefits:
                 filenames = [
@@ -475,6 +477,45 @@ class Cube(object):
                     
             _break_line()
             return moments #A, c, lw, dA, dc, dlw
+        
+        elif method in ['doublegaussian', 'doublebell']:
+            _break_line()
+            kwargs_m = dict(lw_chans=1.0, lower2upper=1.0, sigma_fit=None, method=method, kind='sum')
+            kwargs_m.update(kwargs_method)
+            moments = fit_twocomponent(self,  **kwargs_m)
+            
+            if writefits:
+                filenames = [
+                    'peakintensity_up',
+                    'velocity_up',
+                    'linewidth_up',
+                    'delta_peakintensity_up',
+                    'delta_velocity_up',
+                    'delta_linewidth_up',
+                    'peakintensity_low',
+                    'velocity_low',
+                    'linewidth_low',
+                    'delta_peakintensity_low',
+                    'delta_velocity_low',
+                    'delta_linewidth_low',                    
+                ]
+
+                print ('Writing moments into FITS files...')
+                k = 0 
+                for j in range(4):
+                    for i in range(3):
+                        if i==0:
+                            kwargs = kwargs_io_int
+                        else:
+                            kwargs = kwargs_io_vel
+                        fits.writeto(filenames[k]+'%s.fits'%tag, moments[j][i], **kwargs)
+                        k+=1
+                        
+            _break_line()
+            return moments #A, c, lw, dA, dc, dlw
+
+            pass
+
         else:
             raise InputError(
                 method, "The requested method/kernel is not supported in this version of discminer. Available methods: ['gaussian']"
