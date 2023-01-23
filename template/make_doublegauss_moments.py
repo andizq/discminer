@@ -144,7 +144,8 @@ def make3panels(props, titles=['', '', '']):
     im2 = ax[2].contourf(props[2], extend='both', **kwargs_im)
 
     cc0 = ax[0].contour(props[0], **kwargs_cc)
-    cc1 = ax[1].contour(centroid_model, **kwargs_cc)
+    cc1 = ax[1].contour(props[1], **kwargs_cc)
+    cc2 = ax[2].contour(props[2], **kwargs_cc)
     
     cbar0 = plt.colorbar(im0, cax=ax_cbar0, format='%.1f', **kwargs_cbar)
     cbar0.ax.tick_params(labelsize=12) 
