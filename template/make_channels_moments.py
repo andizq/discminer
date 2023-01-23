@@ -188,6 +188,6 @@ residualscube.writefits()
 #**********************
 #MAKE MOMENT MAPS
 #**********************
-moments_data = datacube.make_moments(method='gaussian', tag='data')
-moments_model = modelcube.make_moments(method='gaussian', tag='model')
+moments_data = datacube.make_moments(method='gaussian', tag='data_'+tag)
+moments_model = modelcube.make_moments(method='gaussian', tag='model_'+tag)
 

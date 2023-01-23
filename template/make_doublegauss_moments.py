@@ -2,8 +2,7 @@ from discminer.core import Data, Model
 from discminer.cube import Cube
 from discminer.disc2d import General2d
 from discminer.rail import Contours
-from discminer.plottools import use_discminer_style
-from discminer.tools import fit_kernel as fk
+from discminer.plottools import get_discminer_cmap, make_up_ax, mod_major_ticks, use_discminer_style, mod_nticks_cbars
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -74,7 +73,7 @@ model.intensity_func = intensity_powerlaw_rout
 #Useful definitions for plots
 xmax = model.skygrid['xmax'] 
 xlim = 1.15*xmax/au_to_m
-#extent= np.array([-xmax, xmax, -xmax, xmax])/au_to_m
+extent= np.array([-xmax, xmax, -xmax, xmax])/au_to_m
   
 #**************
 #PROTOTYPE PARS
@@ -123,11 +122,75 @@ modelcube.show_side_by_side(datacube, extent=model.extent, int_unit='Intensity [
 #**********************
 #MAKE MOMENT MAPS
 #**********************
-moments_data = datacube.make_moments(method='doublegaussian') #Do not use model priors
-moments_data = datacube.make_moments(model=model, method='doublegaussian') #Use model priors
-moments_data = datacube.make_moments(model=model, method='doublebell') #Use model priors + bell kernel
+moments_nopriors = datacube.make_moments(method='doublegaussian') #Do not use model priors
+moments_gauss = datacube.make_moments(model=model, method='doublegaussian') #Use model priors
+moments_bell = datacube.make_moments(model=model, method='doublebell') #Use model priors + bell kernel
+
+#**************************
+#MAKE PLOT
+
+cmap_vel = get_discminer_cmap('velocity')
+kwargs_im = dict(cmap=cmap_vel, extent=extent, levels=np.linspace(-4.0, 4.0, 48)+vsys)
+kwargs_cc = dict(colors='k', linestyles='-', extent=extent, levels=np.linspace(-2, 2, 9)+vsys, linewidths=0.4)
+kwargs_cbar = dict(orientation='horizontal', pad=0.03, shrink=0.95, aspect=15)
+
+def make3panels(props, titles=['', '', '']):
+
+    fig, ax = plt.subplots(ncols=3, nrows=1, figsize=(15,6))
+    ax_cbar0 = fig.add_axes([0.15, 0.14, 0.450+0.292, 0.04])
+
+    im0 = ax[0].contourf(props[0], extend='both', **kwargs_im)
+    im1 = ax[1].contourf(props[1], extend='both', **kwargs_im)
+    im2 = ax[2].contourf(props[2], extend='both', **kwargs_im)
+
+    cc0 = ax[0].contour(props[0], **kwargs_cc)
+    cc1 = ax[1].contour(centroid_model, **kwargs_cc)
+    
+    cbar0 = plt.colorbar(im0, cax=ax_cbar0, format='%.1f', **kwargs_cbar)
+    cbar0.ax.tick_params(labelsize=12) 
+    
+    mod_nticks_cbars([cbar0], nbins=8)
+    
+    ax[0].set_ylabel('Offset [au]', fontsize=15)
+    for i in range(3):
+        ax[i].set_title(titles[i], pad=40, fontsize=17)
+    
+    cbar0.set_label(r'Centroid Velocity [km s$^{-1}$]', fontsize=14)
+    
+    for axi in ax:
+        make_up_ax(axi, xlims=(-xlim, xlim), ylims=(-xlim, xlim), labelsize=11)
+        mod_major_ticks(axi, axis='both', nbins=8)
+        datacube.plot_beam(axi, fc='lime')
+        axi.set_aspect(1)
+
+        model.make_emission_surface(
+            axi,
+            kwargs_R={'colors': '0.4', 'linewidths': 0.4},
+            kwargs_phi={'colors': '0.4', 'linewidths': 0.3}
+        )
+        model.make_disc_axes(axi)
+    
+    for axi in ax[1:]: axi.tick_params(labelleft=False)
+
+    return fig, ax
+
+fig, ax = make3panels([moments_nopriors[0][1], moments_gauss[0][1], moments_bell[0][1]],
+                      ['Upper - no priors', 'Upper - Gaussian', 'Upper - Bell'])
+    
+plt.savefig('twocomponent_centroids_upper.png', bbox_inches='tight', dpi=200)
+plt.show()
+plt.close()
+
+fig, ax = make3panels([moments_nopriors[2][1], moments_gauss[2][1], moments_bell[2][1]],
+                      ['Lower - no priors', 'Lower - Gaussian', 'Lower - Bell'])
+    
+plt.savefig('twocomponent_centroids_lower.png', bbox_inches='tight', dpi=200)
+plt.show()
+plt.close()
 
 sys.exit()
+
+#SINGLE GAUSSIAN MOMENTS:
 moments_data = datacube.make_moments(method='gaussian', tag='data_'+tag) #Fit single Gaussian
 moments_model = modelcube.make_moments(method='gaussian', tag='model_'+tag)
 
