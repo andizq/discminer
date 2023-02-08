@@ -427,7 +427,7 @@ class Cube(object):
             self.writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)
 
             
-    def make_moments(self, method='gaussian', writefits=True, overwrite=True, tag="", **kwargs_method):
+    def make_moments(self, method='gaussian', kind='sum', writefits=True, overwrite=True, parcube=False, writecomp=False, tag="", **kwargs_method):
         """
         Make moment maps from line profile observables.
 
@@ -436,90 +436,136 @@ class Cube(object):
         method : str, optional
             Type of kernel to be fitted to each pixel's line profile. Available methods: ['gaussian'].
           
-            * If 'gaussian', fit a single Gaussian profile to the line and return [peak, centroid, linewidth, dpeak, dcent, dlinewidth].
+            * If 'gaussian', fit a single Gaussian profile to the line and return [peak, centroid, linewidth], [dpeak, dcent, dlinewidth].
+            * If 'doublegaussian', fit double Gaussian profile to the line and return [peak_up, centroid_up, linewidth_up], [dpeak_up, dcent_up, dlinewidth_up], [peak_low, centroid_low, linewidth_low], [dpeak_low, dcent_low, dlinewidth_low].
+            * If 'doublebell', fit double Bell profile to the line and return [peak_up, centroid_up, linewidth_up], [dpeak_up, dcent_up, dlinewidth_up], [peak_low, centroid_low, linewidth_low], [dpeak_low, dcent_low, dlinewidth_low].
+
+        kind : str, optional
+            'sum' or 'mask' upper and lower surface line profiles for 'doublegaussian' and 'doublebell' methods. 
+           
+             * If 'sum', the composite line profile will be the simple sum of the two-component profiles.
+             * If 'mask', the composite line profile intensity in each pixel and velocity channel will be that of the brighter emission surface (between upper and lower surface).
 
         """
-        
-        hdr_vel = copy.copy(self.header)
-        hdr_int = copy.copy(self.header)
-        hdr_vel["BUNIT"] = "km/s"
 
+        hdr_int = copy.copy(self.header)        
+        hdr_vel = copy.copy(self.header)
+        hdr_par = copy.copy(self.header)
+        hdr_comp = copy.copy(self.header)        
+        hdr_vel["BUNIT"] = "km/s"
+        hdr_vel["BTYPE"] = "Velocity"
+        hdr_par["BUNIT"] = hdr_int['BUNIT']+" km/s km/s"
+        hdr_par["BTYPE"] = "Various"
+        hdr_comp["BUNIT"] = ""
+        hdr_comp["BTYPE"] = "Line components"
+        
         kwargs_io_vel = dict(overwrite=overwrite, header=hdr_vel)
-        kwargs_io_int = dict(overwrite=overwrite, header=hdr_int) 
+        kwargs_io_int = dict(overwrite=overwrite, header=hdr_int)
+        kwargs_io_par = dict(overwrite=overwrite, header=hdr_par)
+        kwargs_io_comp = dict(overwrite=overwrite, header=hdr_comp)                 
 
         if len(tag)>0:
             if tag[0]!='_':
                 tag = '_'+tag
-        
+                
         if method=='gaussian':
             _break_line()
             kwargs_m = dict(lw_chans=1.0, sigma_fit=None)
             kwargs_m.update(kwargs_method)            
             moments = fit_gaussian(self, **kwargs_m)
+            moments, n_fit =  moments[:-1], moments[-1]
 
             if writefits:
                 filenames = [
-                    'peakintensity',
-                    'velocity',
-                    'linewidth',
-                    'delta_peakintensity',
-                    'delta_velocity',
-                    'delta_linewidth',
+                    [
+                        'peakintensity',
+                        'velocity',
+                        'linewidth',
+                    ],
+                    [
+                        'delta_peakintensity',
+                        'delta_velocity',
+                        'delta_linewidth',
+                    ]
                 ]
-
+                
                 print ('Writing moments into FITS files...')
-                for i in range(6):
-                    if i==0 or i==3:
-                        kwargs = kwargs_io_int
-                    else:
-                        kwargs = kwargs_io_vel
-                    fits.writeto(filenames[i]+'%s.fits'%tag, moments[i], **kwargs)
+                for j in range(2):
+                    for i in range(3):                    
+                        if i==0:
+                            kwargs = kwargs_io_int
+                        else:
+                            kwargs = kwargs_io_vel
+                        fits.writeto(filenames[j][i]+'_%s%s.fits'%(method, tag), moments[j][i], **kwargs)
+                    
+            if parcube:
+                print ('Writing parcubes into FITS files...')
+                fnameparcubes = ['parcube', 'delta_parcube']                
+                kwargs = kwargs_io_par                
+                for j in range(2):
+                    fits.writeto(fnameparcubes[j]+'_%s%s.fits'%(method, tag), moments[j], **kwargs)
                     
             _break_line()
-            return moments #A, c, lw, dA, dc, dlw
         
         elif method in ['doublegaussian', 'doublebell']:
             _break_line()
-            kwargs_m = dict(lw_chans=1.0, lower2upper=1.0, sigma_fit=None, method=method, kind='sum')
+            kwargs_m = dict(lw_chans=1.0, lower2upper=1.0, sigma_fit=None, method=method, kind=kind)
             kwargs_m.update(kwargs_method)
             moments = fit_twocomponent(self,  **kwargs_m)
+            moments, n_fit =  moments[:-1], moments[-1]
             
             if writefits:
                 filenames = [
-                    'peakintensity_up',
-                    'velocity_up',
-                    'linewidth_up',
-                    'delta_peakintensity_up',
-                    'delta_velocity_up',
-                    'delta_linewidth_up',
-                    'peakintensity_low',
-                    'velocity_low',
-                    'linewidth_low',
-                    'delta_peakintensity_low',
-                    'delta_velocity_low',
-                    'delta_linewidth_low',                    
+                    [
+                        'peakintensity_up',
+                        'velocity_up',
+                        'linewidth_up'
+                    ],
+                    [
+                        'delta_peakintensity_up',
+                        'delta_velocity_up',
+                        'delta_linewidth_up'
+                    ],
+                    [    
+                        'peakintensity_low',
+                        'velocity_low',
+                        'linewidth_low'
+                    ],
+                    [
+                        'delta_peakintensity_low',
+                        'delta_velocity_low',
+                        'delta_linewidth_low'
+                    ]
                 ]
 
                 print ('Writing moments into FITS files...')
-                k = 0 
                 for j in range(4):
                     for i in range(3):
                         if i==0:
                             kwargs = kwargs_io_int
                         else:
                             kwargs = kwargs_io_vel
-                        fits.writeto(filenames[k]+'%s.fits'%tag, moments[j][i], **kwargs)
-                        k+=1
-                        
+                        fits.writeto(filenames[j][i]+'_%s_%s%s.fits'%(method, kind, tag), moments[j][i], **kwargs)
+
+            if parcube:
+                print ('Writing parcubes into FITS files...')
+                fnameparcubes = ['parcube_up', 'delta_parcube_up', 'parcube_low', 'delta_parcube_low']                
+                kwargs = kwargs_io_par
+                for j in range(4):
+                    fits.writeto(fnameparcubes[j]+'_%s_%s%s.fits'%(method, kind, tag), moments[j], **kwargs)
             _break_line()
-            return moments #A, c, lw, dA, dc, dlw
-
-            pass
-
+            
         else:
             raise InputError(
-                method, "The requested method/kernel is not supported in this version of discminer. Available methods: ['gaussian']"
+                method, "method/kernel requested is not supported by this version of discminer. Available methods: ['gaussian', 'doublegauss', 'bell', doublebell]"
             )
+
+        self.n_fit = n_fit
+        if writecomp:
+            kwargs = kwargs_io_comp
+            fits.writeto('fit_line_components'+'_%s_%s%s.fits'%(method, kind, tag), n_fit, **kwargs)        
+
+        return moments #A1, c1, lw1, dA1, dc1, dlw1, A2, c2, lw2, dA2, dc2, dlw2
 
         
     # *********************************

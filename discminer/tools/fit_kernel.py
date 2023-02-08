@@ -25,14 +25,21 @@ def _doublebell_sum(x, *p):
     return A1/(1+np.abs((x-mu1)/sigma1)**(2*Ls)) + A2/(1+np.abs((x-mu2)/sigma2)**(2*Ls))
 
 def _doublegauss_mask(x, *p):
-    pass
-
+    A1, mu1, sigma1, A2, mu2, sigma2 = p
+    gauss1 = A1*np.exp(-(x-mu1)**2/(2.*sigma1**2))
+    gauss2 = A2*np.exp(-(x-mu2)**2/(2.*sigma2**2))
+    return np.where(gauss1>=gauss2, gauss1, gauss2)
+        
 def _doublebell_mask(x, *p):
     Ls = 1.5
-    pass
+    A1, mu1, sigma1, A2, mu2, sigma2 = p
+    bell1 = A1/(1+np.abs((x-mu1)/sigma1)**(2*Ls))
+    bell2 = A2/(1+np.abs((x-mu2)/sigma2)**(2*Ls))
+    return np.where(bell1>=bell2, bell1, bell2)
 
 
-def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=None, method='doublegaussian', kind='sum'):
+def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=None,
+                     method='doublegaussian', kind='sum'):
 
     data = cube.data
     vchannels = cube.vchannels
@@ -41,6 +48,7 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=
     
     nchan, nx, ny = np.shape(data)
     n_one, n_two, n_bad = 0, 0, 0
+    n_fit = np.zeros((nx, ny))
     
     peak_up, dpeak_up = np.zeros((2, nx, ny))
     centroid_up, dcentroid_up = np.zeros((2, nx, ny))
@@ -50,20 +58,21 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=
     linewidth_low, dlinewidth_low = np.zeros((2, nx, ny))
 
     #KERNEL
-    if method=='doublegaussian' and kind=='sum':
+    if method=='doublegaussian':
         fit_func1d = _gauss
         if kind=='sum':
             fit_func = _doublegauss_sum
         elif kind=='mask':
+            fit_func = _doublegauss_mask
+        else: #Raise InputError
             pass
-        else:
-            pass        
+        
     elif method=='doublebell':
         fit_func1d = _bell
         if kind=='sum':
             fit_func = _doublebell_sum
         elif kind=='mask':
-            pass
+            fit_func = _doublebell_mask
         else:
             pass
     else:
@@ -119,6 +128,7 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=
                                               #bounds = [(0, -np.inf, -np.inf, 0, -np.inf, -np.inf), (np.inf, np.inf, np.inf, np.inf, np.inf, np.inf)])
                 deltas = np.sqrt(np.abs(np.diag(var_matrix)))
                 n_two += 1
+                n_fit[i,j] = 2
 
             except RuntimeError:
                 try: 
@@ -129,8 +139,11 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=
                     deltas = np.sqrt(np.abs(np.diag(var_matrix)))
                     deltas = np.append(deltas, deltas)
                     n_one += 1
+                    n_fit[i,j] = 1
+                    
                 except RuntimeError:
                     n_bad += 1
+                    n_fit[i,j] = 0                    
                     continue
                 
             if np.abs(coeff[4]-vel_peak_upper[i,j]) < np.abs(coeff[1]-vel_peak_upper[i,j]):
@@ -156,7 +169,7 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=
     print ('\nTwo-component fit did not converge for %.2f%s of the pixels'%(100.0*(n_bad)/(nx*ny),'%'))
     print ('\nA single component was fit for %.2f%s of the pixels'%(100.0*(n_one)/(nx*ny),'%'))
     
-    return upper, dupper, lower, dlower
+    return upper, dupper, lower, dlower, n_fit
 
 
 def fit_gaussian(cube, lw_chans=1.0, sigma_fit=None):
@@ -181,11 +194,13 @@ def fit_gaussian(cube, lw_chans=1.0, sigma_fit=None):
     vchannels = cube.vchannels
 
     nchan, nx, ny = np.shape(data)
+    n_fit = np.zeros((nx, ny))                        
+    n_bad = 0
+    
     peak, dpeak = np.zeros((nx, ny)), np.zeros((nx, ny))
     centroid, dcent = np.zeros((nx, ny)), np.zeros((nx, ny))
     linewidth, dlinew = np.zeros((nx, ny)), np.zeros((nx, ny))
 
-    n_bad = 0
     ind_max = np.nanargmax(data, axis=0)
     I_max = np.nanmax(data, axis=0)
     vel_peak = vchannels[ind_max]
@@ -199,11 +214,15 @@ def fit_gaussian(cube, lw_chans=1.0, sigma_fit=None):
     for i in range(nx):
         for j in range(ny):
             isfin = np.isfinite(data[:,i,j])
-            try: coeff, var_matrix = curve_fit(_gauss, vchannels[isfin], data[:,i,j][isfin],
-                                               p0=[I_max[i,j], vel_peak[i,j], dv],
-                                               sigma=sigma_func(i,j))
+            try:
+                coeff, var_matrix = curve_fit(_gauss, vchannels[isfin], data[:,i,j][isfin],
+                                              p0=[I_max[i,j], vel_peak[i,j], dv],
+                                              sigma=sigma_func(i,j))
+                n_fit[i,j] = 1
+                    
             except RuntimeError: 
                 n_bad+=1
+                n_fit[i,j] = 0                
                 continue
 
             peak[i,j] = coeff[0]
@@ -217,4 +236,4 @@ def fit_gaussian(cube, lw_chans=1.0, sigma_fit=None):
 
     print ('\nGaussian fit did not converge for %.2f%s of the pixels'%(100.0*n_bad/(nx*ny),'%'))
     
-    return peak, centroid, linewidth, dpeak, dcent, dlinew
+    return [peak, centroid, linewidth], [dpeak, dcent, dlinew], n_fit
