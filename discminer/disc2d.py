@@ -1673,7 +1673,7 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
             
         #*************************************
         if self.prototype:
-            self.get_projected_coords(z_mirror=z_mirror)
+            self.get_projected_coords(z_mirror=z_mirror) #TODO: enable kwargs for this method
             self.props = props
             #Rail.__init__(self, self.projected_coords, self.skygrid)
             return self.get_cube(self.vchannels, *props, header=self.header, dpc=self.dpc, **kwargs_get_cube)

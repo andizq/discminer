@@ -172,7 +172,7 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=
     return upper, dupper, lower, dlower, n_fit
 
 
-def fit_gaussian(cube, lw_chans=1.0, sigma_fit=None):
+def fit_gaussian(cube, lw_chans=1.0, sigma_fit=None, peakmethod='gaussian'):
     """
     Fit Gaussian profiles along the velocity axis of the input datacube.
     
@@ -183,6 +183,9 @@ def fit_gaussian(cube, lw_chans=1.0, sigma_fit=None):
 
     sigma_fit : array_like, optional 
         2-D array of weights computed for each pixel. Shape must be equal to that of the spatial axes of the input data. 
+
+    peakmethod : str, optional
+        Amplitude to return is peak of Gaussian fit ('gaussian') or peak of line profile ('max').
 
     Returns
     -------
@@ -214,9 +217,10 @@ def fit_gaussian(cube, lw_chans=1.0, sigma_fit=None):
     for i in range(nx):
         for j in range(ny):
             isfin = np.isfinite(data[:,i,j])
+            Imax = I_max[i,j]
             try:
                 coeff, var_matrix = curve_fit(_gauss, vchannels[isfin], data[:,i,j][isfin],
-                                              p0=[I_max[i,j], vel_peak[i,j], dv],
+                                              p0=[Imax, vel_peak[i,j], dv],
                                               sigma=sigma_func(i,j))
                 n_fit[i,j] = 1
                     
@@ -225,7 +229,8 @@ def fit_gaussian(cube, lw_chans=1.0, sigma_fit=None):
                 n_fit[i,j] = 0                
                 continue
 
-            peak[i,j] = coeff[0]
+            if peakmethod=='gaussian': peak[i,j] = coeff[0]
+            else: peak[i,j] = Imax
             centroid[i,j] = coeff[1]
             linewidth[i,j] = coeff[2]
             dpeak[i,j], dcent[i,j], dlinew[i,j] = np.sqrt(np.diag(var_matrix))

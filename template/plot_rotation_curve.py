@@ -102,8 +102,8 @@ model.params['height_lower']['q'] = q_lower
 model.make_model()
 #*************************
 #LOAD MOMENT MAPS
-centroid_data = fits.getdata('velocity_data.fits')
-centroid_model = fits.getdata('velocity_model.fits') 
+centroid_data = fits.getdata('velocity_gaussian_data_%s.fits'%tag)
+centroid_model = fits.getdata('velocity_gaussian_model_%s.fits'%tag) 
 
 #**************************
 #MASK AND COMPUTE RESIDUALS
