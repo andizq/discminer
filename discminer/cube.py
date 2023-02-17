@@ -557,7 +557,7 @@ class Cube(object):
             
         else:
             raise InputError(
-                method, "method/kernel requested is not supported by this version of discminer. Available methods: ['gaussian', 'doublegauss', 'bell', doublebell]"
+                method, "method/kernel requested is not supported by this version of discminer. Available methods: ['gaussian', 'doublegaussian', 'bell', doublebell]"
             )
 
         self.n_fit = n_fit
