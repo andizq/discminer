@@ -112,7 +112,7 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=
         ishift = 0
         
     elif method=='doublebell':
-        fit_func1d = _bell_lineslope
+        fit_func1d = _bell
         pfunc_two = lambda i,j: [I_max_upper[i,j], vel_peak_upper[i,j], lw_upper[i,j], ls_upper[i,j],
                                  I_max_lower[i,j], vel_peak_lower[i,j], lw_lower[i,j], ls_lower[i,j]]
         pfunc_one = lambda i,j: [I_max_upper[i,j], vel_peak_upper[i,j], lw_upper[i,j], ls_upper[i,j]]
@@ -120,7 +120,7 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=
         if kind=='sum':
             fit_func = _doublebell_sum
         elif kind=='mask':
-            fit_func = _doublebell_mask_lineslope
+            fit_func = _doublebell_mask
         else:
             pass
         ishift = 1
