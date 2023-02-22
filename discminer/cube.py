@@ -68,6 +68,7 @@ class Cube(object):
         self.dpc = dpc
         self.pix_size = np.abs(self.header["CDELT1"]) * u.Unit(self.header["CUNIT1"])  # pixel size in CUNIT1 units (usually degrees)
 
+        # self.extent = 
         if isinstance(beam, Beam):
             self._init_beam_kernel()  # Get 2D Gaussian kernel from beam
         elif beam is None:
@@ -427,7 +428,7 @@ class Cube(object):
             self.writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)
 
             
-    def make_moments(self, method='gaussian', kind='sum', writefits=True, overwrite=True, parcube=False, writecomp=False, tag="", **kwargs_method):
+    def make_moments(self, method='gaussian', kind='sum', writefits=True, overwrite=True, parcube=True, writecomp=True, tag="", **kwargs_method):
         """
         Make moment maps from line profile observables.
 
@@ -450,17 +451,24 @@ class Cube(object):
 
         hdr_int = copy.copy(self.header)        
         hdr_vel = copy.copy(self.header)
-        hdr_par = copy.copy(self.header)
-        hdr_comp = copy.copy(self.header)        
+        hdr_ls = copy.copy(self.header)
+
         hdr_vel["BUNIT"] = "km/s"
         hdr_vel["BTYPE"] = "Velocity"
+        hdr_ls["BUNIT"] = ""
+        hdr_ls["BTYPE"] = "Line slope"
+
+        hdr_par = copy.copy(self.header) #parcube
+        hdr_comp = copy.copy(self.header) # n components matrix        
+
         hdr_par["BUNIT"] = hdr_int['BUNIT']+" km/s km/s"
         hdr_par["BTYPE"] = "Various"
         hdr_comp["BUNIT"] = ""
-        hdr_comp["BTYPE"] = "Line components"
+        hdr_comp["BTYPE"] = "Number of line components"
         
-        kwargs_io_vel = dict(overwrite=overwrite, header=hdr_vel)
         kwargs_io_int = dict(overwrite=overwrite, header=hdr_int)
+        kwargs_io_vel = dict(overwrite=overwrite, header=hdr_vel)
+        kwargs_io_ls = dict(overwrite=overwrite, header=hdr_ls)
         kwargs_io_par = dict(overwrite=overwrite, header=hdr_par)
         kwargs_io_comp = dict(overwrite=overwrite, header=hdr_comp)                 
 
@@ -538,11 +546,21 @@ class Cube(object):
                     ]
                 ]
 
+                if method == 'doublebell':
+                    for i in range(4):
+                        filenames[i] += [filenames[i][-1].replace('width', 'slope')] #Add lineslope to filenames
+                    ntypes = 4
+                    
+                elif method == 'doublegaussian':
+                    ntypes = 3
+                
                 print ('Writing moments into FITS files...')
                 for j in range(4):
-                    for i in range(3):
+                    for i in range(ntypes):
                         if i==0:
                             kwargs = kwargs_io_int
+                        elif i==3:
+                            kwargs = kwargs_io_ls
                         else:
                             kwargs = kwargs_io_vel
                         fits.writeto(filenames[j][i]+'_%s_%s%s.fits'%(method, kind, tag), moments[j][i], **kwargs)
@@ -565,7 +583,7 @@ class Cube(object):
             kwargs = kwargs_io_comp
             fits.writeto('fit_line_components'+'_%s_%s%s.fits'%(method, kind, tag), n_fit, **kwargs)        
 
-        return moments #A1, c1, lw1, dA1, dc1, dlw1, A2, c2, lw2, dA2, dc2, dlw2
+        return moments #A1, c1, lw1, [Ls1], dA1, dc1, dlw1, [dLs1], A2, c2, lw2, [Ls2], dA2, dc2, dlw2, [dLs2]
 
         
     # *********************************
@@ -857,6 +875,8 @@ class Cube(object):
             show_beam=True,
             surface_from=None,
             kwargs_surface={},
+            vmin = None,
+            vmax = None,
             **kwargs
     ):
 
@@ -880,7 +900,8 @@ class Cube(object):
         ax[1].set_ylabel(int_unit, labelpad=15)
         ax[1].yaxis.set_label_position("right")
         ax[1].set_xlim(v0 - 0.1, v1 + 0.1)
-        vmin, vmax = -1 * max_data / 100, 0.7 * max_data
+        if vmin is None: vmin = -1 * max_data / 100
+        if vmax is None: vmax = 0.7 * max_data
         ax[1].set_ylim(vmin, vmax)
         # ax[1].grid(lw=1.5, ls=':')
         cmapc = copy.copy(plt.get_cmap(cmap))
@@ -983,6 +1004,22 @@ class Cube(object):
             )
             slider_chan.on_changed(update_chan)
 
+        kwargs_def = dict(
+            extent=extent,
+            chan_init=chan_init,
+            cube_init=cube_init,
+            compare_cubes=compare_cubes,
+            cursor_grid=cursor_grid,
+            int_unit=int_unit,
+            pos_unit=pos_unit,
+            vel_unit=vel_unit,
+            show_beam=show_beam,                
+            surface_from=surface_from,
+            kwargs_surface=kwargs_surface,
+            vmin=vmin,
+            vmax=vmax,
+            **kwargs
+        )
         # *************
         # BUTTONS
         # *************
@@ -1009,20 +1046,8 @@ class Cube(object):
                 ci = int(slider_cubes.val)
             else:
                 ci = 0
-            self._show_path(
-                extent=extent,
-                chan_init=chan,
-                cube_init=ci,
-                compare_cubes=compare_cubes,
-                cursor_grid=cursor_grid,
-                int_unit=int_unit,
-                pos_unit=pos_unit,
-                vel_unit=vel_unit,
-                show_beam=show_beam,                
-                surface_from=surface_from,
-                kwargs_surface=kwargs_surface,                
-                **kwargs
-            )
+            kwargs_def.update({'chan_init': chan, 'cube_init': ci})                                
+            self._show_path( **kwargs_def)
 
         def go2trash(event):
             print("Cleaning interactive figure...")
@@ -1032,21 +1057,8 @@ class Cube(object):
                 ci = int(slider_cubes.val)
             else:
                 ci = 0
-            self.show(
-                extent=extent,
-                cmap=cmap,
-                chan_init=chan,
-                cube_init=ci,
-                compare_cubes=compare_cubes,
-                cursor_grid=cursor_grid,
-                int_unit=int_unit,
-                pos_unit=pos_unit,
-                vel_unit=vel_unit,
-                show_beam=show_beam,                
-                surface_from=surface_from,
-                kwargs_surface=kwargs_surface,                
-                **kwargs
-            )
+            kwargs_def.update({'chan_init': chan, 'cube_init': ci})                
+            self.show( **kwargs_def)
 
         def go2surface(event):
             self._surface(ax[0], surface_from, **kwargs_surface)
@@ -1093,6 +1105,8 @@ class Cube(object):
             show_beam=True,
             surface_from=None,
             kwargs_surface={},
+            vmin=None,
+            vmax=None,
             **kwargs
     ):
 
@@ -1120,7 +1134,8 @@ class Cube(object):
         ax[2].set_ylabel(int_unit, labelpad=15)
         ax[2].yaxis.set_label_position("right")
         ax[2].set_xlim(v0 - 0.1, v1 + 0.1)
-        vmin, vmax = -1 * max_data / 100, 0.7 * max_data
+        if vmin is None: vmin = -1 * max_data / 100
+        if vmax is None: vmax = 0.7 * max_data
         ax[2].set_ylim(vmin, vmax)
         cmap = copy.copy(plt.get_cmap(cmap))
         cmap.set_bad(color=(0.9, 0.9, 0.9))
@@ -1232,7 +1247,9 @@ class Cube(object):
                 vel_unit=vel_unit,
                 show_beam=show_beam,                
                 surface_from=surface_from,
-                kwargs_surface=kwargs_surface,                
+                kwargs_surface=kwargs_surface,
+                vmin=vmin,
+                vmax=vmax,
                 **kwargs
             )
 
@@ -1400,20 +1417,22 @@ class Cube(object):
         return cid
 
     def _show_path(
-        self,
-        extent=None,
-        chan_init=0,
-        cube_init=0,
-        compare_cubes=[],
-        cursor_grid=True,
-        cmap="gnuplot2_r",
-        int_unit=r"Intensity [mJy beam$^{-1}$]",
-        pos_unit="au",
-        vel_unit=r"km s$^{-1}$",
-        show_beam=True,
-        surface_from=None,
-        kwargs_surface={},
-        **kwargs
+            self,
+            extent=None,
+            chan_init=0,
+            cube_init=0,
+            compare_cubes=[],
+            cursor_grid=True,
+            cmap="gnuplot2_r",
+            int_unit=r"Intensity [mJy beam$^{-1}$]",
+            pos_unit="au",
+            vel_unit=r"km s$^{-1}$",
+            show_beam=True,
+            surface_from=None,
+            kwargs_surface={},
+            vmin = None,
+            vmax = None,
+            **kwargs
     ):
 
         self._check_cubes_shape(compare_cubes)
@@ -1437,7 +1456,8 @@ class Cube(object):
         ax[1].set_xlabel("Cell id along path")
         ax[1].set_ylabel(int_unit, labelpad=15)
         ax[1].yaxis.set_label_position("right")
-        vmin, vmax = -1 * max_data / 100, 0.7 * max_data
+        if vmin is None: vmin = -1 * max_data / 100
+        if vmax is None: vmax = 0.7 * max_data
         ax[1].set_ylim(vmin, vmax)
         # ax[1].grid(lw=1.5, ls=':')
         cmapc = copy.copy(plt.get_cmap(cmap))
@@ -1599,7 +1619,9 @@ class Cube(object):
                 vel_unit=vel_unit,
                 show_beam=show_beam,
                 surface_from=surface_from,
-                kwargs_surface=kwargs_surface,                
+                kwargs_surface=kwargs_surface,
+                vmin=vmin,
+                vmax=vmax,
                 **kwargs
             )
 
@@ -1622,7 +1644,9 @@ class Cube(object):
                 vel_unit=vel_unit,
                 show_beam=show_beam,
                 surface_from=surface_from,
-                kwargs_surface=kwargs_surface,                
+                kwargs_surface=kwargs_surface,
+                vmin=vmin,
+                vmax=vmax,
                 **kwargs
             )
 

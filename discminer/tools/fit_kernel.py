@@ -1,4 +1,4 @@
-from .utils import FrontendUtils, get_tb
+from .utils import FrontendUtils, InputError, get_tb
 
 import numpy as np
 from astropy.io import fits
@@ -36,8 +36,59 @@ def _doublebell_mask(x, *p):
     return np.where(bell1>=bell2, bell1, bell2)
 
 
+def get_channels_from_parcube(parcube_up, parcube_low, vchannels, method='doublebell', kind='mask', n_fit=None):
+    
+    nx, ny = parcube_up.shape[1:]
+    intensity = np.zeros((len(vchannels), ny, nx))
+    
+    if parcube_low is None and 'double' in method:
+        parcube_low = np.zeros_like(parcube_up)
+
+    par_double = lambda i,j: np.append(parcube_up[:,i,j], parcube_low[:,i,j])
+    par_single = lambda i,j: parcube_up[:,i,j]
+    
+    if 'double' in method:
+        pars = par_double
+    else:
+        pars = par_single
+
+    #******************************
+    #KERNELS AND RELEVANT FUNCTIONS
+    if method=='doublegaussian':
+        fit_func1d = _gauss
+        if kind=='sum':
+            fit_func = _doublegauss_sum
+        elif kind=='mask':
+            fit_func = _doublegauss_mask
+        else:
+            raise InputError(kind, "kind must be 'mask' or 'sum'")
+
+    elif method=='doublebell':
+        fit_func1d = _bell
+        if kind=='sum':
+            fit_func = _doublebell_sum
+        elif kind=='mask':
+            fit_func = _doublebell_mask
+        else:
+            raise InputError(kind, "kind must be 'mask' or 'sum'")
+
+    elif method=='gaussian':
+        fit_func = _gauss
+
+    else:
+        raise InputError(method, "requested moment method is not available")
+
+    #***********************
+    #EVALUATE PARS ON KERNEL
+    for i in range(ny):
+        for j in range(nx):
+            intensity[:,i,j] = fit_func(vchannels, *pars(i,j))
+    
+    return intensity
+
+
 def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=None,
-                     method='doublegaussian', kind='sum'):
+                     method='doublegaussian', kind='mask'):
 
     data = cube.data
     vchannels = cube.vchannels
@@ -56,6 +107,8 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=
     centroid_low, dcentroid_low = np.zeros((2, nx, ny))
     linewidth_low, dlinewidth_low = np.zeros((2, nx, ny))
     lineslope_low, dlineslope_low = np.zeros((2, nx, ny))
+
+    dbell = method=='doublebell'
     
     #MODEL AS INITIAL GUESS?
     if model is None:
@@ -107,10 +160,10 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=
             fit_func = _doublegauss_sum
         elif kind=='mask':
             fit_func = _doublegauss_mask
-        else: #Raise InputError
-            pass
-        ishift = 0
-        
+        else:
+            raise InputError(kind, "kind must be 'mask' or 'sum'")
+        idlow = np.array([3,4,5])
+
     elif method=='doublebell':
         fit_func1d = _bell
         pfunc_two = lambda i,j: [I_max_upper[i,j], vel_peak_upper[i,j], lw_upper[i,j], ls_upper[i,j],
@@ -122,13 +175,12 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=
         elif kind=='mask':
             fit_func = _doublebell_mask
         else:
-            pass
-        ishift = 1
-        
-    else:
-        pass
+            raise InputError(kind, "kind must be 'mask' or 'sum'")
+        idlow = np.array([4,5,6,7])
 
-    idlow = np.array([3,4,5])+ishift #ishift accounts for extra index due to lineslope if using bells
+    else:
+        raise InputError(method, "requested moment method is not available")        
+
     print ('Fitting two-component function to line profiles from cube...')
 
     #********
@@ -164,19 +216,20 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=
                     continue
                 
             if np.abs(coeff[idlow[1]]-vel_peak_upper[i,j]) < np.abs(coeff[1]-vel_peak_upper[i,j]):
-                coeff = np.append(coeff[idlow[0]:idlow[-1]+1+ishift], coeff[0:idlow[0]])
-                deltas = np.append(deltas[idlow[0]:idlow[-1]+1+ishift], deltas[0:idlow[0]])
+                coeff = np.append(coeff[idlow[0]:idlow[-1]+1], coeff[0:idlow[0]])
+                deltas = np.append(deltas[idlow[0]:idlow[-1]+1], deltas[0:idlow[0]])
 
             r"""
             #Sometimes the fit can output upper profiles near to zero intensity and in turn the lower profile is attributed to the bulk of the emission.
             #The following seems to improve things due to this in a few pixels. However, the conditional above accounts for this for the most part already.
             if coeff[0]<=1.0 and coeff[3]>1.0:
-                coeff = np.append(coeff[idlow[0]:idlow[-1]+1+ishift], coeff[0:idlow[0]])
-                deltas = np.append(deltas[idlow[0]:idlow[-1]+1+ishift], deltas[0:idlow[0]])
+                coeff = np.append(coeff[idlow[0]:idlow[-1]+1], coeff[0:idlow[0]])
+                deltas = np.append(deltas[idlow[0]:idlow[-1]+1], deltas[0:idlow[0]])
             #""" 
             peak_up[i,j] = coeff[0]
             centroid_up[i,j] = coeff[1]
             linewidth_up[i,j] = coeff[2]
+            
             peak_low[i,j] = coeff[idlow[0]]
             centroid_low[i,j] = coeff[idlow[1]]
             linewidth_low[i,j] = coeff[idlow[2]]
@@ -184,10 +237,17 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=
             dpeak_up[i,j] = deltas[0]
             dcentroid_up[i,j] = deltas[1]
             dlinewidth_up[i,j] = deltas[2]
+
             dpeak_low[i,j] = deltas[idlow[0]]
             dcentroid_low[i,j] = deltas[idlow[1]]
             dlinewidth_low[i,j] = deltas[idlow[2]]
-            
+
+            if dbell:
+                lineslope_up[i,j] = coeff[3]
+                lineslope_low[i,j] = coeff[idlow[3]]
+                dlineslope_up[i,j] = deltas[3]
+                dlineslope_low[i,j] = deltas[idlow[3]]
+                
             #dpeak_up[i,j], dcentroid_up[i,j], dlinewidth_up[i,j],_, dpeak_low[i,j], dcentroid_low[i,j], dlinewidth_low[i,j],_ = deltas 
             
         _progress_bar(int(100*i/nx))
@@ -198,6 +258,12 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=
     lower = [peak_low, centroid_low, linewidth_low]
     dlower = [dpeak_low, dcentroid_low, dlinewidth_low]
 
+    if dbell:
+        upper += [lineslope_up]
+        dupper += [dlineslope_up]
+        lower += [lineslope_low]
+        dlower += [dlineslope_low]
+        
     print ('\nTwo-component fit did not converge for %.2f%s of the pixels'%(100.0*(n_bad)/(nx*ny),'%'))
     print ('\nA single component was fit for %.2f%s of the pixels'%(100.0*(n_one)/(nx*ny),'%'))
     
