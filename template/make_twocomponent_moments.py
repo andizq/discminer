@@ -188,5 +188,3 @@ fig, ax = make3panels([moments_nopriors[2][1], moments_gauss[2][1], moments_bell
 plt.savefig('twocomponent_centroids_lower.png', bbox_inches='tight', dpi=200)
 plt.show()
 plt.close()
-
-sys.exit()
