@@ -354,7 +354,7 @@ class Cube(object):
             The total number of pixels after clipping would be 2*npix on each spatial axis.
         
         icenter, jcenter : int, optional
-            Reference centre for the clipped window. Must be integers referred to pixel ids from the input data. 
+            Reference centre for the clipped window. Must be integers referred to pixel ids from the input data. Must be one-based to keep fits header convention
             If None, the reference centre is determined from the input header as ``icenter=int(header['CRPIX1'])`` and ``jcenter=int(header['CRPIX2'])``
         
         channels : {"interval" : [i0, i1]} or {"indices" : [i0, i1,..., in]}, optional
@@ -390,11 +390,11 @@ class Cube(object):
         if icenter is not None:
             icenter = int(icenter)
         else:  # Assume reference centre at the centre of the image
-            icenter = int(0.5 * self.header["NAXIS1"] + 1)
+            icenter = int(0.5 * self.header["NAXIS1"] + 1.0)
         if jcenter is not None:
             jcenter = int(jcenter)
         else:
-            jcenter = int(0.5 * self.header["NAXIS2"] + 1)
+            jcenter = int(0.5 * self.header["NAXIS2"] + 1.0)
 
         idchan = self._channel_picker(channels)
         self.data = self.data[idchan]
@@ -408,11 +408,11 @@ class Cube(object):
             # The following is wrong because the projection is not Cartesian:
             #  self.header["CRVAL1"] = CRVAL1 + (icenter - CRPIX1) * CDELT1.
             #   A proper conversion using wcs must be done:
-            newcr = aputils.pixel_to_skycoord(icenter, jcenter, self.wcs)
+            newcr = aputils.pixel_to_skycoord(icenter-1, jcenter-1, self.wcs) #-1 to go back to 0-based convention
             self.header["CRVAL1"] = newcr.ra.value
             self.header["CRVAL2"] = newcr.dec.value
-            self.header["CRPIX1"] = npix + 1.0
-            self.header["CRPIX2"] = npix + 1.0
+            self.header["CRPIX1"] = npix
+            self.header["CRPIX2"] = npix
 
         self.nchan, self.nx, _ = self.data.shape
         self.header["NAXIS1"] = self.nx
@@ -428,7 +428,7 @@ class Cube(object):
             self.writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)
 
             
-    def make_moments(self, method='gaussian', kind='sum', writefits=True, overwrite=True, parcube=True, writecomp=True, tag="", **kwargs_method):
+    def make_moments(self, method='gaussian', kind='mask', writefits=True, overwrite=True, parcube=True, writecomp=True, tag="", **kwargs_method):
         """
         Make moment maps from line profile observables.
 
