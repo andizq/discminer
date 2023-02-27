@@ -802,6 +802,12 @@ class Cube(object):
                 alpha = 0.2
                 dalpha = -alpha / ncubes
                 for cube in compare_cubes:
+                    ax.step(self.vchannels,
+                            cube.data[:, i, j],
+                            color='k', #plot_spec[0].get_color(),
+                            where="mid",
+                            lw=0.5
+                    )
                     ax.fill_between(
                         self.vchannels,
                         cube.data[:, i, j],
