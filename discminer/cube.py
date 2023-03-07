@@ -300,7 +300,7 @@ class Cube(object):
                 nf = 0.5 + (npix / 2 - 1)
 
             # will be the new CRPIX1 and CRPIX2 (origin is 1,1, not 0,0)
-            refpix = 1.0
+            refpix = 1
             # coords of reference pixel, using old pixels info
             refpixval = aputils.pixel_to_skycoord(nf, nf, self.wcs) #referred to 0-based coords
 
