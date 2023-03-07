@@ -1,9 +1,10 @@
-from .utils import FrontendUtils, InputError, get_tb
+from .utils import FrontendUtils, InputError, FITSUtils, get_tb
 
 import numpy as np
 from astropy.io import fits
 from scipy.optimize import curve_fit
 
+import copy
 
 _progress_bar = FrontendUtils._progress_bar
 
@@ -87,16 +88,18 @@ def get_channels_from_parcube(parcube_up, parcube_low, vchannels, method='double
     return intensity
 
 
-def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=None,
-                     method='doublegaussian', kind='mask'):
+def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
+                     method='doublegaussian', kind='mask', sigma_thres=5,
+                     sigma_fit=None,
+):
 
-    data = cube.data
+    data = cube.data    
     vchannels = cube.vchannels
     dv = np.mean(vchannels[1:]-vchannels[:-1])
     lw_sign = np.sign(dv)
     
     nchan, nx, ny = np.shape(data)
-    n_one, n_two, n_bad = 0, 0, 0
+    n_one, n_two, n_bad, n_hot, n_mask = 0, 0, 0, 0, 0
     n_fit = np.zeros((nx, ny))
     
     peak_up, dpeak_up = np.zeros((2, nx, ny))
@@ -107,7 +110,7 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=
     centroid_low, dcentroid_low = np.zeros((2, nx, ny))
     linewidth_low, dlinewidth_low = np.zeros((2, nx, ny))
     lineslope_low, dlineslope_low = np.zeros((2, nx, ny))
-
+    
     dbell = method=='doublebell'
     
     #MODEL AS INITIAL GUESS?
@@ -130,11 +133,16 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=
         print ('Using upper and lower surface properties from discminer model as priors...')
         
         if np.any(np.array(['K', 'Kelvin', 'K ', 'Kelvin ']) == cube.header['BUNIT']): #If input unit is K the raw model intensity must be converted    
+            r"""
+            mheader = copy.copy(cube.header)
+            mheader["BUNIT"] = "beam-1 Jy"
+            I_upper = FITSUtils._convert_to_tb(I_upper*cube.beam_area, mheader, cube.beam, planck=False, writefits=False)
+            #"""
             restfreq = cube.header['RESTFRQ']*1e-9
-            I_upper = get_tb(I_upper*model.beam_area, restfreq, model.beam_info) 
-            I_lower = get_tb(I_lower*model.beam_area, restfreq, model.beam_info) 
+            I_upper = get_tb(1e3*I_upper*cube.beam_area, restfreq, cube.beam, full=False) #I in mJy/beam
+            I_lower = get_tb(1e3*I_lower*cube.beam_area, restfreq, cube.beam, full=False) 
 
-        #Priors
+        #Initial guesses
         ind_max = np.nanargmax(data, axis=0)
         cube_max = np.take_along_axis(data, ind_max[None], axis=0).squeeze()
         I_max_upper = np.where(np.isnan(I_upper), 1.0*cube_max, I_upper)
@@ -148,6 +156,9 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=
 
     if sigma_fit is None: sigma_func = lambda i,j: None
     else: sigma_func = lambda i,j: sigma_fit[:,i,j]
+
+    noise = np.std( np.append(data[:5,:,:], data[-5:,:,:], axis=0), axis=0) #rms intensity from first and last 5 channels
+    mask = np.nanmax(data, axis=0) <= sigma_thres*noise
 
     #******************************
     #KERNELS AND RELEVANT FUNCTIONS
@@ -188,6 +199,12 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=
     for i in range(nx):
         for j in range(ny):
             tmp_data = data[:,i,j]
+
+            if mask[i,j]:
+                n_mask += 1
+                n_fit[i,j] = -10                                    
+                continue
+            
             try: 
                 coeff, var_matrix = curve_fit(fit_func,
                                               vchannels, tmp_data,
@@ -247,12 +264,24 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=
                 lineslope_low[i,j] = coeff[idlow[3]]
                 dlineslope_up[i,j] = deltas[3]
                 dlineslope_low[i,j] = deltas[idlow[3]]
-                
-            #dpeak_up[i,j], dcentroid_up[i,j], dlinewidth_up[i,j],_, dpeak_low[i,j], dcentroid_low[i,j], dlinewidth_low[i,j],_ = deltas 
-            
+                        
         _progress_bar(int(100*i/nx))
     _progress_bar(100)
 
+    #*****************************
+    #KEEPING TRACK OF 'HOT' PIXELS
+    #*****************************
+    #Hot pixels will be tagged as -1
+    mm = n_fit == -10
+    ii = (peak_low <= 0.0) & (~mm)
+    cc = (centroid_up == centroid_low) & (n_fit != 1) & (~mm)
+    ww = ((linewidth_up <= 0.5*dv) | (linewidth_low <= 0.5*dv)) & (~mm) 
+    n_fit[ii+cc+ww] = -1
+    n_hot = np.sum(ii+cc+ww)
+    
+    #***************
+    #PACK AND RETURN
+    #***************    
     upper = [peak_up, centroid_up, linewidth_up]
     dupper = [dpeak_up, dcentroid_up, dlinewidth_up]
     lower = [peak_low, centroid_low, linewidth_low]
@@ -266,6 +295,8 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0, sigma_fit=
         
     print ('\nTwo-component fit did not converge for %.2f%s of the pixels'%(100.0*(n_bad)/(nx*ny),'%'))
     print ('\nA single component was fit for %.2f%s of the pixels'%(100.0*(n_one)/(nx*ny),'%'))
+    print ('\nMasked pixels below intensity threshold: %.2f%s'%(100.0*(n_mask)/(nx*ny),'%'))
+    print ('\nHot pixels: %.2f%s'%(100.0*(n_hot)/(nx*ny),'%'))        
     
     return upper, dupper, lower, dlower, n_fit
 
