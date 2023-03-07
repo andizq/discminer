@@ -981,13 +981,12 @@ class Intensity:
                 int2d_full += noise
 
             if make_convolve and self.beam_kernel:
-                """
-                inf_mask = np.isinf(int2d_full)
-                """
-                inf_mask = np.isnan(int2d_full) # Use np.nan_to_num instead
-                int2d_full = np.where(inf_mask, noise, int2d_full)                
+                int2d_full[np.isnan(int2d_full)] = noise #np.where(inf_mask, noise, int2d_full)                
                 int2d_full = self.beam_area*convolve(int2d_full, self.beam_kernel, preserve_nan=False)
-
+            else:
+                int2d_full *= self.beam_area
+                int2d_full[~np.isfinite(int2d_full)] = noise
+                
             cube.append(int2d_full)
             
         if return_data_only: return np.asarray(cube)
@@ -1121,14 +1120,13 @@ class Mcmc:
         lnx2=0    
         model_cube = self.get_cube(self.channels, vel2d, int2d, linew2d, lineb2d, nchan=self.nchan, return_data_only=True)#, tb = {'nu': 230, 'beam': self.beam_info})
         for i in range(self.nchan):
-            model_chan = model_cube[i] #model_cube.data[i] #self.get_channel(vel2d, int2d, linew2d, lineb2d, self.channels[i])
+            model_chan = model_cube[i]
             mask_data = np.isfinite(self.data[i])
             mask_model = np.isfinite(model_chan)
             data = np.where(np.logical_and(mask_model, ~mask_data), 0, self.data[i])
             model = np.where(np.logical_and(mask_data, ~mask_model), 0, model_chan)
             mask = np.logical_and(mask_data, mask_model)
             lnx =  np.where(mask, np.power((data - model)/self.noise_stddev, 2), 0) 
-            #lnx = -0.5 * np.sum(lnx2[~np.isnan(lnx2)] * 0.00001)# * self.ivar)
             lnx2 += -0.5 * np.sum(lnx)
             
         #print (new_params, "\nLOG LIKELIHOOD %.4e"%lnx2)
@@ -1136,7 +1134,6 @@ class Mcmc:
     
      
 class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #Inheritance should only be from Intensity and Mcmc, the others contain just staticmethods...
-    #def __init__(self, grid, prototype=False, subpixels=False, beam=None, skygrid=None, kwargs_beam={}):
     def __init__(self, datacube, Rmax, Rmin=1.0, prototype=False, subpixels=False):        
         FrontendUtils._print_logo()        
         self.flags = {'disc': True, 'env': False}

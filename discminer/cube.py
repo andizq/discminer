@@ -241,7 +241,7 @@ class Cube(object):
             self.writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)
 
     def downsample(
-        self, npix, method=np.median, kwargs_method={}, writefits=True, tag="", **kwargs
+            self, npix, method=np.median, kwargs_method={}, writefits=True, tag="", crpix_to_center=False, **kwargs
     ):
         """
         Downsample datacube to reduce spatial correlations between pixels and/or to save computational costs in the modelling. 
@@ -302,7 +302,7 @@ class Cube(object):
             # will be the new CRPIX1 and CRPIX2 (origin is 1,1, not 0,0)
             refpix = 1.0
             # coords of reference pixel, using old pixels info
-            refpixval = aputils.pixel_to_skycoord(nf, nf, self.wcs)
+            refpixval = aputils.pixel_to_skycoord(nf, nf, self.wcs) #referred to 0-based coords
 
             CDELT1, CDELT2 = self.header["CDELT1"], self.header["CDELT2"]
             # equivalent to CRVAL1 - CDELT1 * (CRPIX1 - 1 - nf) but using right projection
@@ -316,6 +316,16 @@ class Cube(object):
             self.header["NAXIS2"] = nx
 
             self.wcs = WCS(self.header)
+
+            if crpix_to_center:
+                icenter = int(0.5 * nx)
+                refpixval = aputils.pixel_to_skycoord(icenter, icenter, self.wcs) #referred to new, downsampled wcs
+                self.header["CRVAL1"] = refpixval.ra.value
+                self.header["CRVAL2"] = refpixval.dec.value
+                self.header["CRPIX1"] = icenter+1
+                self.header["CRPIX2"] = icenter+1
+                self.wcs = WCS(self.header)
+                
             if isinstance(self.beam, Beam):
                 self._init_beam_kernel()  # Get 2D Gaussian kernel from beam
             elif self.beam is None:
