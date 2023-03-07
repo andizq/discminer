@@ -428,7 +428,7 @@ class Cube(object):
         self.header["NAXIS1"] = self.nx
         self.header["NAXIS2"] = self.nx
         self.header["NAXIS3"] = self.nchan
-        self.header["CRPIX3"] = 1.0
+        self.header["CRPIX3"] = 1
         self.header["CRVAL3"] = self.vchannels[0]
         self.header["CDELT3"] = self.vchannels[1] - self.vchannels[0]
 
