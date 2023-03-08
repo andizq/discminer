@@ -115,7 +115,7 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
     
     #MODEL AS INITIAL GUESS?
     if model is None:
-        print ('Guessing upper surface properties from data to use them as priors for both upper (primary) and lower (secondary) surface components ...')        
+        print ('Guessing upper surface properties from data to use them as seeds for both upper (primary) and lower (secondary) surface components ...')        
         ind_max = np.nanargmax(data, axis=0)
         I_max = np.nanmax(data, axis=0)
         vel_peak = vchannels[ind_max]
@@ -130,7 +130,7 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
         R, phi, z = [model.projected_coords[key] for key in ['R', 'phi', 'z']]
         I_upper = int2d['upper']
         I_lower = int2d['lower']
-        print ('Using upper and lower surface properties from discminer model as priors...')
+        print ('Using upper and lower surface properties from discminer model as initial guesses...')
         
         if np.any(np.array(['K', 'Kelvin', 'K ', 'Kelvin ']) == cube.header['BUNIT']): #If input unit is K the raw model intensity must be converted    
             r"""
