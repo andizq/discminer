@@ -57,7 +57,7 @@ Type in a terminal:
 ```bash
 git clone https://github.com/andizq/discminer.git
 cd discminer
-python setup.py install
+python setup.py develop
 ```
 
 ### Required dependencies
