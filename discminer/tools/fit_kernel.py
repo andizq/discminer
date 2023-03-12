@@ -149,8 +149,8 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
         I_max_lower = np.where(np.isnan(I_lower), 0.5*cube_max, I_lower)
         vel_peak_upper = np.where(np.isnan(vel2d['upper']), vchannels[ind_max], vel2d['upper'])
         vel_peak_lower = np.where(np.isnan(vel2d['lower']), vchannels[ind_max], vel2d['lower'])
-        lw_upper = lw_sign*np.where(np.isnan(linew2d['upper']), 1.5*dv, linew2d['upper'])
-        lw_lower = lw_sign*np.where(np.isnan(linew2d['lower']), 1.5*dv, linew2d['lower'])
+        lw_upper = lw_sign*np.where(np.isnan(linew2d['upper']), lw_sign*1.5*dv, linew2d['upper'])
+        lw_lower = lw_sign*np.where(np.isnan(linew2d['lower']), lw_sign*1.5*dv, linew2d['lower'])
         ls_upper = np.where(np.isnan(linew2d['upper']), 1.5, lineb2d['upper'])
         ls_lower = np.where(np.isnan(linew2d['lower']), 1.5, lineb2d['lower'])
 
@@ -174,6 +174,8 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
         else:
             raise InputError(kind, "kind must be 'mask' or 'sum'")
         idlow = np.array([3,4,5])
+        bound0 = (0, -np.inf, -np.inf, 0, -np.inf, -np.inf)
+        bound1 = (np.inf, np.inf, np.inf, np.inf, np.inf, np.inf)
 
     elif method=='doublebell':
         fit_func1d = _bell
@@ -188,6 +190,8 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
         else:
             raise InputError(kind, "kind must be 'mask' or 'sum'")
         idlow = np.array([4,5,6,7])
+        bound0 = (0, -np.inf, -np.inf, 0, 0, -np.inf, -np.inf, 0)
+        bound1 = (np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf)
 
     else:
         raise InputError(method, "requested moment method is not available")        
@@ -210,7 +214,7 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
                                               vchannels, tmp_data,
                                               p0=pfunc_two(i,j),
                                               ftol=1e-10, xtol=1e-10, gtol=1e-10, method='lm')
-                                              #bounds = [(0, -np.inf, -np.inf, 0, -np.inf, -np.inf), (np.inf, np.inf, np.inf, np.inf, np.inf, np.inf)])
+                                              #bounds = [bound0, bound1])
                 deltas = np.sqrt(np.abs(np.diag(var_matrix)))
                 n_two += 1
                 n_fit[i,j] = 2
@@ -231,11 +235,13 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
                     n_bad += 1
                     n_fit[i,j] = 0                    
                     continue
-                
+
+            r"""
+            #
             if np.abs(coeff[idlow[1]]-vel_peak_upper[i,j]) < np.abs(coeff[1]-vel_peak_upper[i,j]):
                 coeff = np.append(coeff[idlow[0]:idlow[-1]+1], coeff[0:idlow[0]])
                 deltas = np.append(deltas[idlow[0]:idlow[-1]+1], deltas[0:idlow[0]])
-
+            #"""
             r"""
             #Sometimes the fit can output upper profiles near to zero intensity and in turn the lower profile is attributed to the bulk of the emission.
             #The following seems to improve things due to this in a few pixels. However, the conditional above accounts for this for the most part already.
@@ -272,11 +278,13 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
     #KEEPING TRACK OF 'HOT' PIXELS
     #*****************************
     #Hot pixels will be tagged as -1
-    mm = n_fit == -10
-    ii = (peak_low <= 0.0) & (~mm)
-    cc = (centroid_up == centroid_low) & (n_fit != 1) & (~mm)
-    ww = ((linewidth_up <= 0.5*dv) | (linewidth_low <= 0.5*dv)) & (~mm) 
-    n_fit[ii+cc+ww] = -1
+    mm = n_fit == -10 #noise
+    ii = ((peak_up < 0.0) | (peak_low < 0.0)) & (~mm) #negative intensities
+    peak_thres = 2*np.nanmax(cube_max)
+    jj = ((peak_up > peak_thres) | (peak_low > peak_thres)) & (~mm) #too large intensities
+    cc = (centroid_up == centroid_low) & (n_fit != 1) & (~mm) #up==low
+    ww = ((np.abs(linewidth_up) <= 0.5*np.abs(dv)) | (np.abs(linewidth_low) <= 0.5*np.abs(dv))) & (~mm) #narrow component
+    n_fit[ii+jj+cc+ww] = -1
     n_hot = np.sum(ii+cc+ww)
     
     #***************

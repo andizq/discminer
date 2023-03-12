@@ -359,11 +359,11 @@ class Contours(object):
                 ax.contour(phi_neg_near, levels=phi_lev_neg, **kwargs_phif)
                 ax.contour(np.where(near_nonan, np.nan, phi_pos_far), levels=phi_lev_pos, **kwargs_phif)
                 ax.contour(np.where(near_nonan, np.nan, phi_neg_far), levels=phi_lev_neg, **kwargs_phif)
-            elif which=='upper':
+            elif which in ['upper', 'up']:
                 ax.contour(R['upper'], levels=R_lev, **kwargs_Rf)
                 ax.contour(phi_pos_near, levels=phi_lev_pos, **kwargs_phif)
                 ax.contour(phi_neg_near, levels=phi_lev_neg, **kwargs_phif)
-            elif which=='lower':
+            elif which in ['lower', 'low']:
                 ax.contour(R['lower'], levels=R_lev, **kwargs_Rf)
                 ax.contour(phi_pos_far, levels=phi_lev_pos, **kwargs_phif)
                 ax.contour(phi_neg_far, levels=phi_lev_neg, **kwargs_phif)
