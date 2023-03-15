@@ -7,6 +7,7 @@ from .plottools import (get_discminer_cmap,
 from .tools.fit_kernel import fit_gaussian, fit_twocomponent
 from .tools.utils import FrontendUtils, InputError
 from .rail import Contours
+
 from astropy.convolution import Gaussian2DKernel
 from astropy import units as u
 from astropy import constants as apc
@@ -1777,7 +1778,7 @@ class Cube(object):
     def make_channel_maps(self, channels={'interval': None, 'indices': None}, ncols=5,
                           unit_intensity=None, unit_coordinates=None, fmt_cbar='%3d',
                           observable='intensity', kind='attribute', xlims=None, ylims=None,
-                          projection='wcs', mask_under=None, **kwargs_contourf):
+                          contours_from=None, projection='wcs', mask_under=None, **kwargs_contourf):
         
         try:
             vmin = kwargs_contourf['levels'][0]
@@ -1818,6 +1819,8 @@ class Cube(object):
         kwargs_cf = dict(cmap=cmap_chan, levels=np.linspace(vmin, vmax, 32))
         kwargs_cf.update(kwargs_contourf)
 
+        kwargs_cc = dict(colors='k', linewidths=1.0, origin='lower')
+
         if projection=='wcs':
             plot_projection=self.wcs.celestial
         else: #Assume plot in au
@@ -1828,6 +1831,7 @@ class Cube(object):
             xsky = ysky = ((nx-1) * pix_au/2.0).value
             extent= np.array([-xsky, xsky, -ysky, ysky])
             kwargs_cf.update(dict(extent=extent))
+            kwargs_cc.update(dict(extent=extent))            
             
         idchan = self._channel_picker(channels, warn_hdr=False) #Warning on hdr not relevant here
         plot_data = self.data[idchan]
@@ -1873,6 +1877,16 @@ class Cube(object):
                 axji = ax[j][i]
                 im.append(axji.contourf(plot_data[ichan], **kwargs_cf))
 
+                if contours_from is not None:
+                    try:
+                        vel2d, int2d, linew2d, lineb2d = contours_from.props #i.e. if model provided
+                        axji.contour(vel2d['upper'], levels=[plot_channels[ichan]], linestyles='-', **kwargs_cc)                        
+                        axji.contour(vel2d['lower'], levels=[plot_channels[ichan]], linestyles='--', **kwargs_cc)
+                    except AttributeError:
+                        cca = np.moveaxis(np.atleast_3d(contours_from), -1, 0)
+                        for cci in cca:
+                            axji.contour(cci, levels=[plot_channels[ichan]], linestyles='-', **kwargs_cc)
+            
                 axji.text(0.05,0.95, r'%.2f$^{\rm km/s}$'%plot_channels[ichan], va='top', fontsize=SMALL_SIZE+2, transform=axji.transAxes)
                                                     
                 if j==nrows-1 and i==0:
