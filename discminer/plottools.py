@@ -153,3 +153,19 @@ def get_discminer_cmap(observable, kind='attribute'):
 def use_discminer_style():
     tools = os.path.dirname(os.path.realpath(__file__))+'/tools/'
     plt.style.use(tools+'discminer.mplstyle') 
+
+def add_cbar_ax(fig, ax, perc=4, orientation='horizontal', subplots=True):
+    figx, figy = fig.get_size_inches()
+    figr = figy/figx
+    axp = ax.get_position()
+    x0, x1, y0, y1 = axp.x0, axp.x1, axp.y0, axp.y1
+    w = x1 - x0
+    h = y1 - y0
+    dy = 0.01*perc
+    dx = dy*figr    
+    if subplots:
+        if orientation=='horizontal': return fig.add_axes([x0, y0, w, dy])
+        if orientation=='vertical': return fig.add_axes([x1+0.5*dx, y0+0.1*h, dx, h-0.2*h])        
+    else:
+        if orientation=='horizontal': return fig.add_axes([x0, y0-0.5*dy, w, dy])
+        if orientation=='vertical': return fig.add_axes([x1+0.5*dx, y0, dx, h])        
