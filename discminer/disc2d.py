@@ -1550,7 +1550,7 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
         else:
             raise InputError(surface, "Only 'upper' or 'lower' are valid surfaces.")
 
-        Contours.disc_axes(ax, Rmax, incl, PA, z_daxes, xc=xc, yc=yc)
+        Contours.disc_axes(ax, R_daxes.value, z_daxes, incl, PA, xc=xc, yc=yc)
 
     def make_emission_surface(self, ax, R_lev=None, phi_lev=None,
                               proj_offset=None, which='both',
