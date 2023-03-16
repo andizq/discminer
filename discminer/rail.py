@@ -319,8 +319,8 @@ class Contours(object):
     def emission_surface(ax, R, phi, extent, R_lev=None, phi_lev=None,
                          proj_offset=None, X=None, Y=None, which='both',
                          kwargs_R={}, kwargs_phi={}):
-        kwargs_phif = dict(linestyles=':', linewidths=0.5, colors='k')
-        kwargs_Rf = dict(linestyles=':', linewidths=0.5, colors='k')
+        kwargs_phif = dict(linestyles=':', linewidths=0.4, colors='k')
+        kwargs_Rf = dict(linestyles=':', linewidths=0.4, colors='k')
         kwargs_phif.update(kwargs_phi)        
         kwargs_Rf.update(kwargs_R)
 
@@ -354,7 +354,7 @@ class Contours(object):
         else:
             if which=='both':
                 ax.contour(R['upper'], levels=R_lev, **kwargs_Rf)
-                ax.contour(np.where(near_nonan, np.nan, R['lower']), levels=R_lev, **kwargs_Rf)
+                ax.contour(np.where(R['upper']<R_lev[-1], np.nan, R['lower']), levels=R_lev, **kwargs_Rf)
                 ax.contour(phi_pos_near, levels=phi_lev_pos, **kwargs_phif)
                 ax.contour(phi_neg_near, levels=phi_lev_neg, **kwargs_phif)
                 ax.contour(np.where(near_nonan, np.nan, phi_pos_far), levels=phi_lev_pos, **kwargs_phif)
@@ -374,16 +374,17 @@ class Contours(object):
     @staticmethod
     def disc_axes(ax, R_list, z_list, incl, PA, xc=0, yc=0):
         kwargs_axes = dict(color='k', ls=':', lw=1.5,
-                           dash_capstyle='round', dashes=(0.5, 1.5), alpha=0.7)        
+                           dash_capstyle='round', dashes=(0.5, 1.5), alpha=0.7)
         phi_daxes_0 = np.zeros_like(R_list)
         phi_daxes_90 = np.zeros_like(R_list)+np.pi/2
         phi_daxes_180 = np.zeros_like(R_list)+np.pi
         phi_daxes_270 = np.zeros_like(R_list)-np.pi/2
 
-        make_ax = lambda x, y: ax.plot(x, y, **kwargs_axes)
+        isort = np.argsort(R_list)
+        make_ax = lambda x, y: ax.plot(x, y, **kwargs_axes)        
         
         for phi_dax in [phi_daxes_0, phi_daxes_90, phi_daxes_180, phi_daxes_270]:            
-            x_cont, y_cont,_ = GridTools.get_sky_from_disc_coords(R_list, phi_dax, z_list, incl, PA, xc, yc)
+            x_cont, y_cont,_ = GridTools.get_sky_from_disc_coords(R_list[isort], phi_dax, z_list[isort], incl, PA, xc, yc)
             make_ax(x_cont, y_cont)
 
     @staticmethod
