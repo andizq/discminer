@@ -1946,6 +1946,7 @@ class Cube(object):
         cbar.ax.tick_params(which='major', direction='in', width=1.7, size=3.8, pad=2, labelsize=SMALL_SIZE-1)
         cbar.ax.tick_params(which='minor', direction='in', width=1.7, size=2.3)
         mod_minor_ticks(cbar.ax)
+        cbar.outline.set_linewidth(2) #Polygon patch; modifying cbar.ax spines does not work
         
         return fig, ax, im, cbar
 

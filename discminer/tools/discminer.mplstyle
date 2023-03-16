@@ -5,17 +5,17 @@
 figure.titlesize: 15
 
 ## Tick Labels
-xtick.major.width: 2.3
-xtick.minor.width: 1.8
-xtick.major.size: 5.0
-xtick.minor.size: 3.0
+xtick.major.width: 2.5
+xtick.minor.width: 2.0
+xtick.major.size: 5.3
+xtick.minor.size: 3.3
 xtick.labelsize: 14
 xtick.direction: in
 
-ytick.major.width: 2.3
-ytick.minor.width: 1.8
-ytick.major.size: 5.0
-ytick.minor.size: 3.0
+ytick.major.width: 2.5
+ytick.minor.width: 2.0
+ytick.major.size: 5.3
+ytick.minor.size: 3.3
 ytick.labelsize: 14
 ytick.direction: in
 
@@ -28,7 +28,7 @@ axes.labelsize: 14.5
 axes.labelpad: 12
 axes.titlesize: 15
 axes.titlepad: 20
-axes.linewidth: 2.0
+axes.linewidth: 2.5
 
 ## Legend
 legend.fontsize: 10
