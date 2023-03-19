@@ -6,8 +6,14 @@ import os
 import copy
 import matplotlib
 import numpy as np
+from math import ceil
 import matplotlib.pyplot as plt
 from collections.abc import Iterable
+
+
+SMALL_SIZE = 10
+MEDIUM_SIZE = 15
+BIGGER_SIZE = 22
 
 _residuals_colors = {
     'velocity': ["#"+tmp for tmp in ["000b14","004f8f","1f9aff","fff7db","ff5a47","cc0033","140200"]],
@@ -169,3 +175,281 @@ def add_cbar_ax(fig, ax, perc=4, orientation='horizontal', subplots=True):
     else:
         if orientation=='horizontal': return fig.add_axes([x0, y0-0.5*dy, w, dy])
         if orientation=='vertical': return fig.add_axes([x1+0.5*dx, y0, dx, h])        
+        
+def make_substructures(ax, twodim=False, polar=False, gaps=[], rings=[], kinks=[], make_labels=False,
+                       kwargs_gaps={}, kwargs_rings={}, kwargs_kinks={}, func1d='axvline'):
+    '''Overlay ring-like (if twodim) or vertical lines (if not twodim) to illustrate the radial location of substructures in the disc'''
+    kwargs_g = dict(color='0.2', ls='--', lw=1.7, dash_capstyle='round', dashes=(3.0, 2.5), alpha=1.0)
+    kwargs_r = dict(color='0.2', ls='-', lw=1.7, dash_capstyle='round', alpha=1.0)
+    kwargs_k = dict(color='purple', ls=':', lw=2.5, dash_capstyle='round', dashes=(0.5, 1.5), alpha=0.9)
+    kwargs_g.update(kwargs_gaps)
+    kwargs_r.update(kwargs_rings)
+    kwargs_k.update(kwargs_kinks)        
+    if twodim:
+        nphi = 100
+        phi = np.linspace(0, 2*np.pi, nphi)
+        if polar:
+            for R in gaps: ax.plot(phi, [R]*nphi, **kwargs_g)
+            for R in rings: ax.plot(phi, [R]*nphi, **kwargs_r)
+            for R in kinks: ax.plot(phi, [R]*nphi, **kwargs_k)                
+        else:
+            cos_phi = np.cos(phi)
+            sin_phi = np.sin(phi)
+            for R in gaps: ax.plot(R*cos_phi, R*sin_phi, **kwargs_g)
+            for R in rings: ax.plot(R*cos_phi, R*sin_phi, **kwargs_r)
+            for R in kinks: ax.plot(R*cos_phi, R*sin_phi, **kwargs_k)
+    else:
+        if func1d=='axvline': func1d=ax.axvline
+        elif func1d=='axhline': func1d=ax.axhline            
+        for R in gaps: func1d(R, **kwargs_g)
+        for R in rings: func1d(R, **kwargs_r)
+        for R in kinks: func1d(R, **kwargs_k)
+    if make_labels and len(gaps)>0: ax.plot([None], [None], label='Gaps', **kwargs_g)
+    if make_labels and len(rings)>0: ax.plot([None], [None], label='Rings', **kwargs_r)
+    if make_labels and len(kinks)>0: ax.plot([None], [None], label='Kinks', **kwargs_k)
+
+    return ax
+
+def make_round_cbar(ax, Rout, levels, rwidth=0.06, cmap=get_discminer_cmap('velocity'), unit='km/s', fmt='%4.1f'):
+    xlims = ax.get_xlim()
+    xcbar = np.linspace(xlims[0], 0, 500)
+    ycbar = np.linspace(0, Rout, 500)
+    xx, yy = np.meshgrid(xcbar, ycbar)
+    rr = np.hypot(xx, yy)
+    pp = np.arctan2(yy, xx)
+
+    phi0 = np.pi
+    phi1 = 2*np.pi/3
+    cbar_phi2lev = lambda phi: (levels[-1]-levels[0])*(phi0-phi)/np.abs(phi1-phi0) + levels[0]
+    cbar_lev2phi = lambda lev: (phi1-phi0)*(lev-levels[0])/np.abs(levels[-1]-levels[0]) + phi0
+
+    r0 = Rout+0.05*Rout
+    r1 = r0+rwidth*Rout
+    cbar_polar = np.zeros_like(rr) + np.nan
+    mask_polar = (rr>=r0) & (rr<=r1) & (pp>=phi1) & (pp<=phi0)
+    cbar_polar[mask_polar] = cbar_phi2lev(pp[mask_polar])
+    cbar_im = ax.contourf(xx,yy, cbar_polar, levels=levels, cmap=cmap, extend='both', origin='lower') #np.ma.array(cbar_polar, mask=~mask_polar )
+
+    cbar_levels_pol = np.linspace(levels[0], levels[-1], 5)
+    cbar_levels_phi = cbar_lev2phi(cbar_levels_pol)
+
+    for i,cbi in enumerate(cbar_levels_phi):
+        Rtext = r1 + 0.03*Rout
+        ax.text(Rtext*np.cos(cbi), Rtext*np.sin(cbi), fmt%cbar_levels_pol[i], fontsize=SMALL_SIZE+1, c='0.7',
+                ha='right', va='center', weight='bold', rotation_mode='anchor', rotation=-np.degrees(phi0-cbi))
+
+    ax.text(-Rtext, -0.06*Rout, unit, fontsize=SMALL_SIZE+2, c='0.7', ha='center', va='top', weight='bold', rotation=0)
+
+def make_round_map(
+        map2d, levels, X, Y, Rout,
+        z_func=None, z_pars=None, incl=None, PA=None, xc=0, yc=0, #Optional, make N-sky axis
+        fig=None, ax=None,
+        rwidth=0.06, cmap=get_discminer_cmap('velocity'), unit='km/s', fmt='%5.2f', #cbar kwargs
+        gaps=[], rings=[], kinks=[]
+):
+
+    #SOME DEFINITIONS
+    if fig is None:
+        fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
+
+    X = np.nan_to_num(X.to('au').value)
+    Y = np.nan_to_num(Y.to('au').value)
+    Rout = Rout.to('au').value
+        
+    xlim_rec = 1.15*Rout
+    fill_angs_2pi = np.linspace(0, 2*np.pi, 100)
+    
+    cmap_c = copy.copy(cmap)
+    cmap_c.set_under('0.4')
+    cmap_c.set_over('0.4')
+
+    def make_text_2D(ax, Rlist, posx=0.0, sposy=-1, fmt='%d', va=None, **kwargs_text):
+        if va is not None:
+            _va = va
+            dy = 0
+        else:
+            if sposy<0:
+                _va = 'top'
+                dy = 2
+            elif sposy>0:
+                _va = 'bottom'
+                dy = -1
+            else:
+                return 0
+
+        kwargs = dict(fontsize=SMALL_SIZE+3, ha='center', va=_va, weight='bold', rotation=0)
+        kwargs.update(kwargs_text)
+        for Ri in Rlist:
+            ax.text(posx, sposy*(Ri+dy), fmt%Ri, **kwargs)
+    
+    #MAIN PLOT
+    im = ax.contourf(X, Y, map2d, levels=levels, cmap=cmap_c, extend='both', origin='lower')
+    make_substructures(ax, gaps=gaps, rings=rings, kinks=kinks, twodim=True)
+            
+    #RADIAL GRID
+    ax.plot(Rout*np.cos(fill_angs_2pi), Rout*np.sin(fill_angs_2pi), color='k', ls='-', lw=5.0, alpha=0.9) #Radial border 
+
+    get_intdigits = lambda n: len(str(n).split('.')[0])
+    make_text_rings = True
+    try:
+        kink_0 = kinks[0]        
+        if kinks[0] == 0:            
+            kink_digits = get_intdigits(rings[-1])
+            kink_0 = rings[-1]
+            make_text_kinks = False
+        else:
+            kink_digits = get_intdigits(kinks[0])
+            make_text_kinks = True
+            
+    except IndexError:
+        kink_digits = get_intdigits(rings[-1])
+        kink_0 = rings[-1]
+        make_text_kinks = False
+        
+    R_after_kink = 10**(kink_digits-1)*ceil(kink_0/(10**(kink_digits-1)))
+    Rgrid_polar = np.arange(R_after_kink, Rout, 50)
+    
+    for j,Ri in enumerate(Rgrid_polar[0:-1:2]):
+        if Ri == kink_0: continue
+        ax.plot(Ri*np.cos(fill_angs_2pi), Ri*np.sin(fill_angs_2pi), color='k', ls=':', lw=1.2, alpha=0.5, dash_capstyle='round', dashes=(0.5, 3.5))
+
+    for j,Ri in enumerate(Rgrid_polar[1::2]):
+        ax.plot(Ri*np.cos(fill_angs_2pi), Ri*np.sin(fill_angs_2pi), color='k', ls=':', lw=0.4, alpha=1.0)
+
+    ax.plot([Rout, Rout], [0, -xlim_rec], color='0.0', lw=1.0, dash_capstyle='round', dashes=(1.5, 2.5))
+
+    #AZIMUTHAL GRID
+    for j,phii in enumerate(np.arange(0, 2*np.pi, np.pi/6)):
+        ax.plot([0, Rout*np.cos(phii)], [0, Rout*np.sin(phii)], color='k', ls=':', lw=0.4, alpha=1.0)
+
+    for deg in np.linspace(0, 90, 4):
+        deg_rad = np.radians(deg)
+        txt = ax.text(1.04*Rout*np.cos(deg_rad), 1.04*Rout*np.sin(deg_rad), r'$%d$'%deg, c='0.0',
+                      fontsize=SMALL_SIZE-2, ha='center', va='center', weight='bold', rotation=-(90-deg)) #rotation_mode='anchor', 
+        txt.set_text(r'$%d^{\circ}$'%deg)
+    
+    #SKY AXIS
+    if np.all(np.asarray([z_func, z_pars, incl, PA])!=None):
+        from .grid import GridTools
+        ynorth = np.linspace(-1.1*Rout, 1.1*Rout, 100)
+        xnorth = np.zeros_like(ynorth)
+        xn, yn = [], []
+        for i in range(len(ynorth)):
+            xni, yni = GridTools.get_disc_from_sky_coords(xnorth[i], ynorth[i], z_func, z_pars, incl, PA, xc=0, yc=0)
+            xn.append(xni)
+            yn.append(yni)
+            #plt.scatter(xn, yn, c='k', s=5)
+        xn, yn = np.asarray(xn), np.asarray(yn)
+        ax.plot(xn, yn, color='0.0', lw=1.7, dash_capstyle='round', dashes=(1.5, 2.5))
+
+        #MAKE TEXT Nsky
+        text_nsky = lambda x, y: ax.text(x, y, r'$\vec{\rm N}$$_{\rm sky}$', fontsize=SMALL_SIZE+3,
+                                         ha='center', va='bottom', weight='bold', rotation=np.degrees(-PA))
+        
+        if yni>xni:
+            ci = yni
+            cn = yn
+        else:
+            ci = xni
+            cn = xn
+
+        if ci>xlim_rec:
+            ii = np.argmin(np.abs(cn-xlim_rec))
+            text_nsky(xn[ii], yn[ii])
+        else:
+            text_nsky(xni, yni)
+
+    #MAKE TEXT SUBSTRUCTURES AND RADIAL GRID
+    if make_text_rings:
+        make_text_2D(ax, rings, fmt='B%d')
+    if make_text_kinks:
+        make_text_2D(ax, kinks, fmt='K%d')
+
+    make_text_2D(ax, Rgrid_polar[2:-1:2], sposy=-1, fmt='%d', fontsize=SMALL_SIZE+3, color='0.1', va='center')
+    make_text_2D(ax, Rgrid_polar[2:-1:2], sposy=1, fmt='%d', fontsize=SMALL_SIZE+3, color='0.1', va='center')
+
+    #SET LIMITS AND AXES
+    for side in ['left','top','right']: ax.spines[side].set_visible(False)
+    make_up_ax(ax,
+               xlims=(-xlim_rec, xlim_rec),
+               ylims=(-xlim_rec, xlim_rec),
+               labelleft=False, left=False, right=False, labeltop=False, top=False, labelbottom=True, bottom=True,
+               labelsize=SMALL_SIZE+3, rotation=45)
+    mod_major_ticks(ax, axis='x', nbins=10)
+    ax.set_xlabel('Offset [au]', fontsize=MEDIUM_SIZE+2)
+    ax.set_aspect(1)
+
+    #MAKE ROUND COLORBAR
+    make_round_cbar(ax, Rout, levels, cmap=cmap_c, unit=unit, fmt=fmt)
+    
+    return fig, ax
+        
+def make_polar_map(
+        map2d, levels, R, PHI, Rout,
+        Rin = 0.0,
+        fig=None, ax=None, 
+        cmap=get_discminer_cmap('velocity'), unit='km/s', fmt='%5.2f', clabel=r'$\Delta$ Centroid Velocity [km s$^{-1}$]', #cbar kwargs 
+        gaps=[], rings=[], kinks=[] #,filaments=[],                            
+):
+    from scipy.interpolate import griddata
+
+    #SOME DEFINITIONS
+    if fig is None:
+        fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(12, 3))
+    Rout = Rout.to('au').value
+    try:
+        Rin = Rin.to('au').value
+    except AttributeError:
+        Rin = Rin
+
+    #GRID AND PLOT
+    phi_nonan_deg = np.nan_to_num(PHI, nan=10*np.nanmax(PHI)).to('deg').value
+    R_nonan_au = np.nan_to_num(R).to('au').value
+
+    dR = int((Rout-Rin)/50)
+    PP, RR = np.meshgrid(np.linspace(-180, 180, 10000),
+                         np.arange(Rin, Rout+dR, dR),
+                         indexing='xy')
+    
+    pmap2d = griddata((phi_nonan_deg.flatten(), R_nonan_au.flatten()), map2d.flatten(), (PP, RR), method='linear')
+
+    im=ax.contourf(pmap2d, cmap=cmap,
+                   extent=[PP.min(), PP.max(), RR.min(), RR.max()],
+                   levels=levels,
+                   extend='both', origin='lower')
+
+    """
+    kw_fil = dict(s=20, lw=1, marker='+')
+    for i,filament in enumerate(filaments):
+        if i==0 and filament is not None:
+            kw_fil.update(dict(fc='red', ec='firebrick'))
+        elif i==1 and filament is not None:
+            kw_fil.update(dict(fc='blue', ec='navy'))
+        rrr=R_nonan_up_au[filament.skeleton.astype('bool')]
+        ppr=phi_nonan_up_deg[filament.skeleton.astype('bool')]
+        ax.scatter(ppr, rrr, **kw_fil)
+    """
+
+    #DECORATIONS
+    ax.axvline(-90, ls=':', lw=2.5, color='0.3', dash_capstyle='round')
+    ax.axvline(90, ls=':', lw=2.5, color='0.3', dash_capstyle='round')
+    ax.axvline(0, ls=':', lw=2.5, color='0.3', dash_capstyle='round')
+
+    make_up_ax(ax, labelbottom=True, labeltop=False, labelsize=SMALL_SIZE+1,
+               xlims=(-180.1, 180.1), ylims=(1.1*Rin, 0.95*Rout))
+    ax.set_xticks(np.linspace(-180, 180, 13))
+    ax.set_xlabel('Azimuth [deg]', fontsize=MEDIUM_SIZE)
+    ax.set_ylabel('Radius [au]', fontsize=MEDIUM_SIZE)
+    mod_major_ticks(ax, axis='y', nbins=10)
+    
+    make_substructures(ax, gaps=gaps, rings=rings, kinks=kinks, twodim=False, func1d='axhline',
+                       kwargs_gaps={'lw': 1.0, 'color': 'k'}, kwargs_kinks={'lw': 1.7}, kwargs_rings={'lw': 1.0, 'color': 'k'})
+
+    cax = add_cbar_ax(fig, ax, orientation='vertical', subplots=False, perc=6)    
+    cbar = plt.colorbar(im, cax=cax, format=fmt, orientation='vertical', ticks=np.linspace(levels.min(), levels.max(), 5))
+    cbar.ax.tick_params(which='major', direction='in', width=2.7, size=4.8, pad=4, labelsize=SMALL_SIZE)
+    cbar.ax.tick_params(which='minor', direction='in', width=2.7, size=3.3)
+    cbar.set_label(clabel, fontsize=SMALL_SIZE, labelpad=20, rotation=270)
+    mod_minor_ticks(cbar.ax)
+
+    return fig, ax
