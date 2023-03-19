@@ -57,6 +57,7 @@ class Rail(object):
         
     def prop_along_coords(self,
                           coord_ref=None,
+                          surface='upper',
                           ax=None,
                           ax2=None,
                           acc_threshold=10, #0.05
@@ -126,8 +127,8 @@ class Rail(object):
         """
 
         prop, coord_levels = self.prop, self.coord_levels
-        _rail_phi = self.phi['upper'] #np.where(self.phi['upper'] < 0.98*np.pi, self.phi['upper'], np.nan)
-        coords_azimuthal = [self.R_nonan['upper']/sfu.au, np.degrees(_rail_phi)]
+        _rail_phi = self.phi[surface] #np.where(self.phi['upper'] < 0.98*np.pi, self.phi['upper'], np.nan)
+        coords_azimuthal = [self.R_nonan[surface]/sfu.au, np.degrees(_rail_phi)]
         coords_radial = [] #Missing this, must add the option to allow the user switch between azimuthal or radial contours
         
         X, Y = self.X, self.Y
@@ -277,6 +278,7 @@ class Rail(object):
         #resid_thres: None, '3sigma', or list of thresholds with size len(lev_list)        
 
         if self._lev_list is None:
+            kwargs_along_coords.update({'surface': surface})
             self.prop_along_coords(**kwargs_along_coords)
 
         lev_list, coord_list, resid_list = self._lev_list, self._coord_list, self._resid_list
