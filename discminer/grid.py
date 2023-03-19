@@ -1,8 +1,10 @@
 from .tools.utils import FrontendUtils
 from astropy import units as u
+from scipy.optimize import root
 import numpy as np
 
 _break_line = FrontendUtils._break_line
+au_to_m = u.au.to('m')
 
 def grid(xmax, nx, indexing="xy", verbose=True):
     """
@@ -108,3 +110,19 @@ class GridTools:
         xp, yp, zp = GridTools._project_on_skyplane(xp, yp, zp, np.cos(incl), np.sin(incl))
         xp, yp = GridTools._rotate_sky_plane(xp, yp, PA)
         return xp+xc, yp+yc, zp
+
+    @staticmethod
+    def get_disc_from_sky_coords(xs, ys, z_func, z_pars, incl, PA, xc=0, yc=0, midplane=False):
+        #xs, ys: x and y on sky plane
+        xs, ys = GridTools._rotate_sky_plane(xs-xc, ys-yc, -PA) 
+        xd = xs
+        cos_incl = np.cos(incl)
+        sin_incl = np.sin(incl)
+        def find_yd(yd):
+            R = np.sqrt(xd**2+yd[0]**2)
+            if midplane: zd = 0
+            else: zd = z_func({'R': R*au_to_m}, **z_pars)/au_to_m
+            return yd[0]*cos_incl - zd*sin_incl - ys #see _project_on_skyplane() 
+        yd = root(find_yd, [100], method='hybr')
+        return xd, yd.x[0]
+    

@@ -5,6 +5,7 @@ Classes:
 """
 
 from .grid import GridTools
+from .plottools import make_substructures as make_substruct
 
 from . import constants as sfc
 from . import units as sfu
@@ -388,39 +389,9 @@ class Contours(object):
             make_ax(x_cont, y_cont)
 
     @staticmethod
-    def make_substructures(ax, twodim=False, polar=False, gaps=[], rings=[], kinks=[], make_labels=False,
-                           kwargs_gaps={}, kwargs_rings={}, kwargs_kinks={}, func1d='axvline'):
+    def make_substructures(*args, **kwargs): #Backwards compatibility
         '''Overlay ring-like (if twodim) or vertical lines (if not twodim) to illustrate the radial location of substructures in the disc'''
-        kwargs_g = dict(color='0.2', ls='--', lw=1.7, dash_capstyle='round', dashes=(3.0, 2.5), alpha=1.0)
-        kwargs_r = dict(color='0.2', ls='-', lw=1.7, dash_capstyle='round', alpha=1.0)
-        kwargs_k = dict(color='purple', ls=':', lw=2.5, dash_capstyle='round', dashes=(0.5, 1.5), alpha=0.9)
-        kwargs_g.update(kwargs_gaps)
-        kwargs_r.update(kwargs_rings)
-        kwargs_k.update(kwargs_kinks)        
-        if twodim:
-            nphi = 100
-            phi = np.linspace(0, 2*np.pi, nphi)
-            if polar:
-                for R in gaps: ax.plot(phi, [R]*nphi, **kwargs_g)
-                for R in rings: ax.plot(phi, [R]*nphi, **kwargs_r)
-                for R in kinks: ax.plot(phi, [R]*nphi, **kwargs_k)                
-            else:
-                cos_phi = np.cos(phi)
-                sin_phi = np.sin(phi)
-                for R in gaps: ax.plot(R*cos_phi, R*sin_phi, **kwargs_g)
-                for R in rings: ax.plot(R*cos_phi, R*sin_phi, **kwargs_r)
-                for R in kinks: ax.plot(R*cos_phi, R*sin_phi, **kwargs_k)
-        else:
-            if func1d=='axvline': func1d=ax.axvline
-            elif func1d=='axhline': func1d=ax.axhline            
-            for R in gaps: func1d(R, **kwargs_g)
-            for R in rings: func1d(R, **kwargs_r)
-            for R in kinks: func1d(R, **kwargs_k)
-        if make_labels and len(gaps)>0: ax.plot([None], [None], label='Gaps', **kwargs_g)
-        if make_labels and len(rings)>0: ax.plot([None], [None], label='Rings', **kwargs_r)
-        if make_labels and len(kinks)>0: ax.plot([None], [None], label='Kinks', **kwargs_k)
-            
-        return ax
+        return make_substruct(*args, **kwargs)
         
     @staticmethod
     def make_contour_lev(prop, lev, X, Y, acc_threshold=20): 
