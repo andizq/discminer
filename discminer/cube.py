@@ -4,7 +4,7 @@ from .plottools import (get_discminer_cmap,
                         mod_minor_ticks,
                         mask_cmap_interval)
 
-from .tools.fit_kernel import fit_gaussian, fit_twocomponent
+from .tools.fit_kernel import fit_gaussian, fit_twocomponent, fit_onecomponent
 from .tools.utils import FrontendUtils, InputError
 from .rail import Contours
 
@@ -448,7 +448,8 @@ class Cube(object):
         method : str, optional
             Type of kernel to be fitted to each pixel's line profile. Available methods: ['gaussian'].
           
-            * If 'gaussian', fit a single Gaussian profile to the line and return [peak, centroid, linewidth], [dpeak, dcent, dlinewidth].
+            * If 'gaussian' or 'gauss', fit a single Gaussian profile to the line and return [peak, centroid, linewidth], [dpeak, dcent, dlinewidth].
+            * If 'bell', fit a single bell profile to the line and return [peak, centroid, linewidth, lineslope], [dpeak, dcent, dlinewidth, dlineslope].
             * If 'doublegaussian', fit double Gaussian profile to the line and return [peak_up, centroid_up, linewidth_up], [dpeak_up, dcent_up, dlinewidth_up], [peak_low, centroid_low, linewidth_low], [dpeak_low, dcent_low, dlinewidth_low].
             * If 'doublebell', fit double Bell profile to the line and return [peak_up, centroid_up, linewidth_up], [dpeak_up, dcent_up, dlinewidth_up], [peak_low, centroid_low, linewidth_low], [dpeak_low, dcent_low, dlinewidth_low].
 
@@ -487,11 +488,11 @@ class Cube(object):
             if tag[0]!='_':
                 tag = '_'+tag
                 
-        if method=='gaussian':
+        if method in ['gaussian', 'gauss', 'bell']:
             _break_line()
-            kwargs_m = dict(lw_chans=1.0, sigma_fit=None)
+            kwargs_m = dict(method=method, lw_chans=1.0, sigma_fit=None)
             kwargs_m.update(kwargs_method)            
-            moments = fit_gaussian(self, **kwargs_m)
+            moments = fit_onecomponent(self, **kwargs_m)
             moments, n_fit =  moments[:-1], moments[-1]
 
             if writefits:
@@ -507,10 +508,18 @@ class Cube(object):
                         'delta_linewidth',
                     ]
                 ]
+
+                if method == 'bell':
+                    for i in range(2):
+                        filenames[i] += [filenames[i][-1].replace('width', 'slope')] #Add lineslope to filenames
+                    ntypes = 4
+                    
+                else: 
+                    ntypes = 3
                 
                 print ('Writing moments into FITS files...')
                 for j in range(2):
-                    for i in range(3):                    
+                    for i in range(ntypes):                    
                         if i==0:
                             kwargs = kwargs_io_int
                         else:

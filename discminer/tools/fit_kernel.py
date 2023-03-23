@@ -36,6 +36,8 @@ def _doublebell_mask(x, *p):
     bell2 = A2/(1+np.abs((x-mu2)/sigma2)**(2*Ls2))
     return np.where(bell1>=bell2, bell1, bell2)
 
+def _not_available(method):
+    raise InputError(method, "requested moment method is currently unavailable")
 
 def get_channels_from_parcube(parcube_up, parcube_low, vchannels, method='doublebell', kind='mask', n_fit=None):
     
@@ -76,8 +78,11 @@ def get_channels_from_parcube(parcube_up, parcube_low, vchannels, method='double
     elif method=='gaussian':
         fit_func = _gauss
 
+    elif method=='bell':
+        fit_func = _bell
+        
     else:
-        raise InputError(method, "requested moment method is not available")
+        _not_available(method)
 
     #***********************
     #EVALUATE PARS ON KERNEL
@@ -111,7 +116,7 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
     linewidth_low, dlinewidth_low = np.zeros((2, nx, ny))
     lineslope_low, dlineslope_low = np.zeros((2, nx, ny))
     
-    dbell = method=='doublebell'
+    is_dbell = method=='doublebell'
     
     #MODEL AS INITIAL GUESS?
     if model is None:
@@ -194,9 +199,9 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
         bound1 = (np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf)
 
     else:
-        raise InputError(method, "requested moment method is not available")        
+        _not_available(method)
 
-    print ('Fitting two-component function to line profiles from cube...')
+    print ('Fitting two-component function along velocity axis of the input cube...')
 
     #********
     #MAKE FIT
@@ -265,7 +270,7 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
             dcentroid_low[i,j] = deltas[idlow[1]]
             dlinewidth_low[i,j] = deltas[idlow[2]]
 
-            if dbell:
+            if is_dbell:
                 lineslope_up[i,j] = coeff[3]
                 lineslope_low[i,j] = coeff[idlow[3]]
                 dlineslope_up[i,j] = deltas[3]
@@ -295,23 +300,28 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
     lower = [peak_low, centroid_low, linewidth_low]
     dlower = [dpeak_low, dcentroid_low, dlinewidth_low]
 
-    if dbell:
+    if is_dbell:
         upper += [lineslope_up]
         dupper += [dlineslope_up]
         lower += [lineslope_low]
         dlower += [dlineslope_low]
         
     print ('\nTwo-component fit did not converge for %.2f%s of the pixels'%(100.0*(n_bad)/(nx*ny),'%'))
-    print ('\nA single component was fit for %.2f%s of the pixels'%(100.0*(n_one)/(nx*ny),'%'))
-    print ('\nMasked pixels below intensity threshold: %.2f%s'%(100.0*(n_mask)/(nx*ny),'%'))
-    print ('\nHot pixels: %.2f%s'%(100.0*(n_hot)/(nx*ny),'%'))        
+    print ('A single component was fit for %.2f%s of the pixels'%(100.0*(n_one)/(nx*ny),'%'))
+    print ('Masked pixels below intensity threshold: %.2f%s'%(100.0*(n_mask)/(nx*ny),'%'))
+    print ('Hot pixels: %.2f%s'%(100.0*(n_hot)/(nx*ny),'%'))        
     
     return upper, dupper, lower, dlower, n_fit
 
 
-def fit_gaussian(cube, lw_chans=1.0, sigma_fit=None, peakmethod='gaussian'):
+def fit_gaussian(*args, **kwargs): #Backcompat
+    return fit_onecomponent(*args, **kwargs)
+
+def fit_onecomponent(
+        cube, method='gaussian', lw_chans=1.0, peak_kernel=True, sigma_fit=None, sigma_thres=4
+):
     """
-    Fit Gaussian profiles along the velocity axis of the input datacube.
+    Fit 'gaussian' or 'bell' profiles along the velocity axis of the input cube.
     
     Parameters
     ----------
@@ -321,8 +331,8 @@ def fit_gaussian(cube, lw_chans=1.0, sigma_fit=None, peakmethod='gaussian'):
     sigma_fit : array_like, optional 
         2-D array of weights computed for each pixel. Shape must be equal to that of the spatial axes of the input data. 
 
-    peakmethod : str, optional
-        Amplitude to return is peak of Gaussian fit ('gaussian') or peak of line profile ('max').
+    peak_kernel : bool, optional
+        If True (default) the returned amplitude is the peak of the kernel fitted to the line. Otherwise, the actual peak of the line profile is returned.
 
     Returns
     -------
@@ -335,30 +345,56 @@ def fit_gaussian(cube, lw_chans=1.0, sigma_fit=None, peakmethod='gaussian'):
 
     nchan, nx, ny = np.shape(data)
     n_fit = np.zeros((nx, ny))                        
-    n_bad = 0
+    n_bad, n_mask = 0, 0
     
     peak, dpeak = np.zeros((nx, ny)), np.zeros((nx, ny))
     centroid, dcent = np.zeros((nx, ny)), np.zeros((nx, ny))
     linewidth, dlinew = np.zeros((nx, ny)), np.zeros((nx, ny))
+    lineslope, dlineslope = np.zeros((nx, ny)), np.zeros((nx, ny))    
 
+    is_bell = method=='bell'
+    
     ind_max = np.nanargmax(data, axis=0)
     I_max = np.nanmax(data, axis=0)
     vel_peak = vchannels[ind_max]
     dv = lw_chans*np.mean(vchannels[1:]-vchannels[:-1])
-
+    Ls = 2.0 #p0 Line slope
+    
     if sigma_fit is None: sigma_func = lambda i,j: None
     else: sigma_func = lambda i,j: sigma_fit[:,i,j]
 
-    print ('Fitting Gaussian profile to pixels (along velocity axis)...')
+    #******************************
+    #KERNELS AND RELEVANT FUNCTIONS
+    if method in ['gaussian', 'gauss']:
+        fit_func1d = _gauss
+        pfunc_one = lambda i,j: [I_max[i,j], vel_peak[i,j], dv]
+        bound0 = (0, -np.inf, -np.inf, 0, -np.inf, -np.inf)
+        bound1 = (np.inf, np.inf, np.inf, np.inf, np.inf, np.inf)
+
+    elif method=='bell':
+        fit_func1d = _bell
+        pfunc_one = lambda i,j: [I_max[i,j], vel_peak[i,j], dv, Ls]
+        bound0 = (0, -np.inf, -np.inf, 0, 0, -np.inf, -np.inf, 0)
+        bound1 = (np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf)
+    else:
+        _not_available(method)
+
+    noise = np.std( np.append(data[:5,:,:], data[-5:,:,:], axis=0), axis=0) #rms intensity from first and last 5 channels
+    mask = np.nanmax(data, axis=0) <= sigma_thres*noise
+        
+    print ('Fitting one-component function along velocity axis of the input cube...')
 
     for i in range(nx):
         for j in range(ny):
-            isfin = np.isfinite(data[:,i,j])
-            Imax = I_max[i,j]
+            tmp_data = data[:,i,j]
+            
+            if mask[i,j]:
+                n_mask += 1
+                n_fit[i,j] = -10                                    
+                continue
+            
             try:
-                coeff, var_matrix = curve_fit(_gauss, vchannels[isfin], data[:,i,j][isfin],
-                                              p0=[Imax, vel_peak[i,j], dv],
-                                              sigma=sigma_func(i,j))
+                coeff, var_matrix = curve_fit(fit_func1d, vchannels, tmp_data, p0=pfunc_one(i,j), sigma=sigma_func(i,j))
                 n_fit[i,j] = 1
                     
             except RuntimeError: 
@@ -366,16 +402,33 @@ def fit_gaussian(cube, lw_chans=1.0, sigma_fit=None, peakmethod='gaussian'):
                 n_fit[i,j] = 0                
                 continue
 
-            if peakmethod=='gaussian': peak[i,j] = coeff[0]
-            else: peak[i,j] = Imax
+            deltas = np.sqrt(np.diag(var_matrix))
+            
+            if peak_kernel: peak[i,j] = coeff[0]
+            else: peak[i,j] = I_max[i,j]
             centroid[i,j] = coeff[1]
             linewidth[i,j] = coeff[2]
-            dpeak[i,j], dcent[i,j], dlinew[i,j] = np.sqrt(np.diag(var_matrix))
+            dpeak[i,j], dcent[i,j], dlinew[i,j] = deltas[:3]
 
+            if is_bell:
+                lineslope[i,j] = coeff[3]
+                dlineslope[i,j] = deltas[3]
+                
         _progress_bar(int(100*i/nx))
 
     _progress_bar(100)
 
-    print ('\nGaussian fit did not converge for %.2f%s of the pixels'%(100.0*n_bad/(nx*ny),'%'))
+    #***************
+    #PACK AND RETURN
+    #***************    
+    upper = [peak, centroid, linewidth]
+    dupper = [dpeak, dcent, dlinew]
+
+    if is_bell:
+        upper += [lineslope]
+        dupper += [dlineslope]
     
-    return [peak, centroid, linewidth], [dpeak, dcent, dlinew], n_fit
+    print ('\nOne-component fit did not converge for %.2f%s of the pixels'%(100.0*n_bad/(nx*ny),'%'))
+    print ('Masked pixels below intensity threshold: %.2f%s'%(100.0*(n_mask)/(nx*ny),'%'))
+    
+    return upper, dupper, n_fit
