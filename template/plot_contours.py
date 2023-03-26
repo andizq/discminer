@@ -32,9 +32,10 @@ downsamp_fit = 10 # Downsampling used for MCMC fit
 downsamp_factor = (downsamp_fit/downsamp_pro)**2 # Required to correct intensity normalisation for prototype
 
 datacube = Data(file_data, dpc) # Read data and convert to Cube object
+vchannels = datacube.vchannels
+
 noise = np.std( np.append(datacube.data[:5,:,:], datacube.data[-5:,:,:], axis=0), axis=0)
 mask = np.max(datacube.data, axis=0) < 4*np.mean(noise)
-vchannels = datacube.vchannels
 
 #****************************
 #INIT MODEL AND PRESCRIPTIONS

@@ -1,5 +1,7 @@
 from .cube import Cube
 from .grid import grid as dgrid 
+from .tools.utils import InputError
+
 from astropy import units as u
 import numpy as np
 from radio_beam import Beam, Beams
@@ -18,7 +20,9 @@ class Data(Cube):
         ----------
         filename : path-like 
             Path to input FITS file with datacube information.
-
+        
+        dpc : `~astropy.units.Quantity`
+            Distance to the disc.
         """
         cube_spe = SpectralCube.read(filename)
         try:
@@ -77,54 +81,48 @@ beam : None or `~radio_beam.Beam`, optional
 - If `~radio_beam.Beam` object, it uses this 
 """
         
-class Model():
-    def __init__(self, datacube, Rmax, Rmin=1.0, prototype=False, subpixels=False):
+class ModelGrid():
+    def __init__(self, datacube, Rmax, Rmin=1.0):
         """
-        Initialise Model object. Inherits `~discminer.disc2d.cube.Cube` properties and methods.
+        Initialise ModelGrid object.
 
         Parameters
         ----------
-        cube : `~discminer.disc2d.cube.Cube` object
-            data (or model) cube to model through MCMC methods (see `~discminer.Model.run_mcmc`). It can also be used as a reference to find a prototype model (see `~discminer.Model.prototype`). The prototype model can then be employed as an initial guess for the MCMC parameter search.
+        datacube : `~discminer.disc2d.cube.Cube` object
+            Datacube to get sky grid from.
 
-        dpc : `~astropy.units.quantity.Quantity`
-            Distance to object in physical units. The unit must be specified using the `~astropy.units` module, e.g. 100*units.pc
+        Rmax : `~astropy.units.Quantity`
+            Maximum radial extent of the model in physical units. Not to be confused with the disc outer radius.
 
-        Rmax : `~astropy.units.quantity.Quantity`
-            Disc maximum radial extent in phisical units.
-
-        Rmin : float or `~astropy.units.quantity.Quantity`
-            Disc inner radius to mask out from the model.
+        Rmin : float or `~astropy.units.Quantity`
+            Inner radius to mask out from the model.
 
             - If float, computes inner radius in number of beams. Default is 1.0.
 
-            - If `~astropy.units.quantity.Quantity`, takes the provided value.
-
-        prototype : bool, optional
-            Compute a prototype model. This is useful for quick inspection of channels given a set of parameters, which can then be used as seeding parameters for the MCMC fit. Default is False.
-        
-        subpixels : bool, optional
-            Subdivide original grid pixels into finer subpixels to account for large velocity gradients in the disc. This allows for a more precise calculation of line-of-sight velocities in regions where velocity gradients across individual pixels may be large, e.g. near the centre of the disc. Default is False.
+            - If `~astropy.units.Quantity`, takes the value provided, assumed in physical units.
 
         Attributes
         ----------
         skygrid : dict
-            Dictionary with information of the sky plane grid where the disc observables are merged.
+            Dictionary with useful information of the sky grid where the disc observable properties are merged for visualisation. This grid matches the spatial grid of the input datacube in physical units.
 
-        discgrid : dict
-            In some cases the maximum (deprojected) extent of the disc is larger than the size of the sky grid. Therefore, having independent grids is needed to make sure that the deprojected disc properties do not show sharp boundaries determined by the skyplane grid. In other cases, the maximum extent of the disc is smaller than the skyplane, in which case it's useful to employ a (smaller) independent grid to save computing resources.
+        grid : dict
+            Disc grid where the model disc properties are computed. Why are there two different grids? Sometimes, the maximum (deprojected) extent of the disc is larger than the rectangular size of the sky grid. Therefore, having independent grids is needed to make sure that the deprojected disc properties do not display sharp boundaries at R=skygrid_extent. In other cases, the maximum extent of the disc is smaller than the sky grid, in which case it's useful to employ a (smaller) independent grid to save computing time.
             
         """
+        
         self.dpc = datacube.dpc
         self.Rmax = Rmax
-        self.prototype = prototype
         if isinstance(datacube, Cube):
             self.datacube = datacube
             self.header = datacube.header
             self.vchannels = datacube.vchannels
             self.beam = datacube.beam            
             self.make_grid()
-
+        else:
+            raise InputError(datacube,
+                             'The input cube must be a ~discminer.disc2d.cube.Cube instance.')
+        
         if isinstance(Rmin, numbers.Real):
             if datacube.beam is not None:
                 beam_au = (self.dpc*np.tan(datacube.beam.major.to(u.radian))).to(u.au)

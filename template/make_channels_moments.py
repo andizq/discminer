@@ -1,4 +1,4 @@
-from discminer.core import Data, Model
+from discminer.core import Data
 from discminer.cube import Cube
 from discminer.disc2d import General2d
 from discminer.rail import Contours
@@ -31,8 +31,6 @@ downsamp_fit = 10 # Downsampling used for MCMC fit
 downsamp_factor = (downsamp_fit/downsamp_pro)**2 # Required to correct intensity normalisation for prototype
 
 datacube = Data(file_data, dpc) # Read data and convert to Cube object
-
-#mgrid = Model(datacube, dpc, Rdisc) # Make grid from datacube info
 vchannels = datacube.vchannels
 
 #****************************

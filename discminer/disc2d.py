@@ -1,13 +1,13 @@
 """
 2D Disc models
 ==============
-Classes: Rosenfeld2d, General2d, Velocity, Intensity, Cube, Tools
+Classes: Rosenfeld2d, Model, Velocity, Intensity, Cube, Tools
 """
 
 #TODO in v1.0: migrate to astropy units
-#TODO in General2d: Implement irregular grids (see e.g.  meshio from nschloe on github) for the disc grid. It could be useful for better refinement of e.g. disc centre w/o wasting too much in the outer region.
-#TODO in General2d: Compute props in the interpolated grid (not in the original grid) to avoid interpolation of props and save time.
-#TODO in General2d: Allow the lower surface to have independent intensity and line width parametrisations.
+#TODO in Model: Implement irregular grids (see e.g.  meshio from nschloe on github) for the disc grid. It could be useful for better refinement of e.g. disc centre w/o wasting too much in the outer region.
+#TODO in Model: Compute props in the interpolated grid (not in the original grid) to avoid interpolation of props and save time.
+#TODO in Model: Allow the lower surface to have independent intensity and line width parametrisations.
 #TODO in make_model(): Allow for warped emitting surfaces, check notes for ideas as to how to solve for multiple intersections between l.o.s and emission surface.
 #TODO in __main__ file: show intro message when python -m disc2d
 #TODO in run_mcmc(): use get() methods instead of allowing the user to use self obj attributes.
@@ -44,7 +44,7 @@ from scipy.special import ellipe, ellipk
 from .tools.utils import FrontendUtils, InputError
 from . import constants as sfc
 from . import units as sfu
-from .core import Model
+from .core import ModelGrid
 from .cube import Cube
 from .rail import Contours
 
@@ -60,7 +60,7 @@ except ImportError:
     found_termtables = False
 
 #warnings.filterwarnings("error")
-__all__ = ['Cube', 'Tools', 'Intensity', 'Velocity', 'General2d', 'Rosenfeld2d']
+__all__ = ['Cube', 'Tools', 'Intensity', 'Velocity', 'Model', 'Rosenfeld2d']
 path_icons = os.path.dirname(os.path.realpath(__file__))+'/icons/'
 _break_line = FrontendUtils._break_line
 
@@ -935,7 +935,7 @@ class Intensity:
     def get_cube(self, vchannels, velocity2d, intensity2d, linewidth2d, lineslope2d, make_convolve=True, #Should be in model class
                  nchan=None, rms=None, tb={'nu': False, 'beam': False, 'full': True}, return_data_only=False, header=None, dpc=None, **kwargs_line):
 
-        #from .cube import Cube as Cube2 #header should already be known by here, i.e. it should be an input when General2d is initialised
+        #from .cube import Cube as Cube2 #header should already be known by here, i.e. it should be an input when Model is initialised
         
         vel2d, int2d, linew2d, lineb2d = velocity2d, {}, {}, {}
         line_profile = self.line_profile
@@ -1132,14 +1132,47 @@ class Mcmc:
         #print (new_params, "\nLOG LIKELIHOOD %.4e"%lnx2)
         return lnx2 if np.isfinite(lnx2) else -np.inf
     
-     
-class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #Inheritance should only be from Intensity and Mcmc, the others contain just staticmethods...
+
+class Model(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #Inheritance should only be from Intensity and Mcmc, the others contain just staticmethods...
     def __init__(self, datacube, Rmax, Rmin=1.0, prototype=False, subpixels=False):        
+        """
+        Initialise discminer model object.
+
+        Parameters
+        ----------
+        datacube : `~discminer.disc2d.cube.Cube` object
+            Datacube to be modelled with discminer through MCMC methods (see `~discminer.disc2d.Model.run_mcmc`). It can also be used as a reference cube to make a prototype model, which can then be employed as an initial guess for the MCMC parameter search.
+
+        Rmax : `~astropy.units.Quantity`
+            Maximum radial extent of the model in physical units. Not to be confused with the disc outer radius.
+
+        Rmin : float or `~astropy.units.Quantity`
+            Inner radius to mask out from the model.
+
+            - If float, computes inner radius in number of beams. Default is 1.0.
+
+            - If `~astropy.units.Quantity`, takes the value provided, assumed in physical units.
+
+        prototype : bool, optional
+            Compute a prototype model. This is useful for quick inspection of channels given a set of parameters, which can then be used as seeding parameters for the MCMC fit. It is also helpful for analysis purposes once a best-fit model has been found. Defaults to False.
+        
+        subpixels : bool, optional
+            Subdivide original grid pixels into smaller pixels (subpixels) to account for large velocity gradients in the disc. This allows for more precise calculations of line-of-sight velocities in regions where velocity gradients across individual pixels can be large, e.g. near the centre of the disc. Defaults to False.
+
+        Attributes
+        ----------
+        skygrid : dict
+            Dictionary with useful information of the sky grid where the disc observable properties are merged for visualisation. This grid matches the spatial grid of the input datacube in physical units.
+
+        grid : dict
+            Disc grid where the model disc properties are computed. Why are there two different grids? Sometimes, the maximum (deprojected) extent of the disc is larger than the rectangular size of the sky grid. Therefore, having independent grids is needed to make sure that the deprojected disc properties do not display sharp boundaries at R=skygrid_extent. In other cases, the maximum extent of the disc is smaller than the sky grid, in which case it's useful to employ a (smaller) independent grid to save computing time.
+            
+        """
+        
         FrontendUtils._print_logo()        
-        self.flags = {'disc': True, 'env': False}
         self.prototype = prototype
 
-        mgrid = Model(datacube, Rmax, Rmin=Rmin, prototype=prototype, subpixels=subpixels) #Make model grid (disc and sky grids)
+        mgrid = ModelGrid(datacube, Rmax, Rmin=Rmin) #Make model grid (disc and sky grids)
         grid = mgrid.discgrid        
         skygrid = mgrid.skygrid
 
@@ -1159,13 +1192,13 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
         self.beam_area = datacube.beam_area
         self.beam_kernel = datacube.beam_kernel
         
-        self._z_upper_func = General2d.z_cone
-        self._z_lower_func = General2d.z_cone_neg
-        self._velocity_func = General2d.keplerian
-        self._intensity_func = General2d.intensity_powerlaw
-        self._linewidth_func = General2d.linewidth_powerlaw
-        self._lineslope_func = General2d.lineslope_powerlaw
-        self._line_profile = General2d.line_profile_bell
+        self._z_upper_func = Model.z_cone
+        self._z_lower_func = Model.z_cone_neg
+        self._velocity_func = Model.keplerian
+        self._intensity_func = Model.intensity_powerlaw
+        self._linewidth_func = Model.linewidth_powerlaw
+        self._lineslope_func = Model.lineslope_powerlaw
+        self._line_profile = Model.line_profile_bell
         self._use_temperature = False
         self._use_full_channel = False
  
@@ -1254,7 +1287,7 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
             for key in self.categories: self.params[key] = {}
             print ('Available categories for prototyping:', self.params)            
         else: 
-            self.mc_header, self.mc_kind, self.mc_nparams, self.mc_boundaries_list, self.mc_params_indices = General2d._get_params2fit(self.mc_params, self.mc_boundaries)
+            self.mc_header, self.mc_kind, self.mc_nparams, self.mc_boundaries_list, self.mc_params_indices = Model._get_params2fit(self.mc_params, self.mc_boundaries)
             #print ('Default parameter header for mcmc fitting:', self.mc_header)
             #print ('Default parameters to fit and fixed parameters:', self.mc_params)
 
@@ -1299,7 +1332,7 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
         kwargs_model.update({'z_mirror': z_mirror})
         if z_mirror: 
             for key in self.mc_params['height_lower']: self.mc_params['height_lower'][key] = 'height_upper_mirror'
-        self.mc_header, self.mc_kind, self.mc_nparams, self.mc_boundaries_list, self.mc_params_indices = General2d._get_params2fit(self.mc_params, self.mc_boundaries)
+        self.mc_header, self.mc_kind, self.mc_nparams, self.mc_boundaries_list, self.mc_params_indices = Model._get_params2fit(self.mc_params, self.mc_boundaries)
         self.params = copy.deepcopy(self.mc_params)
 
         #if p0_mean == 'optimize': p0_mean = optimize_p0()
@@ -1473,7 +1506,7 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
             print ('Using height and orientation parameters from prototype model:\n')
             pprint.pprint({key: self.params[key] for key in ['height_upper', 'height_lower', 'orientation']})
             
-        incl, PA, xc, yc = General2d.orientation(**self.params['orientation'])
+        incl, PA, xc, yc = Model.orientation(**self.params['orientation'])
         cos_incl, sin_incl = np.cos(incl), np.sin(incl)
 
         #*******************************************
@@ -1539,7 +1572,7 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
             Rmax = Rmax.to('au')
         R_daxes = np.linspace(0, Rmax, 50)
         
-        incl, PA, xc, yc = General2d.orientation(**self.params['orientation'])
+        incl, PA, xc, yc = Model.orientation(**self.params['orientation'])
         xc /= sfu.au
         yc /= sfu.au        
         
@@ -1572,7 +1605,7 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
             pprint.pprint(self.params)
             _break_line(init='\n')
 
-        incl, PA, xc, yc = General2d.orientation(**self.params['orientation'])
+        incl, PA, xc, yc = Model.orientation(**self.params['orientation'])
         int_kwargs = self.params['intensity']
         vel_kwargs = self.params['velocity']
         lw_kwargs = self.params['linewidth']
@@ -1677,8 +1710,9 @@ class General2d(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc):
         else:
             return props
 
-        
-class Rosenfeld2d(Velocity, Intensity, Linewidth, Tools):
+General2d = Model #Backcompat
+
+class _Rosenfeld2d(Velocity, Intensity, Linewidth, Tools): #Deprecated, haven't tested it in a while
     """
     Host class for the Rosenfeld+2013 model which describes the velocity field of a flared disc in 2D. 
     This model assumes a (Keplerian) double cone to account for the near and far sides of the disc 
@@ -1698,12 +1732,11 @@ class Rosenfeld2d(Velocity, Intensity, Linewidth, Tools):
     """
 
     def __init__(self, grid):
-        self.flags = {'disc': True, 'env': False}
         self.grid = grid
         self._velocity_func = Rosenfeld2d.keplerian
         self._intensity_func = Rosenfeld2d.intensity_powerlaw
         self._linewidth_func = Rosenfeld2d.linewidth_powerlaw
-        self._line_profile = General2d.line_profile_v_sigma
+        self._line_profile = Rosenfeld2d.line_profile_v_sigma
         self._use_temperature = False
         self._use_full_channel = False
 

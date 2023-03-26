@@ -10,9 +10,13 @@ from .. import units as sfu
 class InputError(Exception):
     """Exception raised for input errors.
 
-    Attributes:
-        expression -- input expression where error occurred
-        message -- description of the error
+    Parameters
+    ----------
+    expression : str
+        Input expression where error occurred
+    
+    message : str
+        Output description of the error
     """
     def __init__(self, expression, message):
         self.expression = expression
@@ -24,7 +28,7 @@ class InputError(Exception):
     
 class FrontendUtils(object):
     """
-    Make things look nicer
+    Make outputs prettier
     """    
     path_icons = os.path.dirname(os.path.realpath(__file__))+'/../icons/'
 
