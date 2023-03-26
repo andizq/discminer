@@ -286,6 +286,9 @@ class Tools:
 class Residuals:
     pass
 
+class Canvas3d:
+    pass
+
 
 class PlotTools:
     @staticmethod
@@ -335,9 +338,6 @@ class PlotTools:
         for axi in ax: axi.set_ylim(*ax1_ylims)
 
        
-class Canvas3d:
-    pass
-
 class Height:
     @property
     def z_upper_func(self): 
@@ -1108,7 +1108,7 @@ class Mcmc:
         quantiles = [0.16, 0.5, 0.84] if quantiles is None else quantiles
         corner.corner(samples, labels=labels, title_fmt='.4f', bins=30,
                       quantiles=quantiles, show_titles=True)
-        
+    
     def ln_likelihood(self, new_params, **kwargs):
         for i in range(self.mc_nparams):
             #Assuming uniform prior likelihood (within boundaries) for all parameters
@@ -1118,12 +1118,12 @@ class Mcmc:
         vel2d, int2d, linew2d, lineb2d = self.make_model(**kwargs)
 
         lnx2=0    
-        model_cube = self.get_cube(self.channels, vel2d, int2d, linew2d, lineb2d, nchan=self.nchan, return_data_only=True)#, tb = {'nu': 230, 'beam': self.beam_info})
-        for i in range(self.nchan):
+        model_cube = self.get_cube(self.mc_vchannels, vel2d, int2d, linew2d, lineb2d, nchan=self.mc_nchan, return_data_only=True)#, tb = {'nu': 230, 'beam': self.beam_info})
+        for i in range(self.mc_nchan):
             model_chan = model_cube[i]
-            mask_data = np.isfinite(self.data[i])
+            mask_data = np.isfinite(self.mc_data[i])
             mask_model = np.isfinite(model_chan)
-            data = np.where(np.logical_and(mask_model, ~mask_data), 0, self.data[i])
+            data = np.where(np.logical_and(mask_model, ~mask_data), 0, self.mc_data[i])
             model = np.where(np.logical_and(mask_data, ~mask_model), 0, model_chan)
             mask = np.logical_and(mask_data, mask_model)
             lnx =  np.where(mask, np.power((data - model)/self.noise_stddev, 2), 0) 
@@ -1133,7 +1133,7 @@ class Mcmc:
         return lnx2 if np.isfinite(lnx2) else -np.inf
     
 
-class Model(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #Inheritance should only be from Intensity and Mcmc, the others contain just staticmethods...
+class Model(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #Inheritance should only be from ModelGrid, Intensity and Mcmc, the others contain just staticmethods...
     def __init__(self, datacube, Rmax, Rmin=1.0, prototype=False, subpixels=False):        
         """
         Initialise discminer model object.
@@ -1141,7 +1141,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #In
         Parameters
         ----------
         datacube : `~discminer.disc2d.cube.Cube` object
-            Datacube to be modelled with discminer through MCMC methods (see `~discminer.disc2d.Model.run_mcmc`). It can also be used as a reference cube to make a prototype model, which can then be employed as an initial guess for the MCMC parameter search.
+            Datacube to to be modelled with discminer using an MCMC sampler (see `~discminer.disc2d.Model.run_mcmc`). It can also be used as a reference cube to make a prototype model, which can then be employed as an initial guess for the MCMC parameter search.
 
         Rmax : `~astropy.units.Quantity`
             Maximum radial extent of the model in physical units. Not to be confused with the disc outer radius.
@@ -1171,7 +1171,8 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #In
         
         FrontendUtils._print_logo()        
         self.prototype = prototype
-
+        self.datacube = datacube
+        
         mgrid = ModelGrid(datacube, Rmax, Rmin=Rmin) #Make model grid (disc and sky grids)
         grid = mgrid.discgrid        
         skygrid = mgrid.skygrid
@@ -1183,6 +1184,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #In
         self.Rmin_m = mgrid.Rmin.to('m').value        
 
         self.vchannels = mgrid.vchannels
+        self.nchan = len(mgrid.vchannels)
         self.header = mgrid.header
         self.dpc = mgrid.dpc
         
@@ -1311,8 +1313,8 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #In
         if linewidth: make_plot(self.linewidth_func, 'linewidth')
         if peakintensity: make_plot(self.intensity_func, 'intensity', tag='peak intensity')
         
-    def run_mcmc(self, data, channels, p0_mean=[], p0_stddev=1e-3, noise_stddev=1.0,
-                 nwalkers=30, nsteps=100, frac_stats=0.5, frac_stddev=1e-3, 
+    def run_mcmc(self, data=None, vchannels=None, p0_mean=[], frac_stddev=1e-3,  
+                 nwalkers=30, nsteps=100, frac_stats=0.2, noise_stddev=1.0,
                  nthreads=None,
                  backend=None, #emcee
                  use_zeus=False,
@@ -1321,10 +1323,40 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #In
                  plot_walkers=True, plot_corner=True, tag='',
                  mpi=False,
                  **kwargs_model): 
-        #p0: list of initial guesses. In the future will support 'optimize', 'min_bound', 'max_bound'
-        self.data = data
-        self.channels = channels
-        self.nchan = len(channels)
+        """
+        Optimise the discminer model parameters using an MCMC sampler.
+
+        Parameters
+        __________
+        data : array_like with shape (nchan, nx, nx), optional
+            Reference intensity data to be modelled. If not specified, discminer considers the 
+            *data* attribute of the original datacube with which the model was initialised.
+        
+        vchannels : array_like with shape (nchan,), optional
+            Reference velocity channels matching the velocity axis of the input data. If not specified, discminer
+            considers the velocity channels of the datacube that was used to initialise the model.
+
+        p0_mean : array_like with shape (npars,)
+            Mean value of initial-guess parameters. These will be sampled assuming a normal distribution.
+
+        frac_stddev : float or array_like with shape (npars,), optional
+            Fraction of the parameter range extent that will be considered as the standard deviation of the normal distribution of initial-guess parameters.
+        
+        frac_stats : float
+            Fraction of MCMC steps at the end of the parameter chains considered for the computation of best-fit parameters (Defaults to 0.2, i.e. 20).
+       
+        """        
+        if data is None and vchannels is None:
+            self.mc_data = self.datacube.data
+            self.mc_vchannels = self.vchannels
+        elif data is not None and vchannels is not None:
+            self.mc_data = data
+            self.mc_vchannels = vchannels
+        else:
+            raise InputError((data, vchannels),
+                             'Please specify both data AND vchannel slices you wish to consider for the MCMC sampling.')
+            
+        self.mc_nchan = len(vchannels)
         self.noise_stddev = noise_stddev
         if use_zeus: import zeus as sampler_id
         else: import emcee as sampler_id
@@ -1454,7 +1486,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #In
         #PLOTTING
         #************
         #for key in custom_header: self.mc_header[key] = custom_header[key]
-        #for key in custom_kund: self.mc_kind[key] = custom_kind[key]
+        #for key in custom_kind: self.mc_kind[key] = custom_kind[key]
         if plot_walkers: 
             Mcmc.plot_walkers(sampler_chain.T, best_params, header=self.mc_header, kind=self.mc_kind, nstats=nstats, tag=tag)
         if plot_corner: 
