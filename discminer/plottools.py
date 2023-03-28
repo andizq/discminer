@@ -245,7 +245,8 @@ def make_round_map(
         z_func=None, z_pars=None, incl=None, PA=None, xc=0, yc=0, #Optional, make N-sky axis
         fig=None, ax=None,
         rwidth=0.06, cmap=get_discminer_cmap('velocity'), unit='km/s', fmt='%5.2f', #cbar kwargs
-        gaps=[], rings=[], kinks=[]
+        gaps=[], rings=[], kinks=[],
+        label_gaps=False, label_rings=True, label_kinks=True
 ):
 
     #SOME DEFINITIONS
@@ -290,28 +291,20 @@ def make_round_map(
     ax.plot(Rout*np.cos(fill_angs_2pi), Rout*np.sin(fill_angs_2pi), color='k', ls='-', lw=5.0, alpha=0.9) #Radial border 
 
     get_intdigits = lambda n: len(str(n).split('.')[0])
-    make_text_rings = True
-    try:
-        kink_0 = kinks[0]        
-        if kinks[0] == 0:            
-            kink_digits = get_intdigits(rings[-1])
-            kink_0 = rings[-1]
-            make_text_kinks = False
-        else:
-            kink_digits = get_intdigits(kinks[0])
-            make_text_kinks = True
-            
-    except IndexError:
-        kink_digits = get_intdigits(rings[-1])
-        kink_0 = rings[-1]
-        make_text_kinks = False
+
+    R_subst = np.concatenate([gaps, rings, kinks], axis=None)
+    if len(R_subst)>0:
+        Rref = np.max(R_subst)
+    else:
+        Rref = 0.0
+    Rref_digits = get_intdigits(Rref)        
         
-    R_after_kink = 10**(kink_digits-1)*ceil(kink_0/(10**(kink_digits-1)))
-    Rgrid_polar = np.arange(R_after_kink, Rout, 50)
+    R_after_ref = 10**(Rref_digits-1)*ceil(Rref/(10**(Rref_digits-1)))
+    Rgrid_polar = np.arange(R_after_ref, Rout, 50)
     
     for j,Ri in enumerate(Rgrid_polar[0:-1:2]):
-        if Ri == kink_0: continue
-        ax.plot(Ri*np.cos(fill_angs_2pi), Ri*np.sin(fill_angs_2pi), color='k', ls=':', lw=1.2, alpha=0.5, dash_capstyle='round', dashes=(0.5, 3.5))
+        if Ri == Rref: continue
+        ax.plot(Ri*np.cos(fill_angs_2pi), Ri*np.sin(fill_angs_2pi), color='k', lw=1.2, alpha=0.5, dash_capstyle='round', dashes=(0.5, 3.5)) #will be labeled
 
     for j,Ri in enumerate(Rgrid_polar[1::2]):
         ax.plot(Ri*np.cos(fill_angs_2pi), Ri*np.sin(fill_angs_2pi), color='k', ls=':', lw=0.4, alpha=1.0)
@@ -359,14 +352,16 @@ def make_round_map(
         else:
             text_nsky(xni, yni)
 
-    #MAKE TEXT SUBSTRUCTURES AND RADIAL GRID
-    if make_text_rings:
+    #MAKE TEXT FOR SUBSTRUCTURES AND RADIAL GRID
+    if label_gaps:
+        make_text_2D(ax, gaps, fmt='D%d')
+    if label_rings:
         make_text_2D(ax, rings, fmt='B%d')
-    if make_text_kinks:
+    if label_kinks:
         make_text_2D(ax, kinks, fmt='K%d')
 
-    make_text_2D(ax, Rgrid_polar[2:-1:2], sposy=-1, fmt='%d', fontsize=SMALL_SIZE+3, color='0.1', va='center')
-    make_text_2D(ax, Rgrid_polar[2:-1:2], sposy=1, fmt='%d', fontsize=SMALL_SIZE+3, color='0.1', va='center')
+    make_text_2D(ax, Rgrid_polar[2:-1:2], sposy=-1, fmt='%d', fontsize=SMALL_SIZE+3, color='0.1', va='center') #label every other radius, in the north
+    make_text_2D(ax, Rgrid_polar[2:-1:2], sposy=1, fmt='%d', fontsize=SMALL_SIZE+3, color='0.1', va='center') # and south
 
     #SET LIMITS AND AXES
     for side in ['left','top','right']: ax.spines[side].set_visible(False)
