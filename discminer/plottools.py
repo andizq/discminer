@@ -210,23 +210,59 @@ def make_substructures(ax, twodim=False, polar=False, gaps=[], rings=[], kinks=[
 
     return ax
 
-def make_round_cbar(ax, Rout, levels, rwidth=0.06, cmap=get_discminer_cmap('velocity'), unit='km/s', fmt='%4.1f'):
+def make_round_cbar(ax, Rout, levels,
+                    rwidth=0.06, cmap=get_discminer_cmap('velocity'),
+                    quadrant=2, unit='km/s', fmt='%4.1f'):
+
+    sign_xy = {1: [1,1],
+               2: [-1,1],
+               3: [-1,-1],
+               4: [1,-1],
+    }[quadrant]
+    
+    phi0 = {1: 0.0,
+            2: np.pi,
+            3: -2*np.pi/3,
+            4: -np.pi/3,
+    }[quadrant]
+
+    phi1 = {1: np.pi/3,
+            2: 2*np.pi/3,
+            3: -np.pi,
+            4: 0.0,
+    }[quadrant]
+
+    rot_quad = {1: lambda phi_lev: np.degrees(phi0+phi_lev),
+                2: lambda phi_lev: -np.degrees(phi0-phi_lev),
+                3: lambda phi_lev: -np.degrees(phi1-phi_lev),
+                4: lambda phi_lev: np.degrees(phi1+phi_lev),
+    }[quadrant]
+
+    cticks_ha = {1: 'left',
+                 2: 'right',
+                 3: 'right',
+                 4: 'left'
+    }[quadrant]
+
+    text_R = {1: 1}
+    
+    phi_max = np.max([phi0,phi1])
+    phi_min = np.min([phi0,phi1])
+    
     xlims = ax.get_xlim()
-    xcbar = np.linspace(xlims[0], 0, 500)
-    ycbar = np.linspace(0, Rout, 500)
+    xcbar = np.linspace(*xlims, 1000)
+    ycbar = np.linspace(-Rout, Rout, 1000)
     xx, yy = np.meshgrid(xcbar, ycbar)
     rr = np.hypot(xx, yy)
     pp = np.arctan2(yy, xx)
 
-    phi0 = np.pi
-    phi1 = 2*np.pi/3
-    cbar_phi2lev = lambda phi: (levels[-1]-levels[0])*(phi0-phi)/np.abs(phi1-phi0) + levels[0]
+    cbar_phi2lev = lambda phi: (levels[-1]-levels[0])*np.abs((phi0-phi)/(phi1-phi0)) + levels[0]
     cbar_lev2phi = lambda lev: (phi1-phi0)*(lev-levels[0])/np.abs(levels[-1]-levels[0]) + phi0
 
     r0 = Rout+0.05*Rout
     r1 = r0+rwidth*Rout
     cbar_polar = np.zeros_like(rr) + np.nan
-    mask_polar = (rr>=r0) & (rr<=r1) & (pp>=phi1) & (pp<=phi0)
+    mask_polar = (rr>=r0) & (rr<=r1) & (pp>=phi_min) & (pp<=phi_max)
     cbar_polar[mask_polar] = cbar_phi2lev(pp[mask_polar])
     cbar_im = ax.contourf(xx,yy, cbar_polar, levels=levels, cmap=cmap, extend='both', origin='lower') #np.ma.array(cbar_polar, mask=~mask_polar )
 
@@ -236,15 +272,15 @@ def make_round_cbar(ax, Rout, levels, rwidth=0.06, cmap=get_discminer_cmap('velo
     for i,cbi in enumerate(cbar_levels_phi):
         Rtext = r1 + 0.03*Rout
         ax.text(Rtext*np.cos(cbi), Rtext*np.sin(cbi), fmt%cbar_levels_pol[i], fontsize=SMALL_SIZE+1, c='0.7',
-                ha='right', va='center', weight='bold', rotation_mode='anchor', rotation=-np.degrees(phi0-cbi))
+                ha=cticks_ha, va='center', weight='bold', rotation_mode='anchor', rotation=rot_quad(cbi))
 
-    ax.text(-Rtext, -0.06*Rout, unit, fontsize=SMALL_SIZE+2, c='0.7', ha='center', va='top', weight='bold', rotation=0)
+    ax.text(sign_xy[0]*Rtext, -sign_xy[1]*0.1*Rout, unit, fontsize=SMALL_SIZE+2, c='0.7', ha='center', va='center', weight='bold', rotation=0)
 
 def make_round_map(
         map2d, levels, X, Y, Rout,
         z_func=None, z_pars=None, incl=None, PA=None, xc=0, yc=0, #Optional, make N-sky axis
         fig=None, ax=None,
-        rwidth=0.06, cmap=get_discminer_cmap('velocity'), unit='km/s', fmt='%5.2f', #cbar kwargs
+        rwidth=0.06, cmap=get_discminer_cmap('velocity'), unit='km/s', fmt='%5.2f', quadrant=None, #cbar kwargs
         gaps=[], rings=[], kinks=[],
         label_gaps=False, label_rings=True, label_kinks=True
 ):
@@ -309,8 +345,6 @@ def make_round_map(
     for j,Ri in enumerate(Rgrid_polar[1::2]):
         ax.plot(Ri*np.cos(fill_angs_2pi), Ri*np.sin(fill_angs_2pi), color='k', ls=':', lw=0.4, alpha=1.0)
 
-    ax.plot([Rout, Rout], [0, -xlim_rec], color='0.0', lw=1.0, dash_capstyle='round', dashes=(1.5, 2.5))
-
     #AZIMUTHAL GRID
     for j,phii in enumerate(np.arange(0, 2*np.pi, np.pi/6)):
         ax.plot([0, Rout*np.cos(phii)], [0, Rout*np.sin(phii)], color='k', ls=':', lw=0.4, alpha=1.0)
@@ -351,7 +385,9 @@ def make_round_map(
             text_nsky(xn[ii], yn[ii])
         else:
             text_nsky(xni, yni)
-
+    else:
+        xni, yni = None, None
+        
     #MAKE TEXT FOR SUBSTRUCTURES AND RADIAL GRID
     if label_gaps:
         make_text_2D(ax, gaps, fmt='D%d')
@@ -375,7 +411,23 @@ def make_round_map(
     ax.set_aspect(1)
 
     #MAKE ROUND COLORBAR
-    make_round_cbar(ax, Rout, levels, cmap=cmap_c, unit=unit, fmt=fmt)
+    if quadrant is None: #Guess best quadrant based on Nsky position
+        if xni is None:
+            quadrant = 2
+        elif (yni>0 and xni<0) or (yni<0 and xni>0):
+            quadrant = 3
+        else:
+            quadrant = 2
+            
+    make_round_cbar(ax, Rout, levels, cmap=cmap_c, unit=unit, fmt=fmt, quadrant=quadrant)
+
+    sq = {1: -1,
+          2: 1,
+          3: 1,
+          4: -1,
+    }[quadrant]
+        
+    ax.plot([sq*Rout, sq*Rout], [0, -xlim_rec], color='0.0', lw=1.0, dash_capstyle='round', dashes=(1.5, 2.5)) #Rout projected onto Cartesian xaxis
     
     return fig, ax
         
