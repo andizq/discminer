@@ -288,55 +288,6 @@ class Residuals:
 
 class Canvas3d:
     pass
-
-
-class PlotTools:
-    @staticmethod
-    def append_stddev_panel(ax, prop, weights=None, hist=False, fit_gauss_hist=False): #attach significance panel to ax, based on dist. of points prop 
-        gauss = lambda x, A, mu, sigma: A*np.exp(-(x-mu)**2/(2.*sigma**2))
-        ax1_ylims = ax[-2].get_ylim()
-        for axi in ax[:-1]: axi.tick_params(which='both', right=False, labelright=False)
-        ax[-1].tick_params(which='both', top=False, bottom=False, labelbottom=False, 
-                           left=False, labelleft=False, right=True, labelright=True)
-        ax[-1].yaxis.set_label_position('right')
-        ax[-1].spines['left'].set_color('0.6')
-        ax[-1].spines['left'].set_linewidth(3.5)
-
-        if weights is not None:
-            prop_mean = np.sum(weights*prop)/np.sum(weights)
-            prop_std = Tools.weighted_std(prop, weights, weighted_mean=prop_mean)
-        else:
-            prop_mean = np.mean(prop)
-            prop_std = np.std(prop)
-        max_y = 1.0
-        if hist:
-            n, bins, patches = ax[-1].hist(prop, bins=2*int(round(len(prop)**(1/3.)))-1, orientation='horizontal', 
-                                           density=True, linewidth=1.5, facecolor='0.95', edgecolor='k', alpha=1.0)
-            max_y = np.max(n)
-            if fit_gauss_hist: #Fit Gaussian to histogram to compare against data distribution
-                coeff, var_matrix = curve_fit(gauss, 0.5*(bins[1:]+bins[:-1]), n, p0=[max_y, prop_mean, prop_std])
-                prop_x = np.linspace(prop_mean-4*prop_std, prop_mean+4*prop_std, 100)
-                prop_y = gauss(prop_x, *coeff)
-                ax[-1].plot(prop_y, prop_x, color='tomato', ls='--', lw=2.0)
-            
-        prop_x = np.linspace(prop_mean-4*prop_std, prop_mean+4*prop_std, 100)
-        prop_pars =  [max_y, prop_mean, prop_std]
-        prop_y = gauss(prop_x, *prop_pars)
-        ax[-1].plot(prop_y, prop_x, color='limegreen', lw=3.5)
-        ax[-1].set_xlim(-0.2*max_y, 1.2*max_y)
-
-        #ax[-1].plot([-0.2, 1.0], [prop_mean]*2, color='0.6', lw=2.5)
-        #for axi in ax[:-1]: axi.axhline(prop_mean, color='0.6', lw=2.5)    
-        for i in range(0,4): 
-            prop_stdi = prop_mean+i*prop_std
-            gauss_prop_stdi = gauss(prop_stdi, *prop_pars)
-            ax[-1].plot([-0.2*max_y, gauss_prop_stdi], [prop_stdi]*2, color='0.6', ls=':', lw=2.)
-            for axi in ax[:-1]: axi.axhline(prop_stdi, color='0.6', ls=':', lw=2.)
-            if prop_stdi < ax1_ylims[-1] and i>0:
-                ax[-1].text(gauss_prop_stdi+0.2*max_y, prop_stdi, r'%d$\sigma$'%i, 
-                            fontsize=14, ha='center', va='center', rotation=-90)
-        for axi in ax: axi.set_ylim(*ax1_ylims)
-
        
 class Height:
     @property

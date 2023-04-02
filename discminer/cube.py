@@ -29,7 +29,7 @@ SMALL_SIZE = 10
 MEDIUM_SIZE = 15
 BIGGER_SIZE = 22
 
-# The Cube class should inherit a PlotTools class which can be used to make 2D plots (e.g. moment maps).
+# ToDo --> The Cube class should inherit a Plot2DTools class to make 2D plots e.g. from moment maps.
 
 _progress_bar = FrontendUtils._progress_bar
 _break_line = FrontendUtils._break_line
@@ -446,7 +446,7 @@ class Cube(object):
         Parameters
         ----------
         method : str, optional
-            Type of kernel to be fitted to each pixel's line profile. Available methods: ['gaussian'].
+            Type of kernel to be fitted to each pixel's line profile.
           
             * If 'gaussian' or 'gauss', fit a single Gaussian profile to the line and return [peak, centroid, linewidth], [dpeak, dcent, dlinewidth].
             * If 'bell', fit a single bell profile to the line and return [peak, centroid, linewidth, lineslope], [dpeak, dcent, dlinewidth, dlineslope].
