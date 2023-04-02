@@ -283,10 +283,11 @@ def make_substructures(ax, gaps=[], rings=[], kinks=[],
     if twodim:
         nphi = 100
         phi = np.linspace(0, 2*np.pi, nphi)
+        phi_deg = np.degrees(phi-np.pi)
         if polar:
-            for R in gaps: ax.plot(phi, [R]*nphi, **kwargs_g)
-            for R in rings: ax.plot(phi, [R]*nphi, **kwargs_r)
-            for R in kinks: ax.plot(phi, [R]*nphi, **kwargs_k)                
+            for R in gaps: ax.plot(phi_deg, [R]*nphi, **kwargs_g)
+            for R in rings: ax.plot(phi_deg, [R]*nphi, **kwargs_r)
+            for R in kinks: ax.plot(phi_deg, [R]*nphi, **kwargs_k)                
         else:
             cos_phi = np.cos(phi)
             sin_phi = np.sin(phi)
@@ -317,7 +318,7 @@ def make_round_map(
         rwidth=0.06, cmap=get_discminer_cmap('velocity'), unit='km/s', fmt='%5.2f', quadrant=None, #cbar kwargs
         gaps=[], rings=[], kinks=[],
         label_gaps=False, label_rings=True, label_kinks=True,
-        wthetas=None,
+        mask_wedge=None, mask_inner=None
 ):
 
     #SOME DEFINITIONS
@@ -465,10 +466,15 @@ def make_round_map(
     ax.plot([sq*Rout, sq*Rout], [0, -xlim_rec], color='0.0', lw=1.0, dash_capstyle='round', dashes=(1.5, 2.5)) #Rout projected onto Cartesian xaxis
 
     #MASK
-    if wthetas is not None:
-        mask_wedge = patches.Wedge((0,0), Rout, *wthetas, color='0.5', alpha=0.7)
-        ax.add_artist(mask_wedge)
-    
+    kw_mask = dict(facecolor='0.5', edgecolor='k', lw=1.0, alpha=0.6)
+    if mask_wedge is not None:
+        wedge = patches.Wedge((0,0), Rout, *mask_wedge.to('deg').value, **kw_mask)
+        ax.add_artist(wedge)
+
+    if mask_inner is not None:
+        inner = patches.Circle((0,0), mask_inner.to('au').value, **kw_mask)
+        ax.add_artist(inner)
+        
     return fig, ax
         
 def make_polar_map(
@@ -529,9 +535,8 @@ def make_polar_map(
     ax.set_ylabel('Radius [au]', fontsize=MEDIUM_SIZE)
     mod_major_ticks(ax, axis='y', nbins=10)
     
-    make_substructures(ax, gaps=gaps, rings=rings, kinks=kinks, twodim=False, func1d='axhline',
-                       kwargs_gaps={'lw': 1.0, 'color': 'k'}, kwargs_kinks={'lw': 1.7}, kwargs_rings={'lw': 1.0, 'color': 'k'})
-
+    make_substructures(ax, gaps=gaps, rings=rings, kinks=kinks, twodim=True, polar=True)
+                       
     cax = add_cbar_ax(fig, ax, orientation='vertical', subplots=False, perc=6)    
     cbar = plt.colorbar(im, cax=cax, format=fmt, orientation='vertical', ticks=np.linspace(levels.min(), levels.max(), 5))
     cbar.ax.tick_params(which='major', direction='in', width=2.7, size=4.8, pad=4, labelsize=SMALL_SIZE)

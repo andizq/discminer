@@ -14,7 +14,7 @@ from .tools.utils import weighted_std
 
 import copy
 
-def get_neighbour_peaks(var_x, pos_x, var_y, n_clusters=8, std_thres=3):
+def get_neighbour_peaks(var_x, pos_x, var_y, n_clusters=8, detect_thres=3):
     #Everything is referred to the variance sorted wrt x
     ind_x_sort = np.argsort(pos_x)
     var_x = var_x[ind_x_sort]
@@ -33,7 +33,7 @@ def get_neighbour_peaks(var_x, pos_x, var_y, n_clusters=8, std_thres=3):
         var_noneigh = np.delete(var_y, delete_list)
         var_std_noneigh = np.std(var_noneigh)
         var_mean_noneigh = np.mean(var_noneigh)
-        if first_neighs[0] >= var_mean_noneigh+std_thres*var_std_noneigh:
+        if first_neighs[0] >= var_mean_noneigh+detect_thres*var_std_noneigh:
             acc_neigh.append(ind_neigh)
             sign = int(np.sign(ind_neigh-ind_main)) #left or right neighbour?
             if len(first_neighs)<2: first_neighs = np.array([var_y[ind_neigh+sign]]) #If already at a border
@@ -55,7 +55,7 @@ def get_neighbour_peaks(var_x, pos_x, var_y, n_clusters=8, std_thres=3):
     pos_left = pos_x[ind_main]
     pos_right = pos_x[ind_main]
     var_left, var_right = var_x[ind_main], var_x[ind_main]
-    if var_y[ind_main] > var_mean+std_thres*var_std:
+    if var_y[ind_main] > var_mean+detect_thres*var_std:
         acc_neigh = np.append(acc_neigh, ind_main)
     if len(acc_neigh)>1:
         ind_left = np.argmin(pos_x[acc_neigh])
@@ -71,9 +71,7 @@ def get_neighbour_peaks(var_x, pos_x, var_y, n_clusters=8, std_thres=3):
 
 class Pick(Rail):
     def __init__(self, model, prop, coord_levels, **kw_prop_along_coords):
-    #def __init__(self, coord_list, resid_list, color_list, lev_list, kw_find_peaks={}):
         super().__init__(model, prop, coord_levels)
-
         kw_pac = dict(fold=True)
         kw_pac.update(kw_prop_along_coords)
         lev, coord, resid, color = self.prop_along_coords(**kw_pac)
@@ -83,9 +81,7 @@ class Pick(Rail):
         self.resid_list = copy.copy(resid)
         self.color_list = copy.copy(color)
 
-        #self.find_peaks(**kw_find_peaks)
-
-    def find_peaks(self, phi_min=-85, phi_max=85, std_thres=3, clean_peaks=True):
+    def find_peaks(self, phi_min=-85, phi_max=85, detect_thres=3, clean_thres=np.inf):
         len_res = len(self.resid_list)
         peak_angle = np.zeros(len_res)
         peak_resid = np.zeros(len_res)
@@ -107,10 +103,10 @@ class Pick(Rail):
                 peak_angle[i] = self.coord_list[i][arg90][argpeak]
                 peak_sign[i] = np.sign(self.resid_list[i][arg90][argpeak])
 
-        if clean_peaks:
-            rej_thresh = np.median(peak_resid) + 3*np.std(peak_resid)
+        if clean_thres is not None and np.isfinite(clean_thres):
+            rej_thresh = np.median(peak_resid) + clean_thres*np.std(peak_resid)
             ii = peak_resid < rej_thresh
-            print ('Rejecting %d peak velocity residuals above %.3f km/s (median+3sigma)'%(np.sum(~ii), rej_thresh))
+            print ('Rejecting %d peak velocity residuals above %.3f km/s (median+%dsigma)'%(np.sum(~ii), rej_thresh, clean_thres))
             self.lev_list = self.lev_list[ii]
             self.color_list = self.color_list[ii]
             self.coord_list = self.coord_list[ii]
@@ -129,7 +125,7 @@ class Pick(Rail):
         #********************
         peak_mean = np.sum(peak_weight*peak_resid)/np.sum(peak_weight)
         peak_std = weighted_std(peak_resid, peak_weight, weighted_mean=peak_mean)
-        for stdi in np.arange(std_thres+1)[::-1]: #If it fails to find peaks above the threshold continue and try the next, lower, sigma threshold
+        for stdi in np.arange(detect_thres+1)[::-1]: #If it fails to find peaks above the threshold continue and try the next, lower, sigma threshold
             ind_global_peak = peak_resid > peak_mean+stdi*peak_std
             if np.sum(ind_global_peak)>0: break
 
@@ -205,7 +201,7 @@ class Pick(Rail):
         if axis=='R': self.klabels_R = klabels
         return kcenters, variance_x, variance_y
 
-    def find_clusters(self, n_phi=8, n_R=8, std_thres=3, var_scale=1e3, kw_find_peaks={}):
+    def find_clusters(self, n_phi=8, n_R=8, detect_thres=3, var_scale=1e3, kw_find_peaks={}):
 
         kcenters_phi, variance_phi_x, variance_phi_y = self._make_clusters(n_phi, axis='phi', **kw_find_peaks)
         kcenters_R, variance_R_x, variance_R_y = self._make_clusters(n_R, axis='R', **kw_find_peaks)
@@ -213,7 +209,7 @@ class Pick(Rail):
         #***************************
         #FIND PEAK AZIMUTHAL CLUSTER VARIANCES
         #***************************
-        acc_peaks_phi, var_std_phi, var_width_phi = get_neighbour_peaks(variance_phi_x, kcenters_phi[:,0], variance_phi_y, n_clusters=n_phi, std_thres=std_thres)
+        acc_peaks_phi, var_std_phi, var_width_phi = get_neighbour_peaks(variance_phi_x, kcenters_phi[:,0], variance_phi_y, n_clusters=n_phi, detect_thres=detect_thres)
         print ("accepted variance peaks on PHI:", acc_peaks_phi)
 
         var_colors_phi = np.array(['1.0']*n_phi).astype('<U9')
@@ -236,7 +232,7 @@ class Pick(Rail):
         #***************************
         #FIND PEAK RADIAL CLUSTER VARIANCES
         #***************************
-        acc_peaks_R, var_std_R, var_width_R = get_neighbour_peaks(variance_R_x, kcenters_R[:,0], variance_R_y, n_clusters=n_R, std_thres=std_thres)
+        acc_peaks_R, var_std_R, var_width_R = get_neighbour_peaks(variance_R_x, kcenters_R[:,0], variance_R_y, n_clusters=n_R, detect_thres=detect_thres)
         print ("accepted variance peaks on R:", acc_peaks_R)
 
         var_colors_R = np.array(['1.0']*n_R).astype('<U9')
