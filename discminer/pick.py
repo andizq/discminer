@@ -9,7 +9,8 @@ import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 import scipy.stats as st
-from .disc2d import Tools
+from .rail import Rail
+from .tools.utils import weighted_std
 
 import copy
 
@@ -68,14 +69,21 @@ def get_neighbour_peaks(var_x, pos_x, var_y, n_clusters=8, std_thres=3):
     return acc_neigh, var_std, [pos_left, var_left, pos_right, var_right]
 
 
-class Pick(object):
-    def __init__(self, coord_list, resid_list, color_list, lev_list, kw_find_peaks={}):
-        self.coord_list = copy.copy(coord_list)
-        self.resid_list = copy.copy(resid_list)
-        self.color_list = copy.copy(color_list)
-        self.lev_list = copy.copy(lev_list)
+class Pick(Rail):
+    def __init__(self, model, prop, coord_levels, **kw_prop_along_coords):
+    #def __init__(self, coord_list, resid_list, color_list, lev_list, kw_find_peaks={}):
+        super().__init__(model, prop, coord_levels)
 
-        self.find_peaks(**kw_find_peaks)
+        kw_pac = dict(fold=True)
+        kw_pac.update(kw_prop_along_coords)
+        lev, coord, resid, color = self.prop_along_coords(**kw_pac)
+
+        self.lev_list = copy.copy(lev)        
+        self.coord_list = copy.copy(coord)
+        self.resid_list = copy.copy(resid)
+        self.color_list = copy.copy(color)
+
+        #self.find_peaks(**kw_find_peaks)
 
     def find_peaks(self, phi_min=-85, phi_max=85, std_thres=3, clean_peaks=True):
         len_res = len(self.resid_list)
@@ -83,19 +91,18 @@ class Pick(object):
         peak_resid = np.zeros(len_res)
         peak_sign = np.zeros(len_res)
         peak_error = np.zeros(len_res)
-
+        
         for i in np.arange(0, len_res): #1 radius per quadrant (0,90), (-90,0)
             arg90 = (self.coord_list[i] >= phi_min) & (self.coord_list[i] <= phi_max)  #-90, 90
-            if np.sum(arg90) == 0: abs_resid = [0] #if arg90 is empty
+            if np.sum(arg90) == 0: abs_resid = [np.inf] #if arg90 is empty
             else: abs_resid = np.abs(self.resid_list[i][arg90])
 
             argpeak = np.argmax(abs_resid)
-            if abs_resid[argpeak] > 10.0: peak_resid[i]=0.1
-            else: peak_resid[i] = abs_resid[argpeak]
+            peak_resid[i] = abs_resid[argpeak]
 
             if np.sum(arg90) == 0: #if arg90 is empty
-                peak_angle[i] = 0.0
-                peak_sign[i] = 1
+                peak_angle[i] = np.nan
+                peak_sign[i] = np.nan
             else:
                 peak_angle[i] = self.coord_list[i][arg90][argpeak]
                 peak_sign[i] = np.sign(self.resid_list[i][arg90][argpeak])
@@ -107,10 +114,12 @@ class Pick(object):
             self.lev_list = self.lev_list[ii]
             self.color_list = self.color_list[ii]
             self.coord_list = self.coord_list[ii]
+            self.resid_list = self.resid_list[ii]
             peak_resid = peak_resid[ii]
             peak_angle = peak_angle[ii]
             peak_sign = peak_sign[ii]
 
+        #peak_sky_coords = get_sky_from_disc_coords(self.lev_list, np.radians(peak_angle))
         peak_error = np.ones(len(self.lev_list)) #np.array([centroid_errors2d(peak_sky_coords[0][i], peak_sky_coords[1][i])[0] for i in range(len_res)])
         #peak_error[peak_error/peak_resid>2] = 0
         peak_weight = np.where(peak_error==0, 0, 1/peak_error)
@@ -119,7 +128,7 @@ class Pick(object):
         #FIND GLOBAL PEAK
         #********************
         peak_mean = np.sum(peak_weight*peak_resid)/np.sum(peak_weight)
-        peak_std = Tools.weighted_std(peak_resid, peak_weight, weighted_mean=peak_mean)
+        peak_std = weighted_std(peak_resid, peak_weight, weighted_mean=peak_mean)
         for stdi in np.arange(std_thres+1)[::-1]: #If it fails to find peaks above the threshold continue and try the next, lower, sigma threshold
             ind_global_peak = peak_resid > peak_mean+stdi*peak_std
             if np.sum(ind_global_peak)>0: break
@@ -136,7 +145,7 @@ class Pick(object):
         self.peak_weight = peak_weight
 
 
-    def make_clusters(self, n_clusters, axis='phi'): #, kw_find_peaks={}):
+    def _make_clusters(self, n_clusters, axis='phi'): #, kw_find_peaks={}):
 
         #************************
         #APPLY K-MEANS CLUSTERING
@@ -196,18 +205,18 @@ class Pick(object):
         if axis=='R': self.klabels_R = klabels
         return kcenters, variance_x, variance_y
 
-    def find_peak_clusters(self,n_clusters_phi, n_clusters_R, std_thres=3, var_scale=1e3, kw_find_peaks={}):
+    def find_clusters(self, n_phi=8, n_R=8, std_thres=3, var_scale=1e3, kw_find_peaks={}):
 
-        kcenters_phi, variance_phi_x, variance_phi_y = self.make_clusters(n_clusters_phi, axis='phi', **kw_find_peaks)
-        kcenters_R, variance_R_x, variance_R_y = self.make_clusters(n_clusters_R, axis='R', **kw_find_peaks)
+        kcenters_phi, variance_phi_x, variance_phi_y = self._make_clusters(n_phi, axis='phi', **kw_find_peaks)
+        kcenters_R, variance_R_x, variance_R_y = self._make_clusters(n_R, axis='R', **kw_find_peaks)
 
         #***************************
         #FIND PEAK AZIMUTHAL CLUSTER VARIANCES
         #***************************
-        acc_peaks_phi, var_std_phi, var_width_phi = get_neighbour_peaks(variance_phi_x, kcenters_phi[:,0], variance_phi_y, n_clusters=n_clusters_phi, std_thres=std_thres)
+        acc_peaks_phi, var_std_phi, var_width_phi = get_neighbour_peaks(variance_phi_x, kcenters_phi[:,0], variance_phi_y, n_clusters=n_phi, std_thres=std_thres)
         print ("accepted variance peaks on PHI:", acc_peaks_phi)
 
-        var_colors_phi = np.array(['1.0']*n_clusters_phi).astype('<U9')
+        var_colors_phi = np.array(['1.0']*n_phi).astype('<U9')
         var_colors_phi[acc_peaks_phi] = 'palegreen' #kde_color
         ind_variance_peak_phi = np.argmax(variance_phi_y)
         variance_nomax = np.sort(variance_phi_y)[:-len(acc_peaks_phi)]
@@ -227,10 +236,10 @@ class Pick(object):
         #***************************
         #FIND PEAK RADIAL CLUSTER VARIANCES
         #***************************
-        acc_peaks_R, var_std_R, var_width_R = get_neighbour_peaks(variance_R_x, kcenters_R[:,0], variance_R_y, n_clusters=n_clusters_R, std_thres=std_thres)
+        acc_peaks_R, var_std_R, var_width_R = get_neighbour_peaks(variance_R_x, kcenters_R[:,0], variance_R_y, n_clusters=n_R, std_thres=std_thres)
         print ("accepted variance peaks on R:", acc_peaks_R)
 
-        var_colors_R = np.array(['1.0']*n_clusters_R).astype('<U9')
+        var_colors_R = np.array(['1.0']*n_R).astype('<U9')
         var_colors_R[acc_peaks_R] = 'palegreen' #kde_color
         ind_variance_peak_R = np.argmax(variance_R_y)
         variance_nomax = np.sort(variance_R_y)[:-len(acc_peaks_R)]

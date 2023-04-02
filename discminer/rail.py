@@ -6,17 +6,18 @@ Classes:
 
 from .grid import GridTools
 from .plottools import make_substructures as make_substruct
-
+from .tools.utils import hypot_func
 from . import constants as sfc
 from . import units as sfu
 import matplotlib.pyplot as plt
 import matplotlib
 import numpy as np
+from scipy.interpolate import griddata
+from skimage import measure
 import numbers
-from skimage import measure 
+
 
 get_sky_from_disc_coords = GridTools.get_sky_from_disc_coords
-hypot_func = lambda x,y: np.sqrt(x**2 + y**2) #Slightly faster than np.hypot<np.linalg.norm<scipydistance. Checked precision up to au**2 order and seemed ok.
 
 class Rail(object):
     def __init__(self, model, prop, coord_levels):
@@ -33,8 +34,7 @@ class Rail(object):
            Observable to be analysed, as projected on the sky.
         
         coord_levels : array_like, shape (nlevels,)
-           Contour levels to be extracted from ``coords[0]``.
-           
+           Radial or azimuthal levels where *prop* will be mapped.           
         """
         
         _rail_coords = model.projected_coords
@@ -63,7 +63,7 @@ class Rail(object):
                           acc_threshold=10, #0.05
                           max_prop_threshold=np.inf,
                           color_bounds=[200, 400],
-                          colors=['red', 'dodgerblue', (0,1,0)],
+                          colors=['red', 'dodgerblue', '#FFB000'],
                           lws=[0.3, 0.3, 0.3], lw_ax2_factor=1,
                           fold=False,
                           fold_func=np.subtract):
@@ -171,8 +171,7 @@ class Rail(object):
                     lw = lws[i]
                     color = colors[i]                    
                     break
-                
-            
+                            
             if fold:
                 #if lev < color_bounds[0]: continue
                 ref_pos = 90 #Reference axis for positive angles
@@ -203,7 +202,9 @@ class Rail(object):
                     plot_ang_diff_pos = angle_diff_pos[ind_sort_pos]
                     plot_prop_diff_pos = prop_diff_pos[ind_sort_pos]
                     ind_prop_pos = np.abs(plot_prop_diff_pos)<max_prop_threshold
-                    ax.plot(plot_ang_diff_pos[ind_prop_pos], plot_prop_diff_pos[ind_prop_pos], color=color, lw=lw, zorder=zorder)
+                    if ax is not None:
+                        ax.plot(plot_ang_diff_pos[ind_prop_pos], plot_prop_diff_pos[ind_prop_pos],
+                                color=color, lw=lw, zorder=zorder)
                     coord_list.append(plot_ang_diff_pos[ind_prop_pos])
                     resid_list.append(plot_prop_diff_pos[ind_prop_pos])
                     color_list.append(color)
@@ -227,7 +228,9 @@ class Rail(object):
                     plot_ang_diff_neg = angle_diff_neg[ind_sort_neg]
                     plot_prop_diff_neg = prop_diff_neg[ind_sort_neg]
                     ind_prop_neg = np.abs(plot_prop_diff_neg)<max_prop_threshold
-                    ax.plot(plot_ang_diff_neg[ind_prop_neg], plot_prop_diff_neg[ind_prop_neg], color=color, lw=lw, zorder=zorder)
+                    if ax is not None:
+                        ax.plot(plot_ang_diff_neg[ind_prop_neg], plot_prop_diff_neg[ind_prop_neg],
+                                color=color, lw=lw, zorder=zorder)
                     coord_list.append(plot_ang_diff_neg[ind_prop_neg])
                     resid_list.append(plot_prop_diff_neg[ind_prop_neg])
                     color_list.append(color)
@@ -267,7 +270,11 @@ class Rail(object):
         self._resid_list = resid_list
         self._color_list = color_list
 
-        return [np.asarray(tmp) for tmp in [lev_list, coord_list, resid_list, color_list]]
+        return [np.asarray(tmp, dtype=dty)
+                for tmp,dty in zip([lev_list, coord_list, resid_list, color_list],
+                                   [float, object, object, object]
+                )
+        ]
 
     
     def get_average(self, surface='upper',
@@ -315,7 +322,27 @@ class Rail(object):
                 
         return av_annulus, av_error
 
-
+    def make_2d_map(self, prop_thres=np.inf, return_coords=False): 
+        #compute x,y coords from azimuthal contours and interpolate onto 2D grid
+        n_conts = len(self._coord_list)
+        R_list = np.array([np.repeat(self._lev_list[i], len(self._coord_list[i]))
+                           for i in range(n_conts)], dtype=object)
+        R = np.concatenate(R_list).ravel()
+        phi = np.radians(np.concatenate(self._coord_list).ravel())
+        prop = np.concatenate(self._resid_list).ravel()
+        prop[np.abs(prop)>prop_thres] = 0.0
+        
+        for p in [phi, R, prop]:
+            p = np.nan_to_num(p, nan=0.0)
+            
+        x = R*np.cos(phi)
+        y = R*np.sin(phi)
+        prop2D = griddata((x, y), prop, (self.X, self.Y), method='linear')
+        
+        if return_coords:
+            return x, y, prop, prop2D
+        else:
+            return prop2D
     
 class Contours(object):
     @staticmethod
@@ -397,7 +424,6 @@ class Contours(object):
         
     @staticmethod
     def make_contour_lev(prop, lev, X, Y, acc_threshold=20): 
-        from skimage import measure 
         contour = measure.find_contours(prop, lev)
         inds_cont = np.round(contour[-1]).astype(int)
         inds_cont = [tuple(f) for f in inds_cont]

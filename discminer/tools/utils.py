@@ -6,6 +6,7 @@ from astropy import constants as apc
 from .. import constants as sfc
 from .. import units as sfu
 
+hypot_func = lambda x,y: np.sqrt(x**2 + y**2) #Slightly faster than np.hypot<np.linalg.norm<scipydistance. Checked precision up to au**2 orders.
 
 class InputError(Exception):
     """Exception raised for input errors.
@@ -177,3 +178,23 @@ def _get_beam_from(beam, dpix=None, distance=None, frac_pixels=1.0):
     
     #gauss_kern = beam.as_kernel(pix_scale) #as_kernel() is slowing down the run when used in astropy.convolve
     return beam, gauss_kern
+
+
+def weighted_std(prop, weights, weighted_mean=None):
+    sum_weights = np.sum(weights)
+    if weighted_mean is None:
+        weighted_mean = np.sum(weights*prop)/sum_weights
+    n = np.sum(weights>0)
+    w_std = np.sqrt(np.sum(weights*(prop-weighted_mean)**2)/((n-1)/n * sum_weights))
+    return w_std
+
+
+def read_if_file_exists(base_str, file_str, n_none=3):
+    if base_str is None: return [None]*n_none
+    filename = base_str+file_str
+    try:
+        return np.loadtxt(filename)
+    except OSError:
+        message = 'File not found: %s'%filename
+        warnings.warn(message)
+        return [None]*n_none
