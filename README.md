@@ -22,33 +22,42 @@
 </div>
 
 
-### Features
-
 - Model channel maps from molecular line observations of discs by fitting intensity and rotation velocity simultaneously.
-- Supports different prescriptions for the disc rotation velocity: Keplerian (2D or 3D) + pressure support + self-gravity.   
-- Upper and lower emitting surfaces of your disc can be modelled independently.
-- Easy customisation of model parameterisations as function of the 3D disc coordinates (azimuthal asymmetries are possible!).
-- Can use external emitting surfaces obtained with e.g. the geometrical method of Pinte et al. 2018.
-- Provides analysis tools to study the gas disc physical structure and kinematics.
+- Quantify deviations from Keplerian rotation and understand their relationship to fluctuations in intensities and line widths.
+- Customise model parameterisations as function of the 3D disc coordinates (azimuthal asymmetries are possible!) easily.
+- Employ different prescriptions for the disc rotation velocity if needed: Keplerian (2D or 3D) + pressure support + self-gravity.
+- Model upper and lower emitting surfaces of the disc simultaneously.
+- Can use irregular emitting surfaces obtained with external, non-parametric methods.
+- Analyse the disc physical structure and dynamics using built-in tools.
 
 
-### Mining tools
-
-#### pick
-
-Reveal small scale fluctuations in the disc, possibly related to the presence of planets.
-
-#### hammer (in prep)
-
-Reveal large scale substructures; compute residual maps from line profile properties and investigate coherence of signatures.
+### Mining, analysis and visualisation tools
 
 #### rail
 
-Compute azimuthal or radial averages from intensity or kinematical observables.
+- Extract azimuthal and radial profiles of intensity, line width and velocity from moment maps.
+- Compute rotation curves and decompose the three-dimensional velocity field of the disc.
+- Reveal large-scale substructures and investigate coherence of observable signatures.
 
-#### cart
+#### pick
 
-Stores model attributes and their default prescriptions.
+- Quantify small-scale fluctuations in the disc.
+- Reveal localised velocity perturbations and/or sites of enhanced velocity dispersion.
+
+#### moment maps
+
+- Compute moment maps. Available kernels: Gaussian, bell, doubleGaussian, doubleBell.
+- Output moments include **peak intensity**, **line width** and **centroid velocity**.
+
+#### channel maps
+
+- Visualise model/data channels, and extract spectra interactively.
+
+#### disc geometry
+
+- Use sky or disc [Cartesian or polar] projections interchangeably.
+- Overlay the geometric structure of the disc on moment and channel maps easily. 
+
 
 ## Installation
 
@@ -71,15 +80,35 @@ python setup.py develop
 
 Discminer began life as the model.disc2d.py library of [sf3dmodels](https://github.com/andizq/sf3dmodels).
 
-See changes in `CHANGES.md`.
-
 #### v1.0
 
 - Migrating to astropy units.
 - Addition of analysis tools for mining.
 
-#### Collaborators
-
 #### License
 
-discminer is published under the [MIT license](https://github.com/andizq/discminer/blob/main/LICENSE).
+`discminer` is published under the [MIT license](https://github.com/andizq/discminer/blob/main/LICENSE).
+
+#### Citation
+
+If you find `discminer` useful for your research please cite the work of [Izquierdo et al. 2021](https://ui.adsabs.harvard.edu/abs/2021A%26A...650A.179I/abstract),
+
+```latex
+@ARTICLE{2021A&A...650A.179I,
+       author = {{Izquierdo}, A.~F. and {Testi}, L. and {Facchini}, S. and {Rosotti}, G.~P. and {van Dishoeck}, E.~F.},
+        title = "{The Disc Miner. I. A statistical framework to detect and quantify kinematical perturbations driven by young planets in discs}",
+      journal = {\aap},
+     keywords = {planet-disk interactions, planets and satellites: detection, protoplanetary disks, radiative transfer, Astrophysics - Earth and Planetary Astrophysics, Astrophysics - Solar and Stellar Astrophysics},
+         year = 2021,
+        month = jun,
+       volume = {650},
+          eid = {A179},
+        pages = {A179},
+          doi = {10.1051/0004-6361/202140779},
+archivePrefix = {arXiv},
+       eprint = {2104.09596},
+ primaryClass = {astro-ph.EP},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2021A&A...650A.179I},
+      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+}
+```
