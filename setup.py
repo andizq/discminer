@@ -8,6 +8,18 @@ https://github.com/pypa/sampleproject
 # Always prefer setuptools over distutils
 from setuptools import setup, find_packages
 import pathlib
+import re
+
+# Get version
+VERSIONFILE="discminer/_version.py"
+verstrline = open(VERSIONFILE, "rt").read()
+VSRE = r"^__version__ = ['\"]([^'\"]*)['\"]"
+mo = re.search(VSRE, verstrline, re.M)
+if mo:
+    verstr = mo.group(1)
+else:
+    raise RuntimeError("Unable to find version string in %s." % (VERSIONFILE,))
+#*************
 
 here = pathlib.Path(__file__).parent.resolve()
 
@@ -19,7 +31,7 @@ setup(
     # https://pypi.org/project/discminer/
     name='discminer',  # Required
     # https://packaging.python.org/guides/single-sourcing-package-version/
-    version='1.0.0',  # Required
+    version=verstr,  # Required
     # https://packaging.python.org/specifications/core-metadata/#summary
     description='Python package for parametric modelling of intensity channel maps from gas discs',  # Optional
     # https://packaging.python.org/specifications/core-metadata/#description-optional
@@ -33,27 +45,37 @@ setup(
     # For a list of valid classifiers, see https://pypi.org/classifiers/
     classifiers=[  # Optional
         'Development Status :: 4 - Beta',
-        'Topic :: Astronomy :: Protoplanetary discs',
+        'Topic :: Scientific/Engineering :: Astronomy',
         'License :: OSI Approved :: MIT License',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
-        'Programming Language :: Python :: 3.9',
-        "Programming Language :: Python :: 3.10",
         'Programming Language :: Python :: 3 :: Only',
     ],
-    keywords='astronomy, discs, disks, planets',  # Optional
+    keywords='astronomy, discs, disks, planets, detection',  # Optional
     #package_dir={'discminer': 'discminer'},  # Optional
-    packages=['discminer'], #find_packages(where='discminer'),  # Required
+    packages=['discminer', 'discminer.tools'],  # Required
     # https://packaging.python.org/guides/distributing-packages-using-setuptools/#python-requires
     python_requires='>=3.6, <4',
     # https://packaging.python.org/discussions/install-requires-vs-requirements/
-    install_requires=['numpy', 'scipy', 'matplotlib', 'astropy'],  # Optional
+    install_requires=
+    [
+        'numpy>=1.18',
+        'scipy>=1.5',
+        'matplotlib>=3',
+        'astropy>=3',
+        'emcee>=3',
+        'radio-beam',
+        'scikit-image',
+        'scikit-learn',
+        'spectral-cube'
+    ], 
     # If there are data files included in your packages that need to be
     # installed, specify them here.
     package_data={  # Optional
-        'discminer': ['icons/logo.txt', 'icons/button*'],
+        'discminer':
+        [
+            'icons/logo.txt',
+            'icons/button*',
+            'tools/discminer.mplstyle'
+        ],
     },
     # https://packaging.python.org/specifications/core-metadata/#project-url-multiple-use
     project_urls={  # Optional

@@ -421,7 +421,7 @@ def fit_onecomponent(
     #***************
     #PACK AND RETURN
     #***************    
-    upper = [peak, centroid, linewidth]
+    upper = [peak, centroid, np.abs(linewidth)]
     dupper = [dpeak, dcent, dlinew]
 
     if is_bell:
