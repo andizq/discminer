@@ -14,8 +14,9 @@ To start with, let's download and prepare (clip and downsample) the datacube tha
 Here is a quick view of selected channel maps from this disc and tracer,
 
 .. image:: ../images/channel_maps_data.png
-   :width: 800
-   
+   :width: 80 %
+   :align: center
+
 Mining scripts
 ==============
 
@@ -35,13 +36,15 @@ Next, two additional *make* scripts must be run in order to produce the model ch
 The former command displays the data and best-fit model channel maps interactively, and stores residuals resulting from the subtraction of data and model channel intensities,
 
 .. image:: ../images/channel_maps_residuals.png
-   :width: 70 %
-
+   :width: 80 %
+   :align: center
+	   
 You can use the interactive window to have a quick look at the data and model channels and to visualise spectra from specific pixels/regions of the image.
 
 .. image:: ../images/interactive_window_main.png
-   :width: 70 %
-      
+   :width: 80 %
+   :align: center
+   
 The latter command produces three different types of moment maps: (a) **peak intensities** (b) **line widths** and (c) **centroid velocities**, which are simply the attributes of (in this case) Gaussian kernels fitted along the velocity axis of the input data and model cubes. You can visualise the output moment maps in different ways,
 
 .. code-block:: bash
@@ -52,20 +55,24 @@ The latter command produces three different types of moment maps: (a) **peak int
    python ../_mining/plot_moment+residuals.py -m linewidth 
 
 .. image:: ../images/moment+offset_peakintensity_gaussian.png
-   :width: 800
+   :width: 80 %
+   :align: center
+      
 .. image:: ../images/moment+residuals_velocity_gaussian.png
-   :width: 800
+   :width: 80 %
+   :align: center
+	   
 .. image:: ../images/moment+residuals_linewidth_gaussian.png
-   :width: 800
-   
+   :width: 80 %
+   :align: center   
    
 - **TIP**: The majority of the *mining* scripts support multiple arguments that allow you do different things directly from command line. A list of those arguments can be printed using the ``-h`` flag as in ``python ../_mining/plot_moment+offset.py -h``, which produces the following output,
 
-.. code-block:: bash
+   .. code-block:: bash
 
-   Plot moment map [velocity, linewidth, [peakintensity, peakint]?
+      Plot moment map [velocity, linewidth, [peakintensity, peakint]?
 
-   optional arguments:
+      optional arguments:
 		-h, --help            show this help message and exit
 		-m {velocity,linewidth,lineslope,peakint,peakintensity}, --moment {velocity,linewidth,lineslope,peakint,peakintensity}
 		velocity, linewidth or peakintensity
@@ -81,8 +88,9 @@ Carrying on with the tutorial, you can also have a quick look at the radial depe
    python ../_mining/plot_attributes_model.py
 
 .. image:: ../images/model_attributes.png
-   :width: 800
-
+   :width: 80 %
+   :align: center
+	   
 - **TIP**: You can easily access the different attributes and methods associated with a given variable by running your scripts on an ``IPython`` terminal or in a Jupyter notebook,
 
    .. code-block:: bash
@@ -104,35 +112,38 @@ Now, it is also possible to display residual maps in Cartesian or polar coordina
    python ../_mining/plot_residuals+deproj.py -m velocity -p polar
 
 .. image:: ../images/residuals_all_gaussian_discframe.png
-   :width: 800
+   :width: 80 %
+   :align: center
 
-
-	   
 .. image:: ../images/residuals_deproj_peakintensity_gaussian_cartesian.png
-   :width: 50 %
-
+   :width: 60 %
+   :align: center
+	   
 .. image:: ../images/residuals_deproj_linewidth_gaussian_cartesian.png
-   :width: 50 %
-
+   :width: 60 %
+   :align: center
+	   
 .. image:: ../images/residuals_deproj_velocity_gaussian_cartesian.png
    :width: 70 %
-
-.. image:: ../images/residuals_deproj_velocity_gaussian_polar.png
-   :width: 90 %
+   :align: center
 	   
+.. image:: ../images/residuals_deproj_velocity_gaussian_polar.png
+   :width: 80 %
+   :align: center	   
  
-Additionally, the following routine attempts to reveal asymmetric and localised signatures in the disc by studying the distribution of peak residuals,
+Additionally, you can use these residual maps to reveal asymmetric and localised signatures in the disc by studying the distribution of peak residuals,
 
 .. code-block:: bash
 
    python ../_mining/plot_peak_residuals.py -m velocity -i 2
 
-.. image:: ../images/folded_residuals_deproj_velocity_gaussian_cartesian.png
-   :width: 400
+.. list-table:: 
 
-.. image:: ../images/peak_residuals_velocity_gaussian.png
-   :width: 400
+    * - .. figure:: ../images/folded_residuals_deproj_velocity_gaussian_cartesian.png
 
+
+      - .. figure:: ../images/peak_residuals_velocity_gaussian.png
+	
 
 Velocity and intensity profiles
 ===============================
@@ -147,10 +158,12 @@ The following command produces model and data rotation curves, as well as radial
 
 .. image:: ../images/rotation_curve_velocity_gaussian.png
    :width: 80 %
-
+   :align: center
+	   
 .. image:: ../images/velocity_components_velocity_gaussian.png
    :width: 80 %
-   
+   :align: center
+
 Similarly, the next two lines produce azimuthally averaged profiles of data and model peak intensities and line widths, as well as residual profiles.
 
 .. code-block:: bash
@@ -160,9 +173,10 @@ Similarly, the next two lines produce azimuthally averaged profiles of data and 
  
 .. image:: ../images/radial_profile_residuals_peakintensity_gaussian.png
    :width: 80 %
-
+   :align: center
+	   
 .. image:: ../images/radial_profile_residuals_linewidth_gaussian.png
    :width: 80 %
-
+   :align: center
 
 Details on the physical interpretation of the substructures identified in this and in the other discs of the MAPS sample can be found in the work of Izquierdo et al. (2023).
