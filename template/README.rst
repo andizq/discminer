@@ -14,12 +14,12 @@ To start with, let's download and prepare (clip and downsample) the datacube tha
 Here is a quick view of selected channel maps from this disc and tracer,
 
 .. image:: ../images/channel_maps_data.png
-   :width: 500
+   :width: 800
    
 Mining scripts
 ==============
 
-Now, in the ``../_mining`` folder you will find several scripts that will guide you through the analysis of the structure and dynamics of the disc. Those scripts are adapted to read metadata for the disc of interest from a parameter file generated automatically from command line as follows,
+Now, in the ``../_mining`` folder you will find several scripts that will guide you through the analysis of the structure and dynamics of the disc. Those scripts are adapted for reading metadata of the disc of interest from a parameter file generated automatically from command line as follows,
 
 .. code-block:: bash
 
@@ -32,22 +32,29 @@ Next, two additional *make* scripts must be run in order to produce the model ch
    python ../_mining/make_channels.py
    python ../_mining/make_single_moments.py -k gaussian
 
-The former command saves and displays data and best-fit model channel maps, as well as residuals resulting from the subtraction of model channel intensities to those of the data,
+The former command displays the data and best-fit model channel maps interactively, and stores residuals resulting from the subtraction of data and model channel intensities,
 
+.. image:: ../images/channel_maps_residuals.png
+   :width: 800
 
-
-The latter command produces three different types of moment maps: (a) **peak intensities** (b) **line widths** and (c) **centroid velocities**, which are simply the attributes of (in this case) Gaussian kernels fitted along the velocity axis of the input data and model cubes. You can visualise the output moment maps and residuals with,
+The latter command produces three different types of moment maps: (a) **peak intensities** (b) **line widths** and (c) **centroid velocities**, which are simply the attributes of (in this case) Gaussian kernels fitted along the velocity axis of the input data and model cubes. You can visualise the output moment maps in different ways,
 
 .. code-block:: bash
 
-   python ../_mining/plot_moment+offset.py -m peakintensity 
+   python ../_mining/plot_moment+offset.py -m peakintensity #Peak intensity from data alone + zoom-in around central region
 
-   python ../_mining/plot_moment+residuals.py -m linewidth
-   python ../_mining/plot_moment+residuals.py -m velocity
+   python ../_mining/plot_moment+residuals.py -m velocity #Velocity maps from data and model + residuals
+   python ../_mining/plot_moment+residuals.py -m linewidth 
+
+.. image:: ../images/moment+offset_peakintensity_gaussian.png
+   :width: 800
+.. image:: ../images/moment+residuals_velocity_gaussian.png
+   :width: 800
+.. image:: ../images/moment+residuals_linewidth_gaussian.png
+   :width: 800
    
-
-.. note::
-   The majority of the *mining* scripts support multiple arguments that allow you do different things directly from command line. A list of those arguments can be printed using the ``-h`` flag as in ``python ../_mining/plot_moment+offset.py -h``, which produces the following output,
+   
+- **TIP**: The majority of the *mining* scripts support multiple arguments that allow you do different things directly from command line. A list of those arguments can be printed using the ``-h`` flag as in ``python ../_mining/plot_moment+offset.py -h``, which produces the following output,
 
 .. code-block:: bash
 
@@ -62,37 +69,94 @@ The latter command produces three different types of moment maps: (a) **peak int
 		-s {up,upper,low,lower}, --surface {up,upper,low,lower}
                 upper or lower surface moment map		
 
-Carrying on with the tutorial, you can have a quick look at the radial dependence of the main model attributes retrieved for both upper and lower emitting surfaces of the disc via,
+Carrying on with the tutorial, you can also have a quick look at the radial dependence of the main model attributes retrieved for both upper and lower emitting surfaces of the disc via,
 
 .. code-block:: bash
 
    python ../_mining/plot_attributes_model.py
 
+.. image:: ../images/model_attributes.png
+   :width: 800
 
-Now, it is also possible to display residual maps in Cartesian or polar coordinates in the disc reference frame. Internally, this requires knowledge of the disc vertical structure and orientation in order to translate celestial into disc coordinates; the ``discminer`` best-fit model provides this information.
-
-.. code-block:: bash
-
-   python ../_mining/plot_residuals+all.py -c disc
-   
-   python ../_mining/plot_residuals+deproj.py -m peakint
-   python ../_mining/plot_residuals+deproj.py -m velocity
-   python ../_mining/plot_residuals+deproj.py -m velocity -p polar
-
-Finally, the following script attempts to reveal asymmetric and localised signatures in the disc by analysing the distribution of peak residuals,
-
-.. code-block:: bash
-
-   python ../_mining/plot_peak_residuals.py -m velocity -i 2
-
-
-
-.. note::   
-   You can easily access the different attributes and methods associated with a given variable by running your scripts on an ``IPython`` terminal,
+- **TIP**: You can easily access the different attributes and methods associated with a given variable by running your scripts on an ``IPython`` terminal or in a Jupyter notebook,
 
    .. code-block:: bash
 
       ipython
       run ../_mining/plot_attributes_model.py
       model.skygrid #print dictionary with sky grid information
+
+      
+Now, it is also possible to display residual maps in Cartesian or polar coordinates in the disc reference frame. Internally, this requires knowledge of the disc vertical structure and orientation in order to translate celestial into disc coordinates; the ``discminer`` best-fit model provides this information.
+
+.. code-block:: bash
+
+   python ../_mining/plot_residuals+all.py -c disc #Plot a summary of all residuals in disc coordinates
    
+   python ../_mining/plot_residuals+deproj.py -m peakint
+   python ../_mining/plot_residuals+deproj.py -m linewidth
+   python ../_mining/plot_residuals+deproj.py -m velocity
+   python ../_mining/plot_residuals+deproj.py -m velocity -p polar
+
+.. image:: ../images/residuals_all_gaussian_discframe.png
+   :width: 800
+
+
+.. image:: ../images/residuals_deproj_peakintensity_gaussian_cartesian.png
+   :width: 300
+
+.. image:: ../images/residuals_deproj_velocity_gaussian_cartesian.png
+   :width: 300
+      
+.. image:: ../images/residuals_deproj_linewidth_gaussian_cartesian.png
+   :width: 300
+
+.. image:: ../images/residuals_deproj_velocity_gaussian_polar.png
+   :width: 800
+	   
+ 
+Additionally, the following routine attempts to reveal asymmetric and localised signatures in the disc by studying the distribution of peak residuals,
+
+.. code-block:: bash
+
+   python ../_mining/plot_peak_residuals.py -m velocity -i 2
+
+.. image:: ../images/folded_residuals_deproj_velocity_gaussian_cartesian.png
+   :width: 400
+
+.. image:: ../images/peak_residuals_velocity_gaussian.png
+   :width: 400
+
+
+Velocity and intensity profiles
+===============================
+
+With ``discminer`` you can also compute azimuthally averaged profiles of (a) **velocity**; to investigate azimuthal or vertical gas flows in your disc, (b) **intensity**; which gives access to the overall disc temperature and density structure, and (c) **line width**, which traces thermal and non-thermal fluctuations but also surface density variations probed by optically thick lines. 
+
+The following command produces model and data rotation curves, as well as radial profiles of **dvphi** to quantify azimuthal velocity flows referred to Keplerian rotation, and **vz** to highlight vertical flows possibly associated with meridional circulation of material, winds, or even planet-driven buoyancy spirals.
+
+.. code-block:: bash
+
+   python ../_mining/plot_radial_profiles.py -m velocity
+
+.. image:: ../images/rotation_curve_velocity_gaussian.png
+   :width: 600
+
+.. image:: ../images/velocity_components_velocity_gaussian.png
+   :width: 600
+   
+Similarly, the next two lines produce azimuthally averaged profiles of data and model peak intensities and line widths, as well as residual profiles.
+
+.. code-block:: bash
+
+   python ../_mining/plot_radial_profiles.py -m peakint
+   python ../_mining/plot_radial_profiles.py -m linewidth		
+ 
+.. image:: ../images/radial_profile_residuals_peakintensity_gaussian.png
+   :width: 600
+
+.. image:: ../images/radial_profile_residuals_linewidth_gaussian.png
+   :width: 600
+
+
+Details on the physical interpretation of the substructures identified in this and in the other discs of the MAPS sample can be found in the work of Izquierdo et al. (2023).
