@@ -2,9 +2,9 @@
 Quick Example
 -------------
 
-The following example is based on 12CO J=2-1 line data from the disc of MWC 480 as observed by the ALMA large program MAPS. The parameters provided in the accompanying '.txt' file in this folder were obtained from previous modelling of this object with ``discminer``. Since the ``discminer`` model assumes a smooth and Keplerian disc, any differences that appear from the comparison between the data and the model are mainly tracing deviations from Keplerian rotation and intensity perturbations driven by temperature, turbulence and density variations in the gas disc.
+The following example is based on 12CO J=2-1 line data from the disc of MWC 480 as observed by the ALMA large program MAPS. The parameters provided in the accompanying '.txt' file here were obtained from previous modelling of this object with ``discminer`` using the fitting script provided in the ``./fit`` folder. Since the ``discminer`` model assumes a smooth and Keplerian disc, any differences that appear from the comparison between the data and the model are mainly tracing deviations from Keplerian rotation and intensity perturbations driven by temperature, turbulence and density variations in the gas disc.
 
-To start with, let's download and prepare (clip and downsample) the datacube that will be used throughout this guide:
+To get started, let's download and prepare (clip and downsample) the datacube that will be used throughout this guide:
 
 .. code-block:: bash
 
