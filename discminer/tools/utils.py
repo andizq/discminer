@@ -132,7 +132,6 @@ def get_tb(I, nu, beam, full=True):
     beam object from radio_beam
     if full: use full Planck law, else use rayleigh-jeans approximation
     """
-    from astropy import units as u
     bmaj = beam.major.to(u.arcsecond).value
     bmin = beam.minor.to(u.arcsecond).value
     beam_area = sfu.au**2*np.pi*(bmaj*bmin)/(4*np.log(2)) #area of gaussian beam
@@ -155,7 +154,6 @@ def _get_beam_from(beam, dpix=None, distance=None, frac_pixels=1.0):
     If radio_beam Beam instance is provided, pixel size (in SI units) will be extracted from grid obj. Distance (in pc) must be provided.
     #frac_pixels: number of averaged pixels on the data (useful to reduce computing time)
     """
-    from astropy import units as u
     from astropy.io import fits
     from radio_beam import Beam
     sigma2fwhm = np.sqrt(8*np.log(2))
@@ -167,16 +165,14 @@ def _get_beam_from(beam, dpix=None, distance=None, frac_pixels=1.0):
         if distance is None: raise InputError(distance, 'Wrong input distance. Please provide a value for the distance (in pc) to transform grid pix to arcsec')
         pix_radians = np.arctan(dpix / (distance*sfu.pc)) #dist*ang=projdist
         pix_scale = (pix_radians*u.radian).to(u.arcsec)  
-        #print (pix_scale, pix_radians)
     else: raise InputError(beam, 'beam object must either be str or Beam instance')
 
-    x_stddev = ((beam.major/pix_scale) / sigma2fwhm).value 
-    y_stddev = ((beam.minor/pix_scale) / sigma2fwhm).value 
-    #print (x_stddev, beam.major, pix_scale)
+    x_stddev = ((beam.major/pix_scale) / sigma2fwhm).decompose().value 
+    y_stddev = ((beam.minor/pix_scale) / sigma2fwhm).decompose().value 
     angle = (90*u.deg+beam.pa).to(u.radian).value
     gauss_kern = Gaussian2DKernel(x_stddev, y_stddev, angle) 
     
-    #gauss_kern = beam.as_kernel(pix_scale) #as_kernel() is slowing down the run when used in astropy.convolve
+    #gauss_kern = beam.as_kernel(pix_scale) #as_kernel() slows down the run when passed to astropy.convolve
     return beam, gauss_kern
 
 

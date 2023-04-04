@@ -22,14 +22,19 @@
 </div>
 
 
-- Model channel maps from molecular line observations of discs by fitting intensity and rotation velocity simultaneously.
-- Quantify deviations from Keplerian rotation and understand their relationship to fluctuations in intensities and line widths.
-- Customise model parameterisations as function of the 3D disc coordinates (azimuthal asymmetries are possible!) easily.
-- Employ different prescriptions for the disc rotation velocity if needed: Keplerian (2D or 3D) + pressure support + self-gravity.
+- Model channel maps from molecular line observations of discs by fitting intensity and rotation velocity.
+- Compute moment maps, rotation curves and meridional velocities, intensity and line width profiles.
+- Quantify deviations from Keplerian motion and investigate their relationship to intensity and line width fluctuations.
+- Customise model parameterisations as function of the 3D disc coordinates easily (azimuthal asymmetries are possible!).
+- Employ different prescriptions for the disc rotation velocity if needed: Keplerian + pressure support + self-gravity.
 - Model upper and lower emitting surfaces of the disc simultaneously.
-- Can use irregular emitting surfaces obtained with external, non-parametric methods.
+- Use irregular emitting surfaces obtained with external non-parametric methods if required.
 - Analyse the disc physical structure and dynamics using built-in tools.
 
+<img
+  src="images/discminer_outline.png"
+  alt="Discminer workflow and capabilities"
+  style="display: inline-block; margin: 0 auto; max-width: 500px">
 
 ### Mining, analysis and visualisation tools
 
@@ -61,35 +66,44 @@
 
 ## Installation
 
-Type in a terminal:
+```bash
+pip install discminer
+```
+
+### Optional Dependencies
+
+- [termtables](https://pypi.org/project/termtables)
+- termplotlib
+- FilFinder 
+- ipython
+- schwimmbad
+
+## How to use
+
+The package documentation is under construction but you can find practical examples showing the main
+functionality of `discminer` in the `./template` folder of this repository. To run the examples
+on your local machine you can clone this repository and follow the instructions in the readme file,
 
 ```bash
 git clone https://github.com/andizq/discminer.git
-cd discminer
-python setup.py develop
+cd discminer/template
+less README.rst
 ```
-
-### Required dependencies
-
-- [spectral-cube](https://spectral-cube.readthedocs.io/en/latest/installing.html)
-- [radio-beam](https://radio-beam.readthedocs.io/en/latest/install.html)
-- [emcee](https://emcee.readthedocs.io/en/stable/user/install/)
-- [scikit](https://scikit-image.org/docs/stable/install.html#install-via-pip)
 
 ### Discminer history
 
-Discminer began life as the model.disc2d.py library of [sf3dmodels](https://github.com/andizq/sf3dmodels).
+`discminer` began life as the model.disc2d.py library of [sf3dmodels](https://github.com/andizq/sf3dmodels).
 
-#### v1.0
+#### v0.0.x
 
-- Migrating to astropy units.
-- Addition of analysis tools for mining.
+- Transiting to astropy units.
+- Addition of mining tools.
 
-#### License
+### License
 
 `discminer` is published under the [MIT license](https://github.com/andizq/discminer/blob/main/LICENSE).
 
-#### Citation
+### Citation
 
 If you find `discminer` useful for your research please cite the work of [Izquierdo et al. 2021](https://ui.adsabs.harvard.edu/abs/2021A%26A...650A.179I/abstract),
 

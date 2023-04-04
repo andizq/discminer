@@ -2,32 +2,41 @@
 Quick Example
 -------------
 
-The following example takes 12CO J=2-1 line emission from the disc of MWC 480 as observed by the ALMA large program MAPS. The parameters provided in the accompanying '.txt' file in this folder were obtained from previous modelling of this object with ``discminer``.
+The following example is based on 12CO J=2-1 line data from the disc of MWC 480 as observed by the ALMA large program MAPS. The parameters provided in the accompanying '.txt' file in this folder were obtained from previous modelling of this object with ``discminer``. Since the ``discminer`` model assumes a smooth and Keplerian disc, any differences that appear from the comparison between the data and the model are mainly tracing deviations from Keplerian rotation and intensity perturbations driven by temperature, turbulence and density variations in the gas disc.
 
-To start with, let's download and prepare (clip and downsample) the datacube that we will be using throughout this guide:
+To start with, let's download and prepare (clip and downsample) the datacube that will be used throughout this guide:
 
 .. code-block:: bash
 
    ./download-MAPS.sh #Download MWC480 12CO data from the MAPS website
    python prepare_data.py #Clip and downsample cube
 
+Here is a quick view of selected channel maps from this disc and tracer,
+
+.. image:: ../images/channel_maps_data.png
+   :width: 500
+   
 Mining scripts
 ==============
 
-Now, in the ``../_mining`` folder you will find various scripts to analyse the structure and dynamics of the disc and produce useful outputs. Those scripts are adapted to read metadata and model properties from a parameter file generated as follows,
+Now, in the ``../_mining`` folder you will find several scripts that will guide you through the analysis of the structure and dynamics of the disc. Those scripts are adapted to read metadata for the disc of interest from a parameter file generated automatically from command line as follows,
 
 .. code-block:: bash
 
    python ../_mining/make_parfile.py
 
-Next, two additional *make* scripts will produce the model channel and moment maps necessary for the rest of the analysis,
+Next, two additional *make* scripts must be run in order to produce the model channel and moment maps necessary for the rest of the analysis,
 
 .. code-block:: bash
 
    python ../_mining/make_channels.py
    python ../_mining/make_single_moments.py -k gaussian
 
-The former command displays data and best-fit model channel maps, and the latter produces three different types of moment maps: (a) **peak intensities** (b) **line widths** and (c) **centroid velocities** for both data and model, using Gaussian fits along the velocity axis of the cubes. You can visualise the output moment maps and residuals with,
+The former command saves and displays data and best-fit model channel maps, as well as residuals resulting from the subtraction of model channel intensities to those of the data,
+
+
+
+The latter command produces three different types of moment maps: (a) **peak intensities** (b) **line widths** and (c) **centroid velocities**, which are simply the attributes of (in this case) Gaussian kernels fitted along the velocity axis of the input data and model cubes. You can visualise the output moment maps and residuals with,
 
 .. code-block:: bash
 
@@ -35,9 +44,10 @@ The former command displays data and best-fit model channel maps, and the latter
 
    python ../_mining/plot_moment+residuals.py -m linewidth
    python ../_mining/plot_moment+residuals.py -m velocity
-
    
-- Tip: The majority of the *mining* scripts support multiple arguments that allow you do different things directly from command line. A list of those arguments can be printed using the ``-h`` flag as in ``python ../_mining/plot_moment+offset.py -h``, which produces the following output,
+
+.. note::
+   The majority of the *mining* scripts support multiple arguments that allow you do different things directly from command line. A list of those arguments can be printed using the ``-h`` flag as in ``python ../_mining/plot_moment+offset.py -h``, which produces the following output,
 
 .. code-block:: bash
 
@@ -52,7 +62,14 @@ The former command displays data and best-fit model channel maps, and the latter
 		-s {up,upper,low,lower}, --surface {up,upper,low,lower}
                 upper or lower surface moment map		
 
-Carrying on with the tutorial, it is also possible to display residual maps in Cartesian or polar coordinates in the disc reference frame. Internally, this requires knowledge of the disc vertical structure and orientation in order to translate celestial into disc coordinates; the ``discminer`` best-fit model provides this information.
+Carrying on with the tutorial, you can have a quick look at the radial dependence of the main model attributes retrieved for both upper and lower emitting surfaces of the disc via,
+
+.. code-block:: bash
+
+   python ../_mining/plot_attributes_model.py
+
+
+Now, it is also possible to display residual maps in Cartesian or polar coordinates in the disc reference frame. Internally, this requires knowledge of the disc vertical structure and orientation in order to translate celestial into disc coordinates; the ``discminer`` best-fit model provides this information.
 
 .. code-block:: bash
 
@@ -68,12 +85,14 @@ Finally, the following script attempts to reveal asymmetric and localised signat
 
    python ../_mining/plot_peak_residuals.py -m velocity -i 2
 
-   
-- Tip: You can easily access the different attributes and methods associated with a given variable by running your scripts on an ``IPython`` terminal,
 
-.. code-block:: bash
 
-   ipython
-   run ../_mining/plot_attributes_model.py
-   model.skygrid #print dictionary with sky grid information
+.. note::   
+   You can easily access the different attributes and methods associated with a given variable by running your scripts on an ``IPython`` terminal,
+
+   .. code-block:: bash
+
+      ipython
+      run ../_mining/plot_attributes_model.py
+      model.skygrid #print dictionary with sky grid information
    

@@ -16,7 +16,6 @@ from scipy.interpolate import griddata
 from skimage import measure
 import numbers
 
-
 get_sky_from_disc_coords = GridTools.get_sky_from_disc_coords
 
 class Rail(object):
@@ -154,8 +153,6 @@ class Rail(object):
             if lev == coord_ref: zorder=10
             else: zorder=np.random.randint(0,10)
 
-            #lw = lws[-1]
-            #color = colors[-1]
             for i,bound in enumerate(color_bounds):
                 if lev == coord_ref: 
                     lw = 2.0
@@ -418,7 +415,7 @@ class Contours(object):
             make_ax(x_cont, y_cont)
 
     @staticmethod
-    def make_substructures(*args, **kwargs): #Backwards compatibility
+    def make_substructures(*args, **kwargs): #Backcompat
         '''Overlay ring-like (if twodim) or vertical lines (if not twodim) to illustrate the radial location of substructures in the disc'''
         return make_substruct(*args, **kwargs)
         
@@ -440,9 +437,9 @@ class Contours(object):
             rc = hypot_func(xc, yc)
             a = np.max(rc)
             b = np.min(rc)
-            ellipse_perim = np.pi*(3*(a+b)-np.sqrt((3*a+b)*(a+3*b))) #Assuming that disc vertical extent does not distort much the ellipse
+            ellipse_perim = np.pi*(3*(a+b)-np.sqrt((3*a+b)*(a+3*b))) #Assumes that the disc vertical extent does not distort much the ellipse
             return ellipse_perim/beam_size
-        except ValueError: #No contour was found
+        except ValueError: #No contour found
             return np.inf
 
     @staticmethod
@@ -604,7 +601,6 @@ class Contours(object):
         #adapt_thresh is the width of the element used for the adaptive thresholding mask.
         # This is primarily the step that picks out the filamentary structure. The element size should be similar to the width of the expected filamentary structure
 
-        #kw_fil_mask = dict(verbose=False, adapt_thresh=50*apu.au, smooth_size=1*beam_size_au*apu.au, size_thresh=100*apu.pix**2, border_masking=False, fill_hole_size=0.01*apu.arcsec**2)
         from fil_finder import FilFinder2D
         from astropy import units as apu
 

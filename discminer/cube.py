@@ -29,8 +29,6 @@ SMALL_SIZE = 10
 MEDIUM_SIZE = 15
 BIGGER_SIZE = 22
 
-# ToDo --> The Cube class should inherit a Plot2DTools class to make 2D plots e.g. from moment maps.
-
 _progress_bar = FrontendUtils._progress_bar
 _break_line = FrontendUtils._break_line
 path_icons = FrontendUtils.path_icons
@@ -416,9 +414,9 @@ class Cube(object):
             self.data = self.data[
                 :, jcenter - npix : jcenter + npix, icenter - npix : icenter + npix
             ]
-            # The following is wrong because the projection is not Cartesian:
+            # The following line is wrong because the projection is not Cartesian:
             #  self.header["CRVAL1"] = CRVAL1 + (icenter - CRPIX1) * CDELT1.
-            #   A proper conversion using wcs must be done:
+            #   A proper conversion must use wcs:
             newcr = aputils.pixel_to_skycoord(icenter-1, jcenter-1, self.wcs) #-1 to go back to 0-based convention
             self.header["CRVAL1"] = newcr.ra.value
             self.header["CRVAL2"] = newcr.dec.value

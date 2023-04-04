@@ -1,25 +1,9 @@
 """
-2D Disc models
-==============
-Classes: Rosenfeld2d, Model, Velocity, Intensity, Cube, Tools
+3D Disc projected in the sky
+============================
+Classes: Model, Mcmc, Velocity, Intensity, Linewidth, Lineslope, ScaleHeight, SurfaceDensity, Temperature
 """
-
-#TODO in v1.0: migrate to astropy units
-#TODO in Model: Implement irregular grids (see e.g.  meshio from nschloe on github) for the disc grid. It could be useful for better refinement of e.g. disc centre w/o wasting too much in the outer region.
-#TODO in Model: Compute props in the interpolated grid (not in the original grid) to avoid interpolation of props and save time.
-#TODO in Model: Allow the lower surface to have independent intensity and line width parametrisations.
-#TODO in make_model(): Allow for warped emitting surfaces, check notes for ideas as to how to solve for multiple intersections between l.o.s and emission surface.
-#TODO in __main__ file: show intro message when python -m disc2d
-#TODO in run_mcmc(): use get() methods instead of allowing the user to use self obj attributes.
-#TODO in make_model(): Enable 3D velocities too when subpixel algorithm is used
-#TODO in make_model(): Find a smart way (e.g. having a dict per attribute) to pass only the coords needed by a prop attribute, i.e. not all coordinates need to be passed to compute e.g. keplerian velocities.
-#TODO in show(): use text labels on line profiles to distinguish profiles when more than 2 cubes are shown.
-#TODO in make_model(): Save/load bestfit/input parameters in json files. These should store relevant info in separate dicts (e.g. nwalkers, attribute functions). 
-#TODO in run_mcmc(): Implement other minimisation kernels (i.e. Delta_v). Only one kernel atm: difference of intensities per pixel per channel.
-#TODO in core.py: Allow setting up a mock grid to make a prototype model without requiring an actual datacube. 
     
-from __future__ import print_function
-
 import copy
 import itertools
 import numbers
@@ -41,16 +25,17 @@ from scipy.integrate import quad
 from scipy.interpolate import griddata, interp1d
 from scipy.optimize import curve_fit
 from scipy.special import ellipe, ellipk
-from .tools.utils import FrontendUtils, InputError
+from .tools.utils import FrontendUtils, InputError, _get_beam_from, hypot_func
 from . import constants as sfc
 from . import units as sfu
 from .core import ModelGrid
 from .cube import Cube
 from .rail import Contours
-
-#from .cart import Intensity
+from .grid import GridTools
 
 os.environ["OMP_NUM_THREADS"] = "1"
+
+__all__ = ['Model', 'Mcmc', 'Velocity', 'Intensity', 'Linewidth', 'Lineslope', 'ScaleHeight', 'SurfaceDensity', 'Temperature']
 
 try: 
     import termtables
@@ -59,236 +44,23 @@ except ImportError:
     print ("\n*** For nicer outputs we recommend installing 'termtables' by typing in terminal: pip install termtables ***")
     found_termtables = False
 
-#warnings.filterwarnings("error")
-__all__ = ['Cube', 'Tools', 'Intensity', 'Velocity', 'Model', 'Rosenfeld2d']
-path_icons = os.path.dirname(os.path.realpath(__file__))+'/icons/'
 _break_line = FrontendUtils._break_line
 
 SMALL_SIZE = 10
 MEDIUM_SIZE = 15
-BIGGER_SIZE = 22
 
+def _compute_prop(grid, prop_funcs, prop_kwargs):
+    n_funcs = len(prop_funcs)
+    props = [{} for i in range(n_funcs)]
+    for side in ['upper', 'lower']:
+        x, y, z, R, phi, R_1d, z_1d = grid[side]
+        coord = {'x': x, 'y': y, 'z': z, 'phi': phi, 'R': R, 'R_1d': R_1d, 'z_1d': z_1d}
+        for i in range(n_funcs): props[i][side] = prop_funcs[i](coord, **prop_kwargs[i])
+    return props
 
-hypot_func = lambda x,y: np.sqrt(x**2 + y**2) #Slightly faster than np.hypot<np.linalg.norm<scipydistance. Checked precision up to au**2 orders and seemed ok.
-
-class Tools:
-    @staticmethod
-    def _rotate_sky_plane(x, y, ang):
-        xy = np.array([x,y])
-        cos_ang = np.cos(ang)
-        sin_ang = np.sin(ang)
-        rot = np.array([[cos_ang, -sin_ang],
-                        [sin_ang, cos_ang]])
-        return np.dot(rot, xy)
-
-    @staticmethod
-    def _rotate_sky_plane3d(x, y, z, ang, axis='z'):
-        xyz = np.array([x,y,z])
-        cos_ang = np.cos(ang)
-        sin_ang = np.sin(ang)
-        if axis == 'x':
-            rot = np.array([[1, 0, 0],
-                            [0, cos_ang, -sin_ang],
-                            [0, sin_ang, cos_ang]])
-        if axis == 'y':
-            rot = np.array([[cos_ang, 0, -sin_ang],
-                            [0, 1, 0],
-                            [sin_ang, 0, cos_ang]])
-            
-        if axis == 'z':
-            rot = np.array([[cos_ang, -sin_ang , 0],
-                            [sin_ang, cos_ang, 0], 
-                            [0, 0, 1]])
-        return np.dot(rot, xyz)
-
-    @staticmethod
-    def _project_on_skyplane(x, y, z, cos_incl, sin_incl):
-        x_pro = x
-        y_pro = y * cos_incl - z * sin_incl
-        z_pro = y * sin_incl + z * cos_incl
-        return x_pro, y_pro, z_pro
-
-    @staticmethod
-    def get_sky_from_disc_coords(R, az, z, incl, PA, xc=0, yc=0):
-        xp = R*np.cos(az)
-        yp = R*np.sin(az)
-        zp = z
-        xp, yp, zp = Tools._project_on_skyplane(xp, yp, zp, np.cos(incl), np.sin(incl))
-        xp, yp = Tools._rotate_sky_plane(xp, yp, PA)
-        return xp+xc, yp+yc, zp
-
-    @staticmethod #should be a bound method, self.grid is constant except for z_upper, z_lower
-    def _compute_prop(grid, prop_funcs, prop_kwargs):
-        n_funcs = len(prop_funcs)
-        props = [{} for i in range(n_funcs)]
-        for side in ['upper', 'lower']:
-            x, y, z, R, phi, R_1d, z_1d = grid[side]
-            coord = {'x': x, 'y': y, 'z': z, 'phi': phi, 'R': R, 'R_1d': R_1d, 'z_1d': z_1d}
-            for i in range(n_funcs): props[i][side] = prop_funcs[i](coord, **prop_kwargs[i])
-        return props
-    
-    @staticmethod
-    def _progress_bar(percent=0, width=50):
-        left = width * percent // 100 
-        right = width - left
-        """
-        print('\r[', '#' * left, ' ' * right, ']',
-              f' {percent:.0f}%',
-              sep='', end='', flush=True)
-        """
-        print('\r[', '#' * left, ' ' * right, ']', ' %.0f%%'%percent, sep='', end='') #compatible with python2 docs
-        sys.stdout.flush()
-
-    @staticmethod
-    def _break_line(init='', border='*', middle='=', end='\n', width=100):
-        print('\r', init, border, middle * width, border, sep='', end=end)
-
-    @staticmethod
-    def _print_logo(filename=path_icons+'logo.txt'):
-        logo = open(filename, 'r')
-        print(logo.read())
-        logo.close()
-
-    @staticmethod
-    def _get_beam_from(beam, dpix=None, distance=None, frac_pixels=1.0):
-        """
-        beam must be str pointing to fits file to extract beam from header or radio_beam Beam object.
-        If radio_beam Beam instance is provided, pixel size (in SI units) will be extracted from grid obj. Distance (in pc) must be provided.
-        #frac_pixels: number of averaged pixels on the data (useful to reduce computing time)
-        """
-        from astropy.io import fits
-        from radio_beam import Beam
-        sigma2fwhm = np.sqrt(8*np.log(2))
-        if isinstance(beam, str):
-            header = fits.getheader(beam)
-            beam = Beam.from_fits_header(header)
-            pix_scale = header['CDELT2'] * u.Unit(header['CUNIT2']) * frac_pixels
-        elif isinstance(beam, Beam):
-            if distance is None: raise InputError(distance, 'Wrong input distance. Please provide a value for the distance (in pc) to transform grid pix to arcsec')
-            pix_radians = np.arctan(dpix / (distance*sfu.pc)) #dist*ang=projdist
-            pix_scale = (pix_radians*u.radian).to(u.arcsec)  
-            #print (pix_scale, pix_radians)
-        else: raise InputError(beam, 'beam object must either be str or Beam instance')
-
-        x_stddev = ((beam.major/pix_scale) / sigma2fwhm).decompose().value 
-        y_stddev = ((beam.minor/pix_scale) / sigma2fwhm).decompose().value 
-        #print (x_stddev, beam.major, pix_scale)
-        angle = (90*u.deg+beam.pa).to(u.radian).value
-        gauss_kern = Gaussian2DKernel(x_stddev, y_stddev, angle) 
-
-        #gauss_kern = beam.as_kernel(pix_scale) #as_kernel() is slowing down the run when used in astropy.convolve
-        return beam, gauss_kern
-
-    @staticmethod
-    def average_pixels_cube(data, frac_pixels, av_method=np.median):
-        """
-        data: datacube with shape (nchan, nx0, ny0)
-        frac_pixels: number of pixels to average
-        av_method: function to compute average
-        """
-        nchan, nx0, ny0 = np.shape(data)
-        nx = int(round(nx0/frac_pixels))
-        ny = int(round(ny0/frac_pixels))
-        av_data = np.zeros((nchan, nx, ny))
-        progress = Tools._progress_bar
-        if frac_pixels>1:
-            di = frac_pixels
-            dj = frac_pixels
-            print ('Averaging %dx%d pixels from data cube...'%(di, dj))
-            for k in range(nchan):
-                progress(int(100*k/nchan))
-                for i in range(nx):
-                    for j in range(ny):
-                        av_data[k,i,j] = av_method(data[k,i*di:i*di+di,j*dj:j*dj+dj])
-            progress(100)
-            return av_data
-        else:
-            print('frac_pixels is <= 1, no average was performed...')
-            return data
-
-    @staticmethod
-    def weighted_std(prop, weights, weighted_mean=None):
-        sum_weights = np.sum(weights)
-        if weighted_mean is None:
-            weighted_mean = np.sum(weights*prop)/sum_weights
-        n = np.sum(weights>0)
-        w_std = np.sqrt(np.sum(weights*(prop-weighted_mean)**2)/((n-1)/n * sum_weights))
-        return w_std
-            
-    #define a fit_double_bell func, with a model input as an optional arg to constrain initial guesses better
-    @staticmethod
-    def fit_one_gauss_cube(data, vchannels, lw_chan=1.0, sigma_fit=None):
-        """
-        Fit Gaussian profile along velocity axis to input data
-        lw_chan: initial guess for line width is lw_chan*np.mean(dvi).  
-        sigma_fit: cube w/ channel weights for each pixel, passed to curve_fit
-        """
-        gauss = lambda x, *p: p[0]*np.exp(-(x-p[1])**2/(2.*p[2]**2))
-        nchan, nx, ny = np.shape(data)
-        peak, dpeak = np.zeros((nx, ny)), np.zeros((nx, ny))
-        centroid, dcent = np.zeros((nx, ny)), np.zeros((nx, ny))
-        linewidth, dlinew = np.zeros((nx, ny)), np.zeros((nx, ny))
-        nbad = 0
-        ind_max = np.nanargmax(data, axis=0)
-        I_max = np.nanmax(data, axis=0)
-        vel_peak = vchannels[ind_max]
-        dv = lw_chan*np.mean(vchannels[1:]-vchannels[:-1])
-        progress = Tools._progress_bar   
-        if sigma_fit is None: sigma_func = lambda i,j: None
-        else: sigma_func = lambda i,j: sigma_fit[:,i,j]
-        print ('Fitting Gaussian profile to pixels (along velocity axis)...')
-        for i in range(nx):
-            for j in range(ny):
-                isfin = np.isfinite(data[:,i,j])
-                try: coeff, var_matrix = curve_fit(gauss, vchannels[isfin], data[:,i,j][isfin],
-                                                   p0=[I_max[i,j], vel_peak[i,j], dv],
-                                                   sigma=sigma_func(i,j))
-                except RuntimeError: 
-                    nbad+=1
-                    continue
-                peak[i,j] = coeff[0]
-                centroid[i,j] = coeff[1]
-                linewidth[i,j] = coeff[2]
-                dpeak[i,j], dcent[i,j], dlinew[i,j] = np.sqrt(np.diag(var_matrix))
-            progress(int(100*i/nx))
-        progress(100)
-        print ('\nGaussian fit did not converge for %.2f%s of the pixels'%(100.0*nbad/(nx*ny),'%'))
-        return peak, centroid, linewidth, dpeak, dcent, dlinew
-        
-    @staticmethod
-    def get_tb(I, nu, beam, full=True):
-        """
-        nu in GHz
-        Intensity in mJy/beam
-        beam object from radio_beam
-        if full: use full Planck law, else use rayleigh-jeans approximation
-        """
-        from astropy import units as u
-        bmaj = beam.major.to(u.arcsecond).value
-        bmin = beam.minor.to(u.arcsecond).value
-        beam_area = sfu.au**2*np.pi*(bmaj*bmin)/(4*np.log(2)) #area of gaussian beam
-        #beam solid angle: beam_area/(dist*pc)**2. dist**2 cancels out with beamarea's dist**2 from conversion or bmaj, bmin to mks units. 
-        beam_solid = beam_area/sfu.pc**2 
-        mJy_to_SI = 1e-3*1e-26
-        nu = nu*1e9
-        if full:
-            Tb = np.sign(I)*(np.log((2*sfc.h*nu**3)/(sfc.c**2*np.abs(I)*mJy_to_SI/beam_solid)+1))**-1*sfc.h*nu/(sfc.kb) 
-        else:
-            wl = sfc.c/nu 
-            Tb = 0.5*wl**2*I*mJy_to_SI/(beam_solid*sfc.kb) 
-        #(1222.0*I/(nu**2*(beam.minor/1.0).to(u.arcsecond)*(beam.major/1.0).to(u.arcsecond))).value #nrao RayJeans             
-        return Tb
-
-    @staticmethod
-    def _get_tb(*args, **kwargs): return Tools.get_tb(*args, **kwargs)
-        
-
-class Residuals:
-    pass
-
-class Canvas3d:
-    pass
-       
+#********************
+#Discminer Attributes
+#********************
 class Height:
     @property
     def z_upper_func(self): 
@@ -624,7 +396,7 @@ class Velocity:
             SG_1d.append(SG_integral(R_1d, R_1d[i], z_1d[i])) ##
         SG_2d = interp1d(R_1d, SG_1d)
 
-        #calculate pressure support
+        #compute pressure support
         z = coord['z']
         z_R2 = (z/R)**2
         z_R32 = (1+z_R2)**1.5
@@ -672,10 +444,10 @@ class Intensity:
         return self._beam_from
 
     @beam_from.setter 
-    def beam_from(self, file): 
-        #Rework this, missing beam kwargs info
+    def beam_from(self, file): #Deprecated
         print('Setting beam_from var to', file)
-        if file: self.beam_info, self.beam_kernel = Tools._get_beam_from(file) #Calls beam_kernel setter
+        if file:
+            self.beam_info, self.beam_kernel = _get_beam_from(file) #Calls beam_kernel setter
         self._beam_from = file
 
     @beam_from.deleter 
@@ -691,8 +463,8 @@ class Intensity:
     def use_temperature(self, use): 
         use = bool(use)
         print('Setting use_temperature var to', use)
-        if use: self.line_profile = self.line_profile_temp
-        #else: self.line_profile = self.line_profile_v_sigma
+        if use:
+            self.line_profile = self.line_profile_temp
         self._use_temperature = use
 
     @use_temperature.deleter 
@@ -705,7 +477,7 @@ class Intensity:
         return self._use_full_channel
 
     @use_full_channel.setter 
-    def use_full_channel(self, use): #Needs remake, there is now a new kernel (line_profile_bell) 
+    def use_full_channel(self, use): #Needs a remake considering new kernels
         use = bool(use)
         print('Setting use_full_channel var to', use)
         if use: 
@@ -765,7 +537,7 @@ class Intensity:
         return A*(R**-gamma) * (1+(R/Rt)**alpha)**((gamma-beta)/alpha)
 
     @staticmethod
-    def line_profile_subchannel(line_profile_func, v_chan, v, v_sigma, b_slope, channel_width=0.1, **kwargs): #Currently not used
+    def line_profile_subchannel(line_profile_func, v_chan, v, v_sigma, b_slope, channel_width=0.1, **kwargs):
         half_chan = 0.5*channel_width
         v0 = v_chan - half_chan
         v1 = v_chan + half_chan
@@ -864,29 +636,17 @@ class Intensity:
         else: lineb2d = lineslope2d
     
         v_near, v_far = self.get_line_profile(v_chan, vel2d, linew2d, lineb2d, **kwargs)
-        """
-        v_near_clean = np.where(np.isnan(v_near), -np.inf, v_near)
-        v_far_clean = np.where(np.isnan(v_far), -np.inf, v_far)
-        #vmap_full = np.array([v_near_clean, v_far_clean]).max(axis=0)        
-        int2d_near = np.where(np.isnan(int2d['upper']), -np.inf, int2d['upper'] * v_near_clean)# / v_near_clean.max())
-        int2d_far = np.where(np.isnan(int2d['lower']), -np.inf, int2d['lower'] * v_far_clean)# / v_far_clean.max())
-        """
         int2d_full = np.nanmax([int2d_near, int2d_far], axis=0)
         
         if self.beam_kernel:
-            """
-            inf_mask = np.isinf(int2d_full)
-            """
             inf_mask = np.isnan(int2d_full)
             int2d_full = np.where(inf_mask, 0.0, int2d_full) # Use np.nan_to_num instead
             int2d_full = self.beam_area*convolve(int2d_full, self.beam_kernel, preserve_nan=False)
 
         return int2d_full
 
-    def get_cube(self, vchannels, velocity2d, intensity2d, linewidth2d, lineslope2d, make_convolve=True, #Should be in model class
+    def get_cube(self, vchannels, velocity2d, intensity2d, linewidth2d, lineslope2d, make_convolve=True,
                  nchan=None, rms=None, tb={'nu': False, 'beam': False, 'full': True}, return_data_only=False, header=None, dpc=None, **kwargs_line):
-
-        #from .cube import Cube as Cube2 #header should already be known by here, i.e. it should be an input when Model is initialised
         
         vel2d, int2d, linew2d, lineb2d = velocity2d, {}, {}, {}
         line_profile = self.line_profile
@@ -910,19 +670,12 @@ class Intensity:
             vel2d_near_nan = np.isnan(vel2d['upper']) #~vel2d['upper'].mask
             vel2d_far_nan = np.isnan(vel2d['lower']) #~vel2d['lower'].mask
         """
-
+        
         cube = []
         noise = 0.0
         #for _ in itertools.repeat(None, nchan):
         for vchan in vchannels:
             v_near, v_far = self.get_line_profile(vchan, vel2d, linew2d, lineb2d, **kwargs_line)
-            """
-            v_near_clean = np.where(vel2d_near_nan, -np.inf, v_near)
-            v_far_clean = np.where(vel2d_far_nan, -np.inf, v_far)
-            #vmap_full = np.array([v_near_clean, v_far_clean]).max(axis=0)
-            int2d_near = np.where(int2d_near_nan, -np.inf, int2d['upper'] * v_near_clean)
-            int2d_far = np.where(int2d_far_nan, -np.inf, int2d['lower'] * v_far_clean)
-            """
             int2d_near = int2d['upper'] * v_near
             int2d_far = int2d['lower'] * v_far
             #vel nans might differ from Int nans when a z surf is zero and SG is active, then nanmax must be used: 
@@ -932,7 +685,7 @@ class Intensity:
                 int2d_full += noise
 
             if make_convolve and self.beam_kernel:
-                int2d_full[np.isnan(int2d_full)] = noise #np.where(inf_mask, noise, int2d_full)                
+                int2d_full[np.isnan(int2d_full)] = noise
                 int2d_full = self.beam_area*convolve(int2d_full, self.beam_kernel, preserve_nan=False)
             else:
                 int2d_full *= self.beam_area
@@ -941,9 +694,7 @@ class Intensity:
             cube.append(int2d_full)
             
         if return_data_only: return np.asarray(cube)
-        #else: return Cube(nchan, vchannels, np.asarray(cube), beam=self.beam_info, beam_kernel=self.beam_kernel, tb=tb)
         else: return Cube(np.asarray(cube), header, vchannels, dpc, beam=self.beam_info, filename="./cube_model.fits")
-        #else: return Cube2(np.asarray(cube), header, vchannels, beam=self.beam_info)
 
     @staticmethod
     def make_channels_movie(vchan0, vchan1, velocity2d, intensity2d, linewidth2d, lineslope2d, nchans=30, folder='./movie_channels/', **kwargs):
@@ -974,6 +725,9 @@ class Intensity:
         return np.array(int2d_cube)
 
     
+#*************
+#MODEL CLASSES
+#*************
 class Mcmc:
     @staticmethod
     def _get_params2fit(mc_params, boundaries):
@@ -1062,14 +816,13 @@ class Mcmc:
     
     def ln_likelihood(self, new_params, **kwargs):
         for i in range(self.mc_nparams):
-            #Assuming uniform prior likelihood (within boundaries) for all parameters
             if not (self.mc_boundaries_list[i][0] < new_params[i] < self.mc_boundaries_list[i][1]): return -np.inf
             else: self.params[self.mc_kind[i]][self.mc_header[i]] = new_params[i]
 
         vel2d, int2d, linew2d, lineb2d = self.make_model(**kwargs)
 
         lnx2=0    
-        model_cube = self.get_cube(self.mc_vchannels, vel2d, int2d, linew2d, lineb2d, nchan=self.mc_nchan, return_data_only=True)#, tb = {'nu': 230, 'beam': self.beam_info})
+        model_cube = self.get_cube(self.mc_vchannels, vel2d, int2d, linew2d, lineb2d, nchan=self.mc_nchan, return_data_only=True)
         for i in range(self.mc_nchan):
             model_chan = model_cube[i]
             mask_data = np.isfinite(self.mc_data[i])
@@ -1080,11 +833,11 @@ class Mcmc:
             lnx =  np.where(mask, np.power((data - model)/self.noise_stddev, 2), 0) 
             lnx2 += -0.5 * np.sum(lnx)
             
-        #print (new_params, "\nLOG LIKELIHOOD %.4e"%lnx2)
         return lnx2 if np.isfinite(lnx2) else -np.inf
     
 
-class Model(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #Inheritance should only be from ModelGrid, Intensity and Mcmc, the others contain just staticmethods...
+class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
+    
     def __init__(self, datacube, Rmax, Rmin=1.0, prototype=False, subpixels=False):        
         """
         Initialise discminer model object.
@@ -1124,7 +877,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #In
         self.prototype = prototype
         self.datacube = datacube
         
-        mgrid = ModelGrid(datacube, Rmax, Rmin=Rmin) #Make model grid (disc and sky grids)
+        mgrid = ModelGrid(datacube, Rmax, Rmin=Rmin) #Make disc and sky grids
         grid = mgrid.discgrid        
         skygrid = mgrid.skygrid
 
@@ -1159,16 +912,16 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #In
         self.x_true, self.y_true = x_true, y_true
         self.phi_true = grid['phi'] #From 0 to 2pi, old sf3d version: -pi, pi
         self.R_true = grid['R']         
-        self.mesh = skygrid['meshgrid'] #disc grid will be interpolated onto this sky grid in make_model(). Must match data shape for mcmc. 
+        self.mesh = skygrid['meshgrid'] #disc grid is interpolated onto this grid in make_model(). Must match data shape for mcmc. 
         self.grid = grid
         self.skygrid = skygrid
         self.extent = skygrid['extent']
-        self.projected_coords = None #to be computed by get_projected_coords
+        self.projected_coords = None #computed in get_projected_coords
     
-        self.R_1d = None #will be modified if selfgravity is considered
+        self.R_1d = None #modified if selfgravity is considered
 
         if subpixels and isinstance(subpixels, int):
-            if subpixels%2 == 0: subpixels+=1 #If input even becomes odd to contain pxl centre
+            if subpixels%2 == 0: subpixels+=1 #Force it to be odd to contain parent pix centre
             pix_size = grid['step']
             dx = dy = pix_size / subpixels
             centre = int(round((subpixels-1)/2.))
@@ -1188,7 +941,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #In
             self.subpixels_sq = subpixels**2
         else: self.subpixels=False
 
-        #Get and print default parameters for default functions
+        #Initialise and print default parameters for default functions
         self.categories = ['velocity', 'orientation', 'intensity', 'linewidth', 'lineslope', 'height_upper', 'height_lower']
 
         self.mc_params = {'velocity': {'Mstar': True, 
@@ -1318,12 +1071,11 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #In
         self.mc_header, self.mc_kind, self.mc_nparams, self.mc_boundaries_list, self.mc_params_indices = Model._get_params2fit(self.mc_params, self.mc_boundaries)
         self.params = copy.deepcopy(self.mc_params)
 
-        #if p0_mean == 'optimize': p0_mean = optimize_p0()
         if isinstance(p0_mean, (list, tuple, np.ndarray)): 
             if len(p0_mean) != self.mc_nparams: raise InputError(p0_mean, 'Length of input p0_mean must be equal to the number of parameters to fit: %d'%self.mc_nparams)
             else: pass
 
-        nstats = int(round(frac_stats*(nsteps-1))) #python2 round returns float, python3 returns int
+        nstats = int(round(frac_stats*(nsteps-1)))
         ndim = self.mc_nparams
 
         p0_stddev = [frac_stddev*(self.mc_boundaries_list[i][1] - self.mc_boundaries_list[i][0]) for i in range(self.mc_nparams)]
@@ -1516,9 +1268,6 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #In
             x_grid = griddata((x_pro, y_pro), xt, (self.mesh[0], self.mesh[1]), method='linear')
             y_grid = griddata((x_pro, y_pro), yt, (self.mesh[0], self.mesh[1]), method='linear')
             phi[side] = np.arctan2(y_grid, x_grid) #-np.pi, np.pi output for user 
-            #Since this one is periodic it has to be recalculated, otherwise the interpolation will screw up things at the boundary -np.pi->np.pi
-            # When plotting contours there seems to be in any case some sort of interpolation, so there is still problems at the boundary
-            #phi[side] = griddata((x_pro, y_pro), self.phi_true, (self.mesh[0], self.mesh[1]), method='linear')
             z[side] = griddata((x_pro, y_pro), z_true[side], (self.mesh[0], self.mesh[1]), method='linear')
             #r[side] = hypot_func(R[side], z[side])
             if self.Rmax_m is not None: 
@@ -1544,10 +1293,8 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #In
                                  'z_nonan': z_nonan
         }
 
-        #return self.projected_coords
         return R, phi, z, R_nonan, phi_nonan, z_nonan
 
-#can be generalised and put outside this class, would require incl, PA and z_func as args.    
     def make_disc_axes(self, ax, Rmax=None, surface='upper'): 
         if Rmax is None:
             Rmax = self.Rmax.to('au')
@@ -1613,8 +1360,8 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #In
         grid_true = {'upper': [self.x_true, self.y_true, z_true, self.R_true, self.phi_true, self.R_1d, z_1d], 
                      'lower': [self.x_true, self.y_true, z_true_far, self.R_true, self.phi_true, self.R_1d, z_far_1d]}
 
-        #*******************************
-        #COMPUTE PROPERTIES ON SKY GRID #This will no longer be necessary as all four functions will always be called
+        #******************************
+        #COMPUTE PROPERTIES ON SKY GRID 
         avai_kwargs = [vel_kwargs, int_kwargs, lw_kwargs, ls_kwargs]
         avai_funcs = [self.velocity_func, self.intensity_func, self.linewidth_func, self.lineslope_func]
         true_kwargs = [isinstance(kwarg, dict) for kwarg in avai_kwargs]
@@ -1632,7 +1379,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #In
 
                     subpix_grid_true = {'upper': [self.sub_x_true[j], self.sub_y_true[i], z_true, self.sub_R_true[i][j], self.sub_phi_true[i][j]], 
                                         'lower': [self.sub_x_true[j], self.sub_y_true[i], z_true_far, self.sub_R_true[i][j], self.sub_phi_true[i][j]]}
-                    subpix_vel.append(self._compute_prop(subpix_grid_true, [self.velocity_func], [vel_kwargs])[0])
+                    subpix_vel.append(_compute_prop(subpix_grid_true, [self.velocity_func], [vel_kwargs])[0])
 
             ang_fac = sin_incl * np.cos(self.phi_true) 
             for i in range(self.subpixels_sq):
@@ -1640,11 +1387,11 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #In
                     subpix_vel[i][side] *= ang_fac
                     subpix_vel[i][side] += vel_kwargs['vsys']
                     
-            props = self._compute_prop(grid_true, prop_funcs[1:], prop_kwargs[1:])
+            props = _compute_prop(grid_true, prop_funcs[1:], prop_kwargs[1:])
             props.insert(0, subpix_vel)
             
         else: 
-            props = self._compute_prop(grid_true, prop_funcs, prop_kwargs)
+            props = _compute_prop(grid_true, prop_funcs, prop_kwargs)
             if true_kwargs[0]: #Convention: positive vel (+) means gas receding from observer
                 phi_fac = sin_incl * np.cos(self.phi_true) #phi component
                 for side in ['upper', 'lower']:
@@ -1695,7 +1442,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, Tools, Mcmc): #In
 
 General2d = Model #Backcompat
 
-class _Rosenfeld2d(Velocity, Intensity, Linewidth, Tools): #Deprecated, haven't tested it in a while
+class _Rosenfeld2d(Velocity, Intensity, Linewidth, GridTools): #Deprecated
     """
     Host class for the Rosenfeld+2013 model which describes the velocity field of a flared disc in 2D. 
     This model assumes a (Keplerian) double cone to account for the near and far sides of the disc 
@@ -1722,7 +1469,6 @@ class _Rosenfeld2d(Velocity, Intensity, Linewidth, Tools): #Deprecated, haven't 
         self._line_profile = Rosenfeld2d.line_profile_v_sigma
         self._use_temperature = False
         self._use_full_channel = False
-
 
     def _get_t(self, A, B, C):
         t = []
@@ -1802,7 +1548,7 @@ class _Rosenfeld2d(Velocity, Intensity, Linewidth, Tools): #Deprecated, haven't 
         true_kwargs = [isinstance(kwarg, dict) for kwarg in avai_kwargs]
         prop_kwargs = [kwarg for i, kwarg in enumerate(avai_kwargs) if true_kwargs[i]]
         prop_funcs = [func for i, func in enumerate(avai_funcs) if true_kwargs[i]]
-        props = self._compute_prop(grid_true, prop_funcs, prop_kwargs)
+        props = _compute_prop(grid_true, prop_funcs, prop_kwargs)
         #Positive vel is positive along z, i.e. pointing to the observer, for that reason imposed a (-) factor to convert to the standard convention: (+) receding  
         if true_kwargs[0]:
             ang_fac_near = -sin_incl * np.cos(phi_true_near)
