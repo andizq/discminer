@@ -35,8 +35,13 @@ Next, two additional *make* scripts must be run in order to produce the model ch
 The former command displays the data and best-fit model channel maps interactively, and stores residuals resulting from the subtraction of data and model channel intensities,
 
 .. image:: ../images/channel_maps_residuals.png
-   :width: 800
+   :width: 70 %
 
+You can use the interactive window to have a quick look at the data and model channels and to visualise spectra from specific pixels/regions of the image.
+
+.. image:: ../images/interactive_window_main.png
+   :width: 70 %
+      
 The latter command produces three different types of moment maps: (a) **peak intensities** (b) **line widths** and (c) **centroid velocities**, which are simply the attributes of (in this case) Gaussian kernels fitted along the velocity axis of the input data and model cubes. You can visualise the output moment maps in different ways,
 
 .. code-block:: bash
@@ -102,17 +107,18 @@ Now, it is also possible to display residual maps in Cartesian or polar coordina
    :width: 800
 
 
+	   
 .. image:: ../images/residuals_deproj_peakintensity_gaussian_cartesian.png
-   :width: 300
+   :width: 50 %
+
+.. image:: ../images/residuals_deproj_linewidth_gaussian_cartesian.png
+   :width: 50 %
 
 .. image:: ../images/residuals_deproj_velocity_gaussian_cartesian.png
-   :width: 300
-      
-.. image:: ../images/residuals_deproj_linewidth_gaussian_cartesian.png
-   :width: 300
+   :width: 70 %
 
 .. image:: ../images/residuals_deproj_velocity_gaussian_polar.png
-   :width: 800
+   :width: 90 %
 	   
  
 Additionally, the following routine attempts to reveal asymmetric and localised signatures in the disc by studying the distribution of peak residuals,
@@ -140,10 +146,10 @@ The following command produces model and data rotation curves, as well as radial
    python ../_mining/plot_radial_profiles.py -m velocity
 
 .. image:: ../images/rotation_curve_velocity_gaussian.png
-   :width: 600
+   :width: 80 %
 
 .. image:: ../images/velocity_components_velocity_gaussian.png
-   :width: 600
+   :width: 80 %
    
 Similarly, the next two lines produce azimuthally averaged profiles of data and model peak intensities and line widths, as well as residual profiles.
 
@@ -153,10 +159,10 @@ Similarly, the next two lines produce azimuthally averaged profiles of data and 
    python ../_mining/plot_radial_profiles.py -m linewidth		
  
 .. image:: ../images/radial_profile_residuals_peakintensity_gaussian.png
-   :width: 600
+   :width: 80 %
 
 .. image:: ../images/radial_profile_residuals_linewidth_gaussian.png
-   :width: 600
+   :width: 80 %
 
 
 Details on the physical interpretation of the substructures identified in this and in the other discs of the MAPS sample can be found in the work of Izquierdo et al. (2023).
