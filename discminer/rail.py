@@ -143,13 +143,20 @@ class Rail(object):
             if len(contour)==0:
                 print ('no contours found for phi =', lev)
                 continue
-            ind_good = np.argmin([np.abs(lev-coords[0][tuple(np.round(contour[i][0]).astype(np.int))]) for i in range(len(contour))]) #getting ind of closest contour to lev
+            ind_good = np.argmin([np.abs(lev-coords[0][tuple(np.round(contour[i][0]).astype(np.int))]) for i in range(len(contour))]) #get contour id closest to lev
             inds_cont = np.round(contour[ind_good]).astype(np.int)
             inds_cont = [tuple(f) for f in inds_cont]
             first_cont = np.array([coords[0][i] for i in inds_cont])
             second_cont = np.array([coords[1][i] for i in inds_cont])
             prop_cont = np.array([prop[i] for i in inds_cont])
-            corr_inds = np.abs(first_cont-lev) < acc_threshold
+
+            corr_inds = np.abs(first_cont-lev) < acc_threshold #clean based on acc_threshold
+            
+            _, tmp = np.unique(second_cont, return_index=True) 
+            unique_inds = np.zeros_like(second_cont).astype(bool)
+            unique_inds[tmp] = True
+            corr_inds = corr_inds & unique_inds #make sure points are not repeated
+
             if lev == coord_ref: zorder=10
             else: zorder=np.random.randint(0,10)
 
