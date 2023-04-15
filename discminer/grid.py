@@ -48,7 +48,7 @@ def grid(xmax, nx, indexing="xy", verbose=True):
     xList, yList = [xy.flatten() for xy in XY]
     RList = np.linalg.norm([xList, yList], axis=0)
     phiList = np.arctan2(yList, xList)
-    phiList = np.where(phiList < 0, phiList + 2 * np.pi, phiList)
+    #phiList = np.where(phiList < 0, phiList + 2 * np.pi, phiList)
     _break_line()
 
     return {
