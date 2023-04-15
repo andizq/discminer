@@ -23,9 +23,6 @@ use_discminer_style()
 
 parser = ArgumentParser(prog='plot moment maps', description='Plot moment map [velocity, linewidth, [peakintensity, peakint]?')
 args = add_parser_args(parser, moment=True, kind=True, surface=True)
-
-if args.moment=='peakint':
-     args.moment = 'peakintensity'
      
 #**********************
 #JSON AND PARSER STUFF
@@ -46,7 +43,6 @@ ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get
 #****************
 file_data = meta['file_data']
 tag = meta['tag']
-au_to_m = u.au.to('m')
 
 dpc = meta['dpc']*u.pc
 Rmax = 1.1*Rout*u.au #Max model radius, 10% larger than disc Rout
@@ -55,7 +51,7 @@ Rmax = 1.1*Rout*u.au #Max model radius, 10% larger than disc Rout
 #LOAD DATA AND GRID
 #********************
 datacube = Data(file_data, dpc) # Read data and convert to Cube object
-noise_mean, mask = get_noise_mask(datacube.data)
+noise_mean, mask = get_noise_mask(datacube)
 
 #Useful definitions for plots
 with open('grid_extent.json') as json_file:
@@ -117,7 +113,7 @@ for axi in ax[1:]:
     axi.grid(color='k', ls='--')
     
 for i,axi in enumerate(ax):
-    Contours.emission_surface(axi, R, phi, extent=extent, R_lev=np.linspace(0.1, 1.0, 10)*Rout*au_to_m, which=mtags['surf'])
+    Contours.emission_surface(axi, R, phi, extent=extent, R_lev=np.linspace(0.1, 1.0, 10)*Rout*u.au.to('m'), which=mtags['surf'])
      
 patch = Rectangle([-zoomwidth]*2, 2*zoomwidth, 2*zoomwidth, edgecolor=zoomcolor, facecolor='none',
                   lw=2.0, ls=(0, (1,1.5)), capstyle='round')

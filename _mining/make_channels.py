@@ -104,7 +104,7 @@ plt.savefig('channel_maps_model.png', bbox_inches = 'tight', dpi=200)
 plt.close()
 
 #RESIDUAL CHANNELS
-noise_mean, mask = get_noise_mask(datacube.data)
+noise_mean, mask = get_noise_mask(datacube)
 
 residualscube = Cube(datacube.data-modelcube.data, datacube.header, datacube.vchannels, dpc, beam=datacube.beam)
 residualscube.filename = 'cube_residuals_%s.fits'%tag

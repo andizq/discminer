@@ -1,6 +1,8 @@
 from discminer.core import Data
 from discminer.rail import Contours
 from discminer.plottools import (add_cbar_ax,
+                                 make_substructures,
+                                 _make_radial_grid_2D,
                                  make_up_ax,
                                  mod_minor_ticks,
                                  mod_major_ticks,
@@ -44,7 +46,6 @@ yc = best['orientation']['yc']
 
 gaps = custom['gaps']
 rings = custom['rings']
-kinks = custom['kinks']
 
 #****************
 #SOME DEFINITIONS
@@ -60,7 +61,7 @@ Rmax = 1.1*Rout*u.au
 #LOAD DATA AND GRID
 #********************
 datacube = Data(file_data, dpc) # Read data and convert to Cube object
-noise_mean, mask = get_noise_mask(datacube.data)
+noise_mean, mask = get_noise_mask(datacube)
 
 #Useful definitions for plots
 with open('grid_extent.json') as json_file:
@@ -148,8 +149,8 @@ for i, (axi, moment) in enumerate(zip(ax, mtypes)):
         
     elif args.coords=='disc':
         im = axi.contourf(Xproj, Yproj, clip_prop_radially(residuals[moment], Rmax=Rout), **kwargs_im)                         
-        Contours.make_substructures(axi, gaps=gaps, rings=rings, kinks=kinks, twodim=True)
-        axi.plot(Rout*np.cos(fill_angs_2pi), Rout*np.sin(fill_angs_2pi), color='k', ls='-', lw=3.5, alpha=0.9) #Rout
+        make_substructures(axi, gaps=gaps, rings=rings, twodim=True)
+        _make_radial_grid_2D(axi, Rout, gaps=gaps, rings=rings, make_labels=True, label_freq=2)
         
     cbar = plt.colorbar(im, cax=cbar_axes[i], **kwargs_cbar)
     cbar.set_label(clabels[moment], fontsize=14)

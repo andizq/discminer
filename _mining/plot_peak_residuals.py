@@ -1,10 +1,7 @@
-from discminer.core import Data
 from discminer.plottools import (get_discminer_cmap, append_sigma_panel,
                                  make_up_ax, mod_minor_ticks, mod_major_ticks,
                                  use_discminer_style, mod_nticks_cbars,
                                  make_substructures, make_round_map)
-from discminer.disc2d import General2d
-import discminer.cart as cart
 from discminer.pick import Pick
 from discminer.rail import Contours
 
@@ -15,7 +12,12 @@ from astropy import units as u
 import json
 import copy
 
-from utils import add_parser_args, get_2d_plot_decorators, load_moments
+from utils import (init_data_and_model,
+                   get_noise_mask,
+                   add_parser_args,
+                   get_2d_plot_decorators,
+                   load_moments)
+
 from argparse import ArgumentParser
 
 use_discminer_style()
@@ -23,9 +25,6 @@ use_discminer_style()
 parser = ArgumentParser(prog='Identify and show peak residuals', description='Identify peak residuals in folded maps.')
 parser.add_argument('-c', '--clean_thres', default=np.inf, type=float, help="Threshold above which peak residuals will be rejected.")
 args = add_parser_args(parser, moment=True, kind=True, surface=True, fold=True, projection=True, Rinner=True, Router=True)
-
-if args.moment=='peakint':
-     args.moment = 'peakintensity'
 
 #**********************
 #JSON AND PARSER STUFF
@@ -59,40 +58,13 @@ au_to_m = u.au.to('m')
 dpc = meta['dpc']*u.pc
 Rmax = 1.1*Rout*u.au #Max model radius, 10% larger than disc Rout
 
-#********
-#LOAD DATA
-#********
-datacube = Data(file_data, dpc) # Read data and convert to Cube object
-noise = np.std( np.append(datacube.data[:5,:,:], datacube.data[-5:,:,:], axis=0), axis=0)
-mask = np.max(datacube.data, axis=0) < 4*np.mean(noise)
+#*******************
+#LOAD DATA AND MODEL
+#*******************
+datacube, model = init_data_and_model()
+
+noise_mean, mask = get_noise_mask(datacube, thres=2)
 vchannels = datacube.vchannels
-
-#****************************
-#INIT MODEL AND PRESCRIPTIONS
-#****************************
-model = General2d(datacube, Rmax, Rmin=0, prototype=True)
-
-model.z_upper_func = cart.z_upper_exp_tapered
-model.z_lower_func = cart.z_lower_exp_tapered
-model.velocity_func = model.keplerian_vertical # vrot = sqrt(GM/r**3)*R
-model.line_profile = model.line_profile_bell
-
-if 'I2pwl' in meta['kind']:
-    model.intensity_func = cart.intensity_powerlaw_rbreak
-elif 'I2pwlnosurf' in meta['kind']:
-    model.intensity_func = cart.intensity_powerlaw_rbreak_nosurf    
-else:
-    model.intensity_func = cart.intensity_powerlaw_rout
-
-#**************
-#PROTOTYPE PARS
-#**************
-model.params = copy.copy(best)
-model.params['intensity']['I0'] /= meta['downsamp_factor']
-
-#**************************
-#MAKE MODEL (2D ATTRIBUTES)
-#**************************
 model.make_model()
 
 #*************************
@@ -177,23 +149,23 @@ if args.projection=='cartesian':
     levels_resid = np.linspace(-clim, clim, 32)
     
     if args.surface in ['up', 'upper']:
-        z_func = cart.z_upper_exp_tapered
+        z_func = model.z_upper_func
         z_pars = best['height_upper']
 
     elif args.surface in ['low', 'lower']:
-        z_func = cart.z_lower_exp_tapered
+        z_func = model.z_lower_func
         z_pars = best['height_lower']
     
     fig, ax = make_round_map(folded_map, levels_resid, pick.X*u.au, pick.Y*u.au, R_prof[-1]*u.au,
                              z_func=z_func, z_pars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc,
-                             cmap=cmap_res, unit=unit, fmt=cfmt, 
+                             cmap=cmap_res, clabel=unit, fmt=cfmt, 
                              rings=rings,
                              mask_wedge=(90, 270)*u.deg,
                              mask_inner=R_prof[0]*u.au)
     ax.scatter(lev*cos_peak, lev*sin_peak, edgecolors='none', facecolors=color, alpha=0.2, s=100)
     ax.scatter(lev*cos_peak, lev*sin_peak, edgecolors='none', facecolors=color, alpha=1.0, s=10)
     ax.scatter(lev*cos_peak, lev*sin_peak, edgecolors='0.3', facecolors='none', alpha=1.0, s=100)
-    ax.set_title('%s, folded map'%ctitle, fontsize=12, color='k')
+    ax.set_title('%s, folded map'%ctitle, fontsize=16, color='k')
     
 
 plt.savefig('folded_residuals_deproj_%s_%s.png'%(mtags['base'], args.projection), bbox_inches='tight', dpi=200)

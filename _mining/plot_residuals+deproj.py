@@ -3,6 +3,7 @@ from discminer.rail import Contours
 import discminer.cart as cart
 from discminer.plottools import (make_round_map,
                                  make_polar_map,
+                                 make_substructures,
                                  make_up_ax,
                                  mod_major_ticks,
                                  mod_nticks_cbars,
@@ -26,9 +27,6 @@ use_discminer_style()
 parser = ArgumentParser(prog='plot residual maps', description='Plot residual maps')
 args = add_parser_args(parser, moment=True, kind=True, surface=True, projection=True)
 
-if args.moment=='peakint':
-    args.moment = 'peakintensity'
-     
 #**********************
 #JSON AND PARSER STUFF
 #**********************
@@ -48,7 +46,6 @@ yc = best['orientation']['yc']
 
 gaps = custom['gaps']
 rings = custom['rings']
-kinks = custom['kinks']
 
 ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get_2d_plot_decorators(args.moment, unit_simple=True, fmt_vertical=True)
 
@@ -66,7 +63,7 @@ Rmax = 1.1*Rout*u.au #Max model radius, 10% larger than disc Rout
 #LOAD DATA AND GRID
 #********************
 datacube = Data(file_data, dpc) # Read data and convert to Cube object
-noise_mean, mask = get_noise_mask(datacube.data, thres=2)
+noise_mean, mask = get_noise_mask(datacube, thres=2)
 
 #Useful definitions for plots
 with open('grid_extent.json') as json_file:
@@ -125,19 +122,21 @@ if args.projection=='cartesian':
     
     fig, ax = make_round_map(residuals, levels_resid, Xproj*u.m, Yproj*u.m, Rout*u.au,
                              z_func=z_func, z_pars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc,
-                             cmap=cmap_res, unit=unit, fmt=cfmt, 
-                             rings=rings, kinks=kinks)
-
+                             cmap=cmap_res, clabel=unit, fmt=cfmt, 
+                             gaps=gaps, rings=rings)
+    
+    make_substructures(ax, gaps=gaps, rings=rings, twodim=True, label_rings=True)
 
 elif args.projection=='polar':
     levels_resid = np.linspace(-clim, clim, 48)    
-    fig, ax = make_polar_map(residuals, levels_resid,
-                             R[args.surface]*u.m, phi[args.surface]*u.rad, Rout*u.au,
-                             Rin = datacube.beam_size,
-                             cmap=cmap_res, unit=unit, fmt=cfmt, clabel=clabels[args.moment],
-                             gaps=gaps, rings=rings, kinks=kinks)
-
-ax.set_title(ctitle, fontsize=12, color='k')
+    fig, ax, cbar = make_polar_map(residuals, levels_resid,
+                                   R[args.surface]*u.m, phi[args.surface]*u.rad, Rout*u.au,
+                                   Rin = datacube.beam_size,
+                                   cmap=cmap_res, fmt=cfmt, clabel=clabels[args.moment])
+                                   
+    make_substructures(ax, gaps=gaps, rings=rings, twodim=True, polar=True, label_rings=True)
+    
+ax.set_title(ctitle, fontsize=16, color='k')
 
 plt.savefig('residuals_deproj_%s_%s.png'%(mtags['base'], args.projection), bbox_inches='tight', dpi=200)
 plt.show()

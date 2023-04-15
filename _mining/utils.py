@@ -3,11 +3,18 @@ Useful repeating code
 """
 import json
 import decimal
-import numpy as np
-from astropy.io import fits
 import warnings
+import copy
 
 from discminer.plottools import get_discminer_cmap
+from discminer.core import Data
+from discminer.disc2d import Model
+import discminer.cart as cart
+
+from astropy.io import fits
+import astropy.units as u
+
+import numpy as np
 
 molplot = {
     '12co': r'$^{\rm 12}$CO',
@@ -18,16 +25,23 @@ molplot = {
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
+SMALL_SIZE = 10
+MEDIUM_SIZE = 15
+
+    
 def add_parser_args(parser,
                     moment=False, kind=False, surface=False, projection=False,
-                    mask_ang=False, Rinner=False, Router=False,
+                    mask_minor=False, mask_major=False, Rinner=False, Router=False,
                     fold=False, writetxt=False, 
 ):
 
     if moment:
         parser.add_argument('-m', '--moment', default='velocity', type=str, choices=['velocity', 'linewidth', 'lineslope', 'peakint', 'peakintensity'], help="velocity, linewidth or peakintensity")
-    if mask_ang:
-        parser.add_argument('-a', '--mask_ang', default=60.0, type=float, help="+- azimuthal mask around disc minor axis for computation of velocity components")
+
+    if mask_minor:
+        parser.add_argument('-b', '--mask_minor', default=60.0, type=float, help="+- azimuthal mask around disc minor axis for computation of vphi and vz velocity components")
+    if mask_major:
+        parser.add_argument('-a', '--mask_major', default=30.0, type=float, help="+- azimuthal mask around disc major axis for computation of vR velocity component")
     if kind:
         parser.add_argument('-k', '--kind', default='gaussian', type=str, choices=['gauss', 'gaussian', 'bell', 'dgauss', 'doublegaussian', 'dbell', 'doublebell'], help="gauss(or gaussian), dbell(or doublebell)")
     if surface:
@@ -42,9 +56,62 @@ def add_parser_args(parser,
         parser.add_argument('-i', '--Rinner', default=1.0, type=float, help="Number of beams to mask out from inner region")
     if Router:
         parser.add_argument('-o', '--Router', default=0.9, type=float, help="Fraction of Rout to consider as the outer radius for the analysis")
+
+    args = parser.parse_args()
+
+    try:
+        if args.moment=='peakint':
+            args.moment = 'peakintensity'
+    except AttributeError:
+        pass
+
+    return args
+
+
+def init_data_and_model(parfile='parfile.json', Rmin=0, Rmax=1.1, init_model=True):
+    #Rmin: If dimensionless, fraction of beam_size
+    #Rmax: If dimensionless, fraction of Rout    
+    with open(parfile) as jf:
+        pars = json.load(jf)
+
+    meta = pars['metadata']
+    best = pars['best_fit']
+    custom = pars['custom']
+
+    file_data = meta['file_data']
+    Rout = best['intensity']['Rout']
+    dpc = meta['dpc']*u.pc
+
+    datacube = Data(file_data, dpc) # Read data and convert to Cube object
+
+    if init_model:
+        Rmax = Rmax*Rout*u.au
+        model = Model(datacube, Rmax=Rmax, Rmin=Rmin, prototype=True)
         
-    return parser.parse_args()
-        
+        model.z_upper_func = cart.z_upper_exp_tapered
+        model.z_lower_func = cart.z_lower_exp_tapered
+        model.velocity_func = model.keplerian_vertical # vrot = sqrt(GM/r**3)*R
+        model.line_profile = model.line_profile_bell
+    
+        if 'I2pwl' in meta['kind']:
+            model.intensity_func = cart.intensity_powerlaw_rbreak
+        elif 'I2pwlnosurf' in meta['kind']:
+            model.intensity_func = cart.intensity_powerlaw_rbreak_nosurf    
+        else:
+            model.intensity_func = cart.intensity_powerlaw_rout
+
+        #****************
+        #PROTOTYPE PARAMS
+        #****************
+        model.params = copy.copy(best)
+        model.params['intensity']['I0'] /= meta['downsamp_factor']
+
+        return datacube, model
+
+    else:
+        return datacube
+
+    
 def read_json(decimals=True): #Read json file again but keep track of (if) decimals
     if decimals:
         parse_func = lambda x: decimal.Decimal(str(x))
@@ -170,8 +237,9 @@ def get_1d_plot_decorators(moment, tag=''):
     
     return clabel, clabel_res, clim0, clim0_res, clim1, clim1_res, unit
 
-def get_noise_mask(data, thres=4, return_mean=True):
+def get_noise_mask(datacube, thres=4, return_mean=True):
     #std from line-free channels, per pixel
+    data = datacube.data
     noise = np.std( np.append(data[:5,:,:], data[-5:,:,:], axis=0), axis=0) 
     if return_mean:
         noise_mean = np.mean(noise)
@@ -223,3 +291,8 @@ def load_disc_grid():
         lower=np.load('lower_z.npy')
     )
     return R, phi, z
+
+def make_1d_legend(ax, **kwargs):
+    kwargs_def = dict(frameon=False, fontsize=MEDIUM_SIZE-2, ncol=3, loc='lower right', bbox_to_anchor=(1.0, 1.0))
+    kwargs_def.update(kwargs)
+    return ax.legend(**kwargs_def)

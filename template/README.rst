@@ -179,4 +179,17 @@ Similarly, the next two lines produce azimuthally averaged profiles of data and 
    :width: 80 %
    :align: center
 
+
+- **TIP**: The ``writetxt`` argument activated with a ``-w 1`` flag in command line is particularly useful to produce .txt outputs of radial profiles for further analysis.
+  
+  .. code-block:: bash
+
+	python ../_mining/plot_radial_profiles.py -m velocity -w 1
+	python ../_mining/plot_velocity_components.py
+
+.. image:: ../images/pie_velocity_components_velocity_gaussian.png
+   :width: 80 %
+   :align: center	   
+	
+	   
 Details on the physical interpretation of the substructures identified in this and in the other discs of the MAPS sample can be found in the work of Izquierdo et al. (2023).
