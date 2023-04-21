@@ -852,7 +852,7 @@ class Mcmc:
         vel2d, int2d, linew2d, lineb2d = self.make_model(**kwargs)
 
         lnx2=0    
-        model_cube = self.get_cube(self.mc_vchannels, vel2d, int2d, linew2d, lineb2d, nchan=self.mc_nchan, return_data_only=True)
+        model_cube = self.get_cube(self.mc_vchannels, vel2d, int2d, linew2d, lineb2d, return_data_only=True)
         for i in range(self.mc_nchan):
             model_chan = model_cube[i]
             mask_data = np.isfinite(self.mc_data[i])
