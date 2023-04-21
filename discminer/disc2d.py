@@ -506,7 +506,21 @@ class Intensity:
     def line_profile(self): 
         print('Deleting intensity function') 
         del self._line_profile
-    
+
+    @property
+    def line_uplow(self): 
+        return self._line_uplow
+          
+    @line_uplow.setter 
+    def line_uplow(self, uplow): 
+        print('Setting composite upper+lower line profile function to', uplow) 
+        self._line_uplow = uplow
+
+    @line_uplow.deleter 
+    def line_uplow(self): 
+        print('Deleting intensity function') 
+        del self._line_uplow
+        
     @property
     def intensity_func(self): 
         return self._intensity_func
@@ -609,6 +623,15 @@ class Intensity:
         J = J * dvsub/channel_width
         return J
 
+    @staticmethod
+    def line_uplow_sum(Iup, Ilow):
+        return Iup + Ilow
+    
+    @staticmethod
+    def line_uplow_mask(Iup, Ilow):
+        #velocity nans might differ from Int nans when a z surf is zero and SG is active, nanmax must be used
+        return np.nanmax([Iup, Ilow], axis=0)
+    
     def get_line_profile(self, v_chan, vel2d, linew2d, lineb2d, **kwargs):
         if self.subpixels:
             v_near, v_far = [], []
@@ -636,7 +659,7 @@ class Intensity:
         else: lineb2d = lineslope2d
     
         v_near, v_far = self.get_line_profile(v_chan, vel2d, linew2d, lineb2d, **kwargs)
-        int2d_full = np.nanmax([int2d_near, int2d_far], axis=0)
+        int2d_full = self.line_uplow(int2d_near, int2d_far)
         
         if self.beam_kernel:
             inf_mask = np.isnan(int2d_full)
@@ -646,23 +669,27 @@ class Intensity:
         return int2d_full
 
     def get_cube(self, vchannels, velocity2d, intensity2d, linewidth2d, lineslope2d, make_convolve=True,
-                 nchan=None, rms=None, tb={'nu': False, 'beam': False, 'full': True}, return_data_only=False, header=None, dpc=None, **kwargs_line):
+                 rms=None, tb={'nu': False, 'beam': False, 'full': True}, return_data_only=False, header=None, dpc=None, **kwargs_line):
         
         vel2d, int2d, linew2d, lineb2d = velocity2d, {}, {}, {}
-        line_profile = self.line_profile
-        if nchan is None: nchan=len(vchannels)
         int2d_shape = np.shape(velocity2d['upper'])
         
-        if isinstance(intensity2d, numbers.Number): int2d['upper'] = int2d['lower'] = intensity2d
-        else: int2d = intensity2d
-        if isinstance(linewidth2d, numbers.Number): linew2d['upper'] = linew2d['lower'] = linewidth2d
-        else: linew2d = linewidth2d
-        if isinstance(lineslope2d, numbers.Number): lineb2d['upper'] = lineb2d['lower'] = lineslope2d
-        else: lineb2d = lineslope2d
+        if isinstance(intensity2d, numbers.Number):
+            int2d['upper'] = int2d['lower'] = intensity2d
+        else:
+            int2d = intensity2d
+
+        if isinstance(linewidth2d, numbers.Number):
+            linew2d['upper'] = linew2d['lower'] = linewidth2d
+        else:
+            linew2d = linewidth2d
+
+        if isinstance(lineslope2d, numbers.Number):
+            lineb2d['upper'] = lineb2d['lower'] = lineslope2d
+        else:
+            lineb2d = lineslope2d
 
         """
-        int2d_near_nan = np.isnan(int2d['upper']) #~int2d['upper'].mask
-        int2d_far_nan = np.isnan(int2d['lower']) #~int2d['lower'].mask
         if self.subpixels:
             vel2d_near_nan = np.isnan(vel2d[self.sub_centre_id]['upper'])
             vel2d_far_nan = np.isnan(vel2d[self.sub_centre_id]['lower'])
@@ -678,17 +705,20 @@ class Intensity:
             v_near, v_far = self.get_line_profile(vchan, vel2d, linew2d, lineb2d, **kwargs_line)
             int2d_near = int2d['upper'] * v_near
             int2d_far = int2d['lower'] * v_far
-            #vel nans might differ from Int nans when a z surf is zero and SG is active, then nanmax must be used: 
-            int2d_full = np.nanmax([int2d_near, int2d_far], axis=0) 
+            int2d_full = self.line_uplow(int2d_near, int2d_far) 
+            
             if rms is not None:
                 noise = np.random.normal(scale=rms, size=int2d_shape)
                 int2d_full += noise
 
-            if make_convolve and self.beam_kernel:
-                int2d_full[np.isnan(int2d_full)] = noise
-                int2d_full = self.beam_area*convolve(int2d_full, self.beam_kernel, preserve_nan=False)
+            if self.beam_kernel is not None:
+                if make_convolve:
+                    int2d_full[np.isnan(int2d_full)] = noise
+                    int2d_full = self.beam_area*convolve(int2d_full, self.beam_kernel, preserve_nan=False)
+                else:
+                    int2d_full *= self.beam_area
+                    int2d_full[~np.isfinite(int2d_full)] = noise
             else:
-                int2d_full *= self.beam_area
                 int2d_full[~np.isfinite(int2d_full)] = noise
                 
             cube.append(int2d_full)
@@ -905,6 +935,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         self._linewidth_func = Model.linewidth_powerlaw
         self._lineslope_func = Model.lineslope_powerlaw
         self._line_profile = Model.line_profile_bell
+        self._line_uplow = Model.line_uplow_mask
         self._use_temperature = False
         self._use_full_channel = False
  

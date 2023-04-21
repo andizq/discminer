@@ -51,6 +51,7 @@ model.z_upper_func = cart.z_upper_exp_tapered
 model.z_lower_func = cart.z_lower_exp_tapered
 model.velocity_func = model.keplerian_vertical # vrot = sqrt(GM/r**3)*R
 model.line_profile = model.line_profile_bell
+model.line_uplow = model.line_uplow_mask
 
 if 'I2pwl' in meta['kind']:
     model.intensity_func = cart.intensity_powerlaw_rbreak

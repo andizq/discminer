@@ -92,6 +92,7 @@ def init_data_and_model(parfile='parfile.json', Rmin=0, Rmax=1.1, init_model=Tru
         model.z_lower_func = cart.z_lower_exp_tapered
         model.velocity_func = model.keplerian_vertical # vrot = sqrt(GM/r**3)*R
         model.line_profile = model.line_profile_bell
+        model.line_uplow = model.line_uplow_mask
     
         if 'I2pwl' in meta['kind']:
             model.intensity_func = cart.intensity_powerlaw_rbreak
