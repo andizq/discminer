@@ -661,10 +661,8 @@ class Intensity:
         v_near, v_far = self.get_line_profile(v_chan, vel2d, linew2d, lineb2d, **kwargs)
         int2d_full = self.line_uplow(int2d_near, int2d_far)
         
-        if self.beam_kernel:
-            inf_mask = np.isnan(int2d_full)
-            int2d_full = np.where(inf_mask, 0.0, int2d_full) # Use np.nan_to_num instead
-            int2d_full = self.beam_area*convolve(int2d_full, self.beam_kernel, preserve_nan=False)
+        if self.beam_kernel is not None:
+            int2d_full = self.beam_area*convolve(np.nan_to_num(int2d_full), self.beam_kernel, preserve_nan=False)
 
         return int2d_full
 

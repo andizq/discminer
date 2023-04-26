@@ -71,7 +71,10 @@ class Cube(object):
         if isinstance(beam, Beam):
             self._init_beam_kernel()  # Get 2D Gaussian kernel from beam
         elif beam is None:
-            pass
+            self.beam_size = None
+            self.beam_area = None
+            self.beam_kernel = None
+            self.beam_area_arcsecs = None
         else:
             raise InputError(beam, "beam must be either None or radio_beam.Beam object")
 

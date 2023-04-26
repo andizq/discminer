@@ -32,6 +32,7 @@ class Data(Cube):
                 rest_value=cube_spe.header["RESTFRQ"] * u.Hz,
             )
         except KeyError:
+            #Assume velocity axis is already in km/s
             cube_vel = cube_spe
             
         #In km/s, remove .value to keep astropy units
