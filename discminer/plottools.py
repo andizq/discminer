@@ -178,8 +178,8 @@ def add_cbar_ax(fig, ax, perc=4, orientation='horizontal', subplots=True):
     x0, x1, y0, y1 = axp.x0, axp.x1, axp.y0, axp.y1
     w = x1 - x0
     h = y1 - y0
-    dy = 0.01*perc
-    dx = dy*figr    
+    dx = dy = 0.01*perc
+    
     if subplots:
         if orientation=='horizontal': return fig.add_axes([x0, y0, w, dy])
         if orientation=='vertical': return fig.add_axes([x1+0.5*dx, y0+0.1*h, dx, h-0.2*h])        
@@ -270,7 +270,7 @@ def _make_text_2D(ax, Rlist, posx=0.0, sposy=1, fmt='%d', va=None, **kwargs_text
         else:
             return 0
 
-    kwargs = dict(fontsize=SMALL_SIZE+3, ha='center', va=_va, weight='bold', rotation=0)
+    kwargs = dict(fontsize=SMALL_SIZE+3, ha='center', va=_va, weight='bold', zorder=20, rotation=0)
     kwargs.update(kwargs_text)
     for Ri in Rlist:
         ax.text(posx, sposy*(Ri+dy), fmt%Ri, **kwargs)
@@ -382,15 +382,18 @@ def make_substructures(ax, gaps=[], rings=[], kinks=[],
         nphi = 100
         phi = np.linspace(0, 2*np.pi, nphi)
         phi_deg = np.degrees(phi-np.pi)
-        subst_fmt = zip([gaps, rings, kinks], ['D%d', 'B%d', 'K%d'], [label_gaps, label_rings, label_kinks])
+        subst_fmt = zip([gaps, rings, kinks],
+                        ['D%d', 'B%d', 'K%d'],
+                        [label_gaps, label_rings, label_kinks],
+                        [kwargs_g['color'], kwargs_r['color'], kwargs_k['color']])
         if polar:
             for R in gaps: ax.plot(phi_deg, [R]*nphi, **kwargs_g)
             for R in rings: ax.plot(phi_deg, [R]*nphi, **kwargs_r)
             for R in kinks: ax.plot(phi_deg, [R]*nphi, **kwargs_k)
 
-            for subst, fmt, label in subst_fmt:
+            for subst, fmt, label, color in subst_fmt:
                 if label:
-                    _make_text_2D(ax, subst, posx=-45, fmt=fmt)                
+                    _make_text_2D(ax, subst, posx=-45, fmt=fmt, color=color)                
         else:
             cos_phi = np.cos(phi)
             sin_phi = np.sin(phi)
@@ -398,9 +401,9 @@ def make_substructures(ax, gaps=[], rings=[], kinks=[],
             for R in rings: ax.plot(R*cos_phi, R*sin_phi, **kwargs_r)
             for R in kinks: ax.plot(R*cos_phi, R*sin_phi, **kwargs_k)
 
-            for subst, fmt, label in subst_fmt:
+            for subst, fmt, label, color in subst_fmt:
                 if label:
-                    _make_text_2D(ax, subst, sposy=-1, fmt=fmt)
+                    _make_text_2D(ax, subst, sposy=-1, fmt=fmt, color=color)
             
     else:
         if func1d=='axvline': func1d=ax.axvline
@@ -517,11 +520,15 @@ def make_polar_map(
         Rin = 0.0,
         fig=None, ax=None, 
         cmap=get_discminer_cmap('velocity'),
-        fmt='%5.2f', clabel=None, 
+        fmt='%5.2f', clabel=None, gradient=0,
+        **kwargs_cbar
         #,filaments=[],                            
 ):
     from scipy.interpolate import griddata
 
+    kwargs_cb = dict(orientation='vertical', subplots=False, perc=2)
+    kwargs_cb.update(kwargs_cbar)
+    
     #SOME DEFINITIONS
     if fig is None:
         fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(12, 3))
@@ -536,17 +543,44 @@ def make_polar_map(
     R_nonan_au = np.nan_to_num(R).to('au').value
 
     dR = int((Rout-Rin)/50)
-    PP, RR = np.meshgrid(np.linspace(-180, 180, 10000),
-                         np.arange(Rin, Rout+dR, dR),
-                         indexing='xy')
+    R1d = np.arange(Rin, Rout+dR, dR)
+    phi1d = np.linspace(-180, 180, 1000)
+    dP = phi1d[1] - phi1d[0]
+
+    PP, RR = np.meshgrid(phi1d, R1d, indexing='xy')
     
     pmap2d = griddata((phi_nonan_deg.flatten(), R_nonan_au.flatten()), map2d.flatten(), (PP, RR), method='linear')
-
-    im=ax.contourf(pmap2d, cmap=cmap,
-                   extent=[PP.min(), PP.max(), RR.min(), RR.max()],
-                   levels=levels,
-                   extend='both', origin='lower')
-
+    
+    make_plot = lambda map2d: ax.contourf(map2d, cmap=cmap,
+                                          extent=[PP.min(), PP.max(), RR.min(), RR.max()],
+                                          levels=levels,
+                                          extend='both', origin='lower')
+    
+    if not gradient:
+        im = make_plot(pmap2d)
+        map2d = pmap2d
+        
+    else:
+        dr, dphi = np.gradient(pmap2d) #in pix-1 units
+        dr /= dR # in au-1 units
+        dphi *= 1/np.radians(dP) * 1/RR # in au-1 rad-1 units 
+        dmax = np.sqrt(dphi**2 + dr**2)
+        
+        if gradient=='phi':
+            im = make_plot(dphi)
+            map2d = dphi
+        elif gradient=='r':
+            im = make_plot(dr)
+            map2d = dr
+        elif gradient=='peak':
+            im = make_plot(dmax)
+            map2d = dmax
+        else:
+            raise InputError(
+                kind, "kind must be 'attribute' or 'residuals'"
+            )
+   
+        
     """
     kw_fil = dict(s=20, lw=1, marker='+')
     for i,filament in enumerate(filaments):
@@ -571,7 +605,7 @@ def make_polar_map(
     ax.set_ylabel('Radius [au]', fontsize=MEDIUM_SIZE)
     mod_major_ticks(ax, axis='y', nbins=10)
                        
-    cax = add_cbar_ax(fig, ax, orientation='vertical', subplots=False, perc=6)    
+    cax = add_cbar_ax(fig, ax, **kwargs_cb)
     cbar = plt.colorbar(im, cax=cax, format=fmt, orientation='vertical', ticks=np.linspace(levels.min(), levels.max(), 5))
     cbar.ax.tick_params(which='major', direction='in', width=2.7, size=4.8, pad=4, labelsize=SMALL_SIZE)
     cbar.ax.tick_params(which='minor', direction='in', width=2.7, size=3.3)

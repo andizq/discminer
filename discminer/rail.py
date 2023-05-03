@@ -12,6 +12,7 @@ from . import units as sfu
 import matplotlib.pyplot as plt
 import matplotlib
 import numpy as np
+from astropy import units as u
 from scipy.interpolate import griddata
 from skimage import measure
 import numbers
@@ -19,7 +20,7 @@ import numbers
 get_sky_from_disc_coords = GridTools.get_sky_from_disc_coords
 
 class Rail(object):
-    def __init__(self, model, prop, coord_levels):
+    def __init__(self, model, prop, coord_levels=None):
         """
         Initialise Rail class. This class provides useful methods to compute azimuthal/radial contours and/or azimuthal averages from an input ``prop`` map projected on the sky.
         The methods in this class use the model disc vertical structure to convert sky to disc coordinates, and therefore all quantities returned are referred to the disc reference frame.
@@ -32,8 +33,11 @@ class Rail(object):
         prop : array_like, shape (nx, ny)
            Observable to be analysed, as projected on the sky.
         
-        coord_levels : array_like, shape (nlevels,)
-           Radial or azimuthal levels where *prop* will be mapped.           
+        coord_levels : array_like, shape (nlevels,), optional
+           Radial or azimuthal levels where *prop* will be mapped.
+
+              - If None, coord_levels are assumed to vary linearly and radially as np.arange(model.Rmin, model.Rmax, beam/4)
+              - Does not have any effect on the `Rail.make_filaments` method
         """
         
         _rail_coords = model.projected_coords
@@ -45,14 +49,63 @@ class Rail(object):
         self.phi = _rail_coords['phi']
         self.R_nonan = _rail_coords['R_nonan']                
         self.extent = model.skygrid['extent']
-        self.beam_size = model.beam_size.to('au').value
-        self.prop = prop
-        self.coord_levels = coord_levels
+        self.dpc = model.dpc
+        self.Rmin = model.Rmin
+        self.Rmax = model.Rmax        
+
+        self.beam_size = model.beam_size
+        self.header = model.header
+
+        self.prop = prop        
+        if coord_levels is None:
+            self.coord_levels = np.arange(
+                model.Rmin.to('au').value,
+                model.Rmax.to('au').value,
+                model.beam_size.to('au').value/4
+            )
+        else:
+            self.coord_levels = coord_levels
 
         self._lev_list = None
         self._coord_list = None
         self._resid_list = None
         self._color_list = None
+
+    def make_filaments(self, surface='upper', **kwargs):
+        #FIND FILAMENTS
+        #adapt_thresh is the width of the element used for the adaptive thresholding mask.
+        # This is primarily the step that picks out the filamentary structure. The element size should be similar to the width of the expected filamentary structure
+
+        from fil_finder import FilFinder2D
+
+        kw_fil_mask = dict(
+            verbose=False,
+            border_masking=False,
+            adapt_thresh=self.beam_size,
+            smooth_size=0.2*self.beam_size,
+            size_thresh=500*u.pix**2,
+            fill_hole_size=0.01*u.arcsec**2
+        )
+        kw_fil_mask.update(kwargs)
+        
+        Rgrid = self.R_nonan[surface]        
+        R_min_m=self.Rmin.to('m').value
+        ang_scale = np.abs(self.header['CDELT1'])*u.Unit(self.header['CUNIT1']) #pix size
+                       
+        Rind = (Rgrid>R_min_m) #& (Rgrid<R_max)
+        fil_pos = FilFinder2D(np.where(Rind & (self.prop>0), np.abs(self.prop), 0), ang_scale=ang_scale, distance=self.dpc)
+        fil_pos.preprocess_image(skip_flatten=True) 
+        fil_pos.create_mask(**kw_fil_mask)
+        fil_pos.medskel(verbose=False)
+        
+        fil_neg = FilFinder2D(np.where(Rind & (self.prop<0), np.abs(self.prop), 0), ang_scale=ang_scale, distance=self.dpc)
+        fil_neg.preprocess_image(skip_flatten=True) 
+        fil_neg.create_mask(**kw_fil_mask)
+        fil_neg.medskel(verbose=False)
+        
+        fil_pos.analyze_skeletons(prune_criteria='length')
+        fil_neg.analyze_skeletons(prune_criteria='length')
+        return fil_pos, fil_neg
         
     def prop_along_coords(self,
                           coord_ref=None,
@@ -67,56 +120,37 @@ class Rail(object):
                           fold=False,
                           fold_func=np.subtract):
         """
-        Compute radial/azimuthal contours according to the model disc geometry 
-        to get and plot information from the input 2D property ``prop``.    
+        Compute azimuthal contours according to the model disc geometry 
+        to retrieve and plot information from the input two-dimensional map ``prop``.    
 
         Parameters
         ----------
         coord_ref : scalar, optional
-           Reference coordinate (referred to ``coords[0]``). The contour at this coordinate will be highlighted in bold black.
+           The contour at this coordinate will be highlighted in bold black.
 
         ax : `matplotlib.axes` instance, optional
            ax instance where computed contours are to be shown
-
-        prop : array_like, shape (nx, ny)
-           Input 2D field to extract information along contours.
-        
-        coords : list, shape (2,)
-           coords[0] [array_like, shape (nx, ny)], is the coordinate 2D map onto which contours will be computed using the input ``coord_levels``;
-           coords[1] [array_like, shape (nx, ny)], is the coordinate 2D map against which the ``prop`` values are plotted. The output plot is prop vs coords[1]       
-
-        coord_levels : array_like, shape (nlevels,)
-           Contour levels to be extracted from ``coords[0]``.
-           
-        coord_ref : scalar
-           Reference coordinate (referred to ``coords[0]``) to highlight among the other contours.
                    
         ax2 : `matplotlib.axes` instance (or list of instances), optional
            Additional ax(s) instance(s) to plot the location of contours in the disc. 
-           If provided, ``X`` and ``Y`` must also be passed.
            
-        X : array_like, shape (nx, ny), optional
-           Meshgrid of the model x coordinate (see `numpy.meshgrid`). Required if ax2 instance(s) is provided.
-
-        Y : array_like, shape (nx, ny), optional
-           Meshgrid of the model y coordinate (see `numpy.meshgrid`). Required if ax2 instance(s) is provided.
-                   
         acc_threshold : float, optional 
-           Threshold to accept points on contours at a given coords[0] level. If coord level obtained for a pixel is such that np.abs(level_pixel-level_reference)<acc_threshold the pixel value is accepted
+           Threshold to accept points on contours at a given coord_level. If coord_level obtained for a pixel is such that np.abs(level_pixel-level_reference)<acc_threshold the pixel value is accepted
 
         max_prop_threshold : float, optional 
            Threshold to accept points of contours. Rejects residuals of the contour if they are < max_prop_threshold. Useful to reject hot pixels.
 
         color_bounds : array_like, shape (nbounds,), optional
-           Colour bounds with respect to the reference contour coord_ref.
+           Color bounds for contour colors.
            
-        colors : array_like, shape (nbounds+2,), optional
-           Contour colors. (i=0) is reserved for the reference contour coord_ref, 
-           (i>0) for contour colors according to the bounds in color_bounds. 
-           
-        lws : array_like, shape (nbounds+2), optional
-           Contour linewidths. Similarly, (i=0) is reserved for coord_ref and 
-           (i>0) for subsequent bounds.
+        colors : array_like, shape (nbounds+1,), optional
+           Contour colors within bounds. 
+
+        lws : array_like, shape (nbounds+1), optional
+           Contour linewidths within bounds.
+
+        lw_ax2_factor : float, optional
+           Fraction of lws for linewidth value of contours in ax2.
 
         fold : bool, optional
            If True, subtract residuals by folding along the projected minor axis of the disc. Currently working for azimuthal contours only.
@@ -296,7 +330,7 @@ class Rail(object):
         Rgrid = self.R_nonan[surface]/sfu.au
         X = self.X
         Y = self.Y
-        beam_size = self.beam_size
+        beam_size = self.beam_size.to('au').value
         
         frac_annulus = 1.0 #if halves, 0.5; if quadrants, 0.25
         nconts = len(lev_list)
@@ -423,7 +457,7 @@ class Contours(object):
 
     @staticmethod
     def make_substructures(*args, **kwargs): #Backcompat
-        '''Overlay ring-like (if twodim) or vertical lines (if not twodim) to illustrate the radial location of substructures in the disc'''
+        __doc__ = make_substruct.__doc__
         return make_substruct(*args, **kwargs)
         
     @staticmethod
