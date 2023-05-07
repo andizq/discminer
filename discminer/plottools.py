@@ -7,13 +7,15 @@ import copy
 import matplotlib
 import numpy as np
 from math import ceil
+import astropy.units as u
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from collections.abc import Iterable
-from .tools.utils import weighted_std
+
+from .tools.utils import weighted_std, InputError
 from .tools.fit_kernel import _gauss
 from .grid import GridTools
-        
+
 SMALL_SIZE = 10
 MEDIUM_SIZE = 15
 BIGGER_SIZE = 22
@@ -133,8 +135,8 @@ def get_continuous_cmap(hex_list, float_list=None):
     x, y = np.mgrid[-5:5:0.05, -5:5:0.05]                                
     z = (np.sqrt(x**2 + y**2) + np.sin(x**2 + y**2))
     im = ax.imshow(z, cmap=get_continuous_cmap(hex_list))                                                         
-    fig.colorbar(im)                                                                                                                                                                      
-    ax.yaxis.set_major_locator(plt.NullLocator()) # remove y axis ticks                                                                                                                               
+    fig.colorbar(im)  
+    ax.yaxis.set_major_locator(plt.NullLocator()) # remove y axis ticks 
     ax.xaxis.set_major_locator(plt.NullLocator()) # remove x axis ticks
     plt.show()
     """
@@ -368,16 +370,21 @@ def _make_nsky_2D(ax, Rout, xlim, z_func, z_pars, incl, PA, xc=0.0, yc=0.0):
     return xni, yni
 
 def make_substructures(ax, gaps=[], rings=[], kinks=[],
-                       twodim=False, polar=False, make_legend=False,
+                       twodim=False,
+                       coords='disc', polar=False,
+                       model=None, surface='upper', #relevant if coords='sky'
+                       make_legend=False,                       
                        label_gaps=False, label_rings=False, label_kinks=False,
                        kwargs_gaps={}, kwargs_rings={}, kwargs_kinks={}, func1d='axvline'):
+    
     '''Overlay ring-like (if twodim) or vertical lines (if not twodim) to illustrate the radial location of substructures in the disc'''
     kwargs_g = dict(color='0.2', ls='--', lw=1.7, dash_capstyle='round', dashes=(3.0, 2.5), alpha=1.0)
     kwargs_r = dict(color='0.2', ls='-', lw=1.7, dash_capstyle='round', alpha=1.0)
     kwargs_k = dict(color='purple', ls=':', lw=2.5, dash_capstyle='round', dashes=(0.5, 1.5), alpha=0.9)
     kwargs_g.update(kwargs_gaps)
     kwargs_r.update(kwargs_rings)
-    kwargs_k.update(kwargs_kinks)        
+    kwargs_k.update(kwargs_kinks)
+    
     if twodim:
         nphi = 100
         phi = np.linspace(0, 2*np.pi, nphi)
@@ -386,25 +393,72 @@ def make_substructures(ax, gaps=[], rings=[], kinks=[],
                         ['D%d', 'B%d', 'K%d'],
                         [label_gaps, label_rings, label_kinks],
                         [kwargs_g['color'], kwargs_r['color'], kwargs_k['color']])
-        if polar:
-            for R in gaps: ax.plot(phi_deg, [R]*nphi, **kwargs_g)
-            for R in rings: ax.plot(phi_deg, [R]*nphi, **kwargs_r)
-            for R in kinks: ax.plot(phi_deg, [R]*nphi, **kwargs_k)
 
-            for subst, fmt, label, color in subst_fmt:
-                if label:
-                    _make_text_2D(ax, subst, posx=-45, fmt=fmt, color=color)                
-        else:
-            cos_phi = np.cos(phi)
-            sin_phi = np.sin(phi)
-            for R in gaps: ax.plot(R*cos_phi, R*sin_phi, **kwargs_g)
-            for R in rings: ax.plot(R*cos_phi, R*sin_phi, **kwargs_r)
-            for R in kinks: ax.plot(R*cos_phi, R*sin_phi, **kwargs_k)
+        if coords in ['disc', 'disk']:
 
-            for subst, fmt, label, color in subst_fmt:
-                if label:
-                    _make_text_2D(ax, subst, sposy=-1, fmt=fmt, color=color)
+            if polar:
+                for R in gaps: ax.plot(phi_deg, [R]*nphi, **kwargs_g)
+                for R in rings: ax.plot(phi_deg, [R]*nphi, **kwargs_r)
+                for R in kinks: ax.plot(phi_deg, [R]*nphi, **kwargs_k)
+
+                for subst, fmt, label, color in subst_fmt:
+                    if label:
+                        _make_text_2D(ax, subst, posx=-45, fmt=fmt, color=color)                
+            else:
+                cos_phi = np.cos(phi)
+                sin_phi = np.sin(phi)
+                for R in gaps: ax.plot(R*cos_phi, R*sin_phi, **kwargs_g)
+                for R in rings: ax.plot(R*cos_phi, R*sin_phi, **kwargs_r)
+                for R in kinks: ax.plot(R*cos_phi, R*sin_phi, **kwargs_k)
+                
+                for subst, fmt, label, color in subst_fmt:
+                    if label:
+                        _make_text_2D(ax, subst, sposy=-1, fmt=fmt, color=color)
+                        
+        elif coords=='sky':
+            if model is None:
+                raise InputError(
+                    model, "model must be a discminer model instance"
+                )
+
+            au_m = u.au.to('m')
+            get_sky_from_disc_coords = GridTools.get_sky_from_disc_coords
+            cont_gaps, cont_rings, cont_kinks = [], [], []
+
+            incl = model.params['orientation']['incl']
+            PA = model.params['orientation']['PA']
+            xc = model.params['orientation']['xc']
+            yc = model.params['orientation']['yc']
+            orient = (incl, PA, xc, yc)
             
+            get_z = lambda r: model.z_upper_func({'R': r*au_m}, **model.params['height_%s'%surface])/au_m
+            get_0 = lambda r: 0
+
+            if surface=='midplane':
+                get_fz = get_0
+            else:
+                get_fz = get_z
+                
+            for gap in gaps:
+                z = get_fz(gap)
+                x_cont, y_cont,_ = get_sky_from_disc_coords(gap, phi, z, *orient)
+                ax.plot(x_cont, y_cont, **kwargs_g)
+                
+            for ring in rings:
+                z = get_fz(ring)
+                x_cont, y_cont,_ = get_sky_from_disc_coords(ring, phi, z, *orient)
+                ax.plot(x_cont, y_cont, **kwargs_r)
+                
+            for kink in kinks:
+                z = get_fz(kink)
+                x_cont, y_cont,_ = get_sky_from_disc_coords(kink, phi, z, *orient)
+                ax.plot(x_cont, y_cont, **kwargs_k)
+            
+        else:
+            raise InputError(
+                coords, "coords must be 'disc' [or 'disk'] or 'sky'"
+            )
+
     else:
         if func1d=='axvline': func1d=ax.axvline
         elif func1d=='axhline': func1d=ax.axhline            

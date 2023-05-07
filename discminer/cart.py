@@ -14,6 +14,14 @@ def z_lower_exp_tapered(coord, z0, p, Rb, q, R0=100):
     R = coord['R']/au_to_m
     return -au_to_m*(z0*(R/R0)**p*np.exp(-(R/Rb)**q))
 
+def z_upper_powerlaw(coord, z0, p, Rb, q, R0=100):
+    R = coord['R']/au_to_m
+    return au_to_m*(z0*(R/R0)**p - Rb*(R/R0)**q)
+
+def z_lower_powerlaw(coord, z0, p, Rb, q, R0=100):
+    R = coord['R']/au_to_m
+    return -au_to_m*(z0*(R/R0)**p - Rb*(R/R0)**q)
+
 #****************
 #CUSTOM INTENSITY
 #****************
