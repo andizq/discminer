@@ -7,9 +7,11 @@ import copy
 import matplotlib
 import numpy as np
 from math import ceil
+import scipy.stats as st
 import astropy.units as u
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from matplotlib.colors import ListedColormap
 from collections.abc import Iterable
 
 from .tools.utils import weighted_std, InputError
@@ -481,12 +483,15 @@ def make_substructures(ax, gaps=[], rings=[], kinks=[],
 def make_round_map(
         map2d, levels, X, Y, Rout,
         z_func=None, z_pars=None, incl=None, PA=None, xc=0, yc=0, #Optional, make N-sky axis
-        fig=None, ax=None,
+        fig=None, ax=None, make_cbar=True,
         rwidth=0.06, cmap=get_discminer_cmap('velocity'), clabel='km/s', fmt='%5.2f', quadrant=None, #cbar kwargs
         gaps=[], rings=[], kinks=[],
-        mask_wedge=None, mask_inner=None
+        mask_wedge=None, mask_inner=None, kwargs_mask={}
 ):
 
+    kw_mask = dict(facecolor='0.5', edgecolor='k', lw=1.0, alpha=0.6)
+    kw_mask.update(kwargs_mask)
+    
     #SOME DEFINITIONS
     if fig is None:
         fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(10, 10))
@@ -536,8 +541,9 @@ def make_round_map(
             quadrant = 3
         else:
             quadrant = 2
-            
-    make_round_cbar(ax, Rout, levels, cmap=cmap_c, clabel=clabel, fmt=fmt, quadrant=quadrant)
+
+    if make_cbar:
+        make_round_cbar(ax, Rout, levels, cmap=cmap_c, clabel=clabel, fmt=fmt, quadrant=quadrant)
 
     sq = {1: -1,
           2: 1,
@@ -548,7 +554,6 @@ def make_round_map(
     ax.plot([sq*Rout, sq*Rout], [0, -xlim_rec], color='0.0', lw=1.0, dash_capstyle='round', dashes=(1.5, 2.5)) #Rout projected onto Cartesian xaxis
 
     #MASK
-    kw_mask = dict(facecolor='0.5', edgecolor='k', lw=1.0, alpha=0.6)
     if mask_wedge is not None:
 
         for wedge in mask_wedge:
@@ -653,7 +658,7 @@ def make_polar_map(
     ax.axvline(0, ls=':', lw=2.5, color='0.3', dash_capstyle='round')
 
     make_up_ax(ax, labelbottom=True, labeltop=False, labelsize=SMALL_SIZE+1,
-               xlims=(-180.1, 180.1), ylims=(1.1*Rin, 0.95*Rout))
+               xlims=(-180.1, 180.1), ylims=(1.02*Rin, 0.98*Rout))
     ax.set_xticks(np.linspace(-180, 180, 13))
     ax.set_xlabel('Azimuth [deg]', fontsize=MEDIUM_SIZE)
     ax.set_ylabel('Radius [au]', fontsize=MEDIUM_SIZE)
@@ -821,3 +826,102 @@ def append_sigma_panel(fig, ax, values, ax_std=None, weights=None, hist=False, f
     for axi in ax:
         axi.set_ylim(*ax1_ylims)
 
+    return ax[-1]
+
+
+def make_clusters_1d(pick, which='phi', fig=None, ax=None, color='#FFB000', percentiles=[5, 67], var_scale=1e3):
+
+    if fig is None:
+        fig, ax = plt.subplots(ncols=2, nrows=1, figsize=(12,5))
+
+    kde_cmap = get_cmap_from_color(color, lev=len(percentiles))        
+    variance_x, variance_y = [], []
+
+    if which=='phi':
+        peak_both = np.array([pick.peak_angle, pick.peak_resid]).T        
+        klabels = pick.klabels_phi
+        xmax = 90*1.05
+        xmin = -xmax
+        kcent_x = pick.kcent_sort_phi
+        kcent_y = pick.kcent_sort_vel_phi
+        kcent_var = pick.var_y_sort_phi        
+        peak_variance = pick.peak_variance_phi
+        var_nopeaks = pick.var_nopeaks_phi        
+        color_var = pick.var_colors_phi
+        for axi in ax:
+            axi.set_xlim(-95,95)
+            axi.set_xticks(np.arange(-90,90+1,30))
+        ax[0].set_xlabel(r'Azimuth [deg]')    
+        ax[1].set_xlabel(r'Azimuth [deg]')
+            
+    elif which=='r':
+        peak_both = np.array([pick.lev_list, pick.peak_resid]).T                
+        klabels = pick.klabels_R
+        xmax = np.nanmax(pick.lev_list)
+        xmin = np.nanmin(pick.lev_list)        
+        kcent_x = pick.kcent_sort_R
+        kcent_y = pick.kcent_sort_vel_R
+        kcent_var = pick.var_y_sort_R
+        peak_variance = pick.peak_variance_R
+        var_nopeaks = pick.var_nopeaks_R
+        color_var = pick.var_colors_R
+        ax[0].set_xlabel(r'Radius [au]')    
+        ax[1].set_xlabel(r'Radius [au]')
+
+    n_clusters = len(kcent_x)
+
+    ymin, ymax = -0.1*pick.peak_global_val, 1.2*pick.peak_global_val 
+    xx, yy = np.mgrid[xmin:xmax:200j, ymin:ymax:200j]
+
+    #MAKE GAUSSIAN KDE per CLUSTER
+    for i in range(n_clusters):
+        x = peak_both[:,0][klabels == i]
+        y = peak_both[:,1][klabels == i]
+        positions = np.vstack([xx.ravel(), yy.ravel()])
+        values = np.vstack([x, y]) #shape (2, ndata)    
+        try: 
+            kernel = st.gaussian_kde(values)#, weights=pick.peak_weight[klabels==i])
+            perr = np.sqrt(np.diag(kernel.covariance))
+            variance_x.append((kernel.covariance[0,0]**0.5/kernel.factor)**2) #True variance: std**2
+            variance_y.append(kernel.covariance[1,1])
+        except ValueError: #when too few points in cluster
+            variance_x.append(0)
+            variance_y.append(0)
+            continue
+
+        f = np.reshape(kernel(positions).T, xx.shape)
+        levels = [st.scoreatpercentile(kernel(kernel.resample(1000)), per) for per in percentiles]
+        levels.append(np.amax(f))
+        try: 
+            ax[0].contourf(xx, yy, f, levels, cmap=kde_cmap)
+            ax[0].contour(xx, yy, f, levels, colors='k', linewidths=[0.5, 1.0, 1.5], alpha=0.6)
+        except ValueError:
+            continue 
+
+    #PLOT CLUSTER CENTRES
+    for j in range(n_clusters):   
+        ax[0].scatter(kcent_x[j], kcent_y[j], facecolors='1.0', edgecolors='k', linewidths=1.5, marker='X', s=200, zorder=10)
+        ax[1].scatter(kcent_x[j], kcent_var[j], facecolors=color_var[j], alpha=1,  
+                      edgecolors='k', linewidths=1.5, marker='X', s=200, zorder=10)
+
+    ax[1].plot(kcent_x, kcent_var, lw=2., ls='-', color='k', zorder=9)
+    ax_std = append_sigma_panel(fig, ax[1], var_nopeaks, hist=True)
+
+    #DECORATIONS
+    for axi in ax: 
+        axi.tick_params(labelbottom=True, top=True, right=True, which='both', direction='in')
+        mod_major_ticks(axi, nbins=8)
+        mod_minor_ticks(axi)
+
+    ax[0].set_ylim(ymin, 1.05*ymax)
+    ax[1].axvline(peak_variance, lw=3, c=color, label='variance peak')
+    ax[1].legend(frameon=False, fontsize=MEDIUM_SIZE-2, handlelength=1.0) #, loc='lower left', bbox_to_anchor=(-0.04, 0.98))    
+    ax[1].tick_params(labelleft=False, labelright=True)
+
+    ax[0].set_title('K-means clusters')
+    ax[0].set_ylabel('Peak residual [km/s]')
+    ax[1].set_title('Velocity variance from KDE cov.')
+    ax_std.set_ylabel(r'Variance [$\times 10^{-%d}$ km$^2$/s$^2$]'%int(np.log10(var_scale)))
+    
+    return fig, ax
+    

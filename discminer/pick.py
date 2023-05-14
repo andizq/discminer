@@ -217,14 +217,14 @@ class Pick(Rail):
         ind_variance_peak_phi = np.argmax(variance_phi_y)
         variance_nomax = np.sort(variance_phi_y)[:-len(acc_peaks_phi)]
         peak_variance_std_phi = var_std_phi #std of variances except those from accepted peaks np.std(variance_nomax)
-        peak_variance_angle = kcenters_phi[:,0][ind_variance_peak_phi]
+        self.peak_variance_phi = kcenters_phi[:,0][ind_variance_peak_phi]
 
         kc_indsort_phi = np.argsort(kcenters_phi[:,0])
         kcent_sort_phi = kcenters_phi[:,0][kc_indsort_phi]
         kcent_sort_vel_phi = kcenters_phi[:,1][kc_indsort_phi]
         var_y_sort_phi = variance_phi_y[kc_indsort_phi]*var_scale
-        var_nopeaks_phi = np.delete(var_y_sort_phi, acc_peaks_phi)
-        peak_variance_mean_phi = np.mean(var_nopeaks_phi)/var_scale #mean of variances excluding those from accepted peaks
+        self.var_nopeaks_phi = np.delete(var_y_sort_phi, acc_peaks_phi)
+        peak_variance_mean_phi = np.mean(self.var_nopeaks_phi)/var_scale #mean of variances excluding those from accepted peaks
 
         #peak_variance_sigmas = (self.variance_y[ind_variance_peak]-peak_variance_mean)/peak_variance_std #Considering only peak accepted variance
         self.peak_variance_sigmas_phi = (np.mean(var_y_sort_phi[acc_peaks_phi])/var_scale-peak_variance_mean_phi)/peak_variance_std_phi #Considering mean std of all accepted peaks
@@ -240,14 +240,14 @@ class Pick(Rail):
         ind_variance_peak_R = np.argmax(variance_R_y)
         variance_nomax = np.sort(variance_R_y)[:-len(acc_peaks_R)]
         peak_variance_std_R = var_std_R #std of variances except those from accepted peaks np.std(variance_nomax)
-        peak_variance_angle = kcenters_R[:,0][ind_variance_peak_R]
+        self.peak_variance_R = kcenters_R[:,0][ind_variance_peak_R]
 
         kc_indsort_R = np.argsort(kcenters_R[:,0])
         kcent_sort_R = kcenters_R[:,0][kc_indsort_R]
         kcent_sort_vel_R = kcenters_R[:,1][kc_indsort_R]
         var_y_sort_R = variance_R_y[kc_indsort_R]*var_scale
-        var_nopeaks_R = np.delete(var_y_sort_R, acc_peaks_R)
-        peak_variance_mean_R = np.mean(var_nopeaks_R)/var_scale #mean of variances excluding those from accepted peaks
+        self.var_nopeaks_R = np.delete(var_y_sort_R, acc_peaks_R)
+        peak_variance_mean_R = np.mean(self.var_nopeaks_R)/var_scale #mean of variances excluding those from accepted peaks
 
         #peak_variance_sigmas = (self.variance_y[ind_variance_peak]-peak_variance_mean)/peak_variance_std #Considering only peak accepted variance
         self.peak_variance_sigmas_R = (np.mean(var_y_sort_R[acc_peaks_R])/var_scale-peak_variance_mean_R)/peak_variance_std_R #Considering mean std of all accepted peaks
