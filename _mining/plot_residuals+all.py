@@ -26,7 +26,7 @@ use_discminer_style()
 
 parser = ArgumentParser(prog='plot moment maps', description='Plot moment map [velocity, linewidth, [peakintensity, peakint]?')
 parser.add_argument('-c', '--coords', default='sky', type=str, choices=['disc', 'sky'], help="reference frame")
-args = add_parser_args(parser, kind=True, surface=True)
+args = add_parser_args(parser, kind=True, surface=True, Rinner=True, Router=True)
      
 #**********************
 #JSON AND PARSER STUFF
@@ -91,20 +91,25 @@ mtags = {}
 mtypes = ['linewidth', 'velocity', 'peakintensity']
 
 for moment in mtypes:
-    md, mm, mt = load_moments(args, moment=moment)
-    md = np.where(mask, np.nan, md)
-    mm = np.where(mask, np.nan, mm)     
+    if args.coords=='sky':
+        md, mm, rr, mt = load_moments(args, moment=moment, mask=mask)
+    elif args.coords=='disc':
+        md, mm, rr, mt = load_moments(
+            args,
+            moment=moment,
+            mask=mask,
+            clip_Rmin=args.Rinner*datacube.beam_size,
+            clip_Rmax=args.Router*Rout*u.au,
+            clip_Rgrid=R[args.surface]*u.m
+        )        
     mtags[moment] = mt
     moments_data[moment] = md 
     moments_model[moment] = mm 
-    residuals[moment] = md - mm
+    residuals[moment] = rr
          
 #****************
 #USEFUL FUNCTIONS
 #****************
-def clip_prop_radially(prop2d, Rmin=datacube.beam_size.to('au').value, Rmax=np.inf, Rgrid=R_nonan_au):
-    return np.where((Rgrid<Rmin) | (Rgrid>Rmax), np.nan, prop2d)
-
 def decorate_ax_res_2D(ax, cbar, lim=xlim):
     ax.set_aspect(1)
     make_up_ax(ax, xlims=(-lim,lim), ylims=(-lim,lim), labelsize=13)
@@ -136,7 +141,6 @@ for i, (axi, moment) in enumerate(zip(ax, mtypes)):
     kwargs_cbar = dict(orientation='horizontal', format=cfmt, ticks=levels_cbar, pad=0.03, shrink=0.95, aspect=15)    
     
     if args.coords=='sky':
-        #clip_prop_radially(residuals[moment])
         im = axi.contourf(residuals[moment], extent=extent, **kwargs_im)
         Contours.emission_surface(axi, R, phi, extent=extent,
                                   R_lev=np.linspace(0.1, 1.0, 10)*Rout*au_to_m,
@@ -148,9 +152,11 @@ for i, (axi, moment) in enumerate(zip(ax, mtypes)):
                            incl, PA, xc=xc, yc=yc)
         
     elif args.coords=='disc':
-        im = axi.contourf(Xproj, Yproj, clip_prop_radially(residuals[moment], Rmax=Rout), **kwargs_im)                         
-        make_substructures(axi, gaps=gaps, rings=rings, twodim=True)
-        _make_radial_grid_2D(axi, Rout, gaps=gaps, rings=rings, make_labels=True, label_freq=2)
+        im = axi.contourf(Xproj, Yproj, residuals[moment], **kwargs_im)
+        #make_substructures(axi, gaps=gaps, rings=rings, twodim=True)
+        if Rout>700: lf = 4
+        else: lf = 2
+        _make_radial_grid_2D(axi, args.Router*Rout, gaps=gaps, make_labels=True, label_freq=lf)
         
     cbar = plt.colorbar(im, cax=cbar_axes[i], **kwargs_cbar)
     cbar.set_label(clabels[moment], fontsize=14)

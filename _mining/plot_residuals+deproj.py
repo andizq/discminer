@@ -1,5 +1,4 @@
 from discminer.core import Data
-from discminer.rail import Contours
 import discminer.cart as cart
 from discminer.plottools import (make_round_map,
                                  make_polar_map,
@@ -9,7 +8,9 @@ from discminer.plottools import (make_round_map,
                                  mod_nticks_cbars,
                                  use_discminer_style)
 
-from utils import (get_2d_plot_decorators,
+from utils import (make_and_save_filaments,
+                   init_data_and_model,
+                   get_2d_plot_decorators,
                    get_noise_mask,
                    load_moments,
                    load_disc_grid,
@@ -25,7 +26,8 @@ from argparse import ArgumentParser
 use_discminer_style()
 
 parser = ArgumentParser(prog='plot residual maps', description='Plot residual maps')
-args = add_parser_args(parser, moment=True, kind=True, surface=True, projection=True)
+parser.add_argument('-f', '--filaments', default=0, type=int, choices=[0, 1], help="Make filaments")
+args = add_parser_args(parser, moment=True, kind=True, surface=True, projection=True, Rinner=True, Router=True)
 
 #**********************
 #JSON AND PARSER STUFF
@@ -81,27 +83,19 @@ Xproj = R[args.surface]*np.cos(phi[args.surface])
 Yproj = R[args.surface]*np.sin(phi[args.surface])
 
 #*************************
-#LOAD MOMENT MAPS    
-moment_data, moment_model, mtags = load_moments(args)
+#LOAD AND CLIP MOMENT MAPS    
+moment_data, moment_model, residuals, mtags = load_moments(
+    args,
+    mask=mask,
+    clip_Rmin=0.0*u.au,
+    clip_Rmax=args.Router*Rout*u.au,
+    clip_Rgrid=R[args.surface]*u.m
+)
+#residuals = moment_data
+#cmap_res = cmap_mom
 
-#****************
-#USEFUL FUNCTIONS
-#****************
-def clip_prop_radially(prop2d, Rmin=datacube.beam_size, Rmax=np.inf, Rgrid=R[args.surface]*u.m):
-    Rmin = Rmin.to('au').value
-    Rgrid = np.nan_to_num(Rgrid).to('au').value
-    try:
-        Rmax = Rmax.to('au').value
-    except AttributeError:
-        Rmax = Rmax
-    return np.where((Rgrid<Rmin) | (Rgrid>Rmax), np.nan, prop2d)
-
-#**************************
-#MASK AND COMPUTE RESIDUALS
-moment_data = np.where(mask, np.nan, moment_data)
-moment_model = np.where(mask, np.nan, moment_model)
-residuals = clip_prop_radially(moment_data - moment_model, Rmax=Rout)
-
+#***********
+#MAKE PLOTS
 clabels = {
     'linewidth': r'$\Delta$ Line width [km s$^{-1}$]',
     'lineslope': r'$\Delta$ Line slope',
@@ -109,6 +103,7 @@ clabels = {
     'peakintensity': r'$\Delta$ Peak Int. [K]'
 }
 
+   
 if args.projection=='cartesian':
     levels_resid = np.linspace(-clim, clim, 32)
     
@@ -120,24 +115,33 @@ if args.projection=='cartesian':
         z_func = cart.z_lower_exp_tapered
         z_pars = best['height_lower']
     
-    fig, ax = make_round_map(residuals, levels_resid, Xproj*u.m, Yproj*u.m, Rout*u.au,
+    fig, ax = make_round_map(residuals, levels_resid, Xproj*u.m, Yproj*u.m, args.Router*Rout*u.au,
                              z_func=z_func, z_pars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc,
                              cmap=cmap_res, clabel=unit, fmt=cfmt, 
-                             gaps=gaps, rings=rings)
+                             gaps=gaps, rings=rings,
+                             mask_inner=args.Rinner*datacube.beam_size)
     
     make_substructures(ax, gaps=gaps, rings=rings, twodim=True, label_rings=True)
 
+    if args.filaments:
+        _, model = init_data_and_model()
+        model.make_model()
+        fil_pos, fil_neg = make_and_save_filaments(model, residuals, tag=mtags['base']+'_'+args.projection, return_all=False)        
+
+        ax.contour(Xproj/au_to_m, Yproj/au_to_m, fil_pos.skeleton, linewidths=0.2, colors='darkred', alpha=1, zorder=11)
+        ax.contour(Xproj/au_to_m, Yproj/au_to_m, fil_neg.skeleton, linewidths=0.2, colors='navy', alpha=1, zorder=11)
+    
 elif args.projection=='polar':
-    levels_resid = np.linspace(-clim, clim, 48)    
+    levels_resid = np.linspace(-clim, clim, 48)    #levels_im #
     fig, ax, cbar = make_polar_map(residuals, levels_resid,
-                                   R[args.surface]*u.m, phi[args.surface]*u.rad, Rout*u.au,
-                                   Rin = datacube.beam_size,
+                                   R[args.surface]*u.m, phi[args.surface]*u.rad, args.Router*Rout*u.au,
+                                   Rin=args.Rinner*datacube.beam_size,
                                    cmap=cmap_res, fmt=cfmt, clabel=clabels[args.moment])
                                    
     make_substructures(ax, gaps=gaps, rings=rings, twodim=True, polar=True, label_rings=True)
     
 ax.set_title(ctitle, fontsize=16, color='k')
 
-plt.savefig('residuals_deproj_%s_%s.png'%(mtags['base'], args.projection), bbox_inches='tight', dpi=200)
+plt.savefig('residuals_deproj_%s_%s_.png'%(mtags['base'], args.projection), bbox_inches='tight', dpi=200)
 plt.show()
 plt.close()

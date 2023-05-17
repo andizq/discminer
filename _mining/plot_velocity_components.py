@@ -53,7 +53,7 @@ model.make_model()
 
 #****************
 #LOAD MOMENT MAPS
-moment_data, moment_model, mtags = load_moments(args)
+moment_data, moment_model, residuals, mtags = load_moments(args, mask=mask)
 
 #******************
 #LOAD DISC GEOMETRY

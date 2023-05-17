@@ -1,29 +1,28 @@
 from discminer.plottools import (get_discminer_cmap, append_sigma_panel,
                                  make_up_ax, mod_minor_ticks, mod_major_ticks,
                                  use_discminer_style, mod_nticks_cbars,
-                                 make_substructures, make_round_map)
+                                 make_substructures, make_round_map,
+                                 get_cmap_from_color, make_clusters_1d)
 from discminer.pick import Pick
-from discminer.rail import Contours
-
-import numpy as np
-import matplotlib.pyplot as plt
-
-from astropy import units as u
-import json
-import copy
-
 from utils import (init_data_and_model,
                    get_noise_mask,
                    add_parser_args,
                    get_2d_plot_decorators,
                    load_moments)
 
+import numpy as np
+import matplotlib.pyplot as plt
+from astropy import units as u
+
+import json
 from argparse import ArgumentParser
 
 use_discminer_style()
 
 parser = ArgumentParser(prog='Identify and show peak residuals', description='Identify peak residuals in folded maps.')
 parser.add_argument('-c', '--clean_thres', default=np.inf, type=float, help="Threshold above which peak residuals will be rejected.")
+parser.add_argument('-a', '--nphi', default=8, type=int, help="Number of azimuthal clusters.")
+parser.add_argument('-r', '--nr', default=8, type=int, help="Number of radial clusters.")
 args = add_parser_args(parser, moment=True, kind=True, surface=True, fold=True, projection=True, Rinner=True, Router=True)
 
 #**********************
@@ -69,16 +68,10 @@ model.make_model()
 
 #*************************
 #LOAD MOMENT MAPS
-moment_data, moment_model, mtags = load_moments(args)
-
-#**************************
-#MASK AND COMPUTE RESIDUALS
-moment_data = np.where(mask, np.nan, moment_data)
-moment_model = np.where(mask, np.nan, moment_model)
-moment_residuals = moment_data - moment_model
+moment_data, moment_model, residuals, mtags = load_moments(args, mask=mask)
     
 if args.moment=='velocity' and args.fold=='absolute':
-    moment_residuals = np.abs(moment_data-vsys) - np.abs(moment_model-vsys)
+    residuals = np.abs(moment_data-vsys) - np.abs(moment_model-vsys)
 
 #*******************
 #FIND PEAK RESIDUALS
@@ -90,7 +83,7 @@ xlim0, xlim1 = 0.5*R_prof[0], 1.05*R_prof[-1]
 fig, ax = plt.subplots(ncols=2, nrows=1, figsize=(11,5))    
 ax_c = fig.add_axes([0.8,0.65,0.23*5/11,0.23]) #AxesSubplot for showing contour colours 
 
-pick = Pick(model, moment_residuals, R_prof, fold=True, color_bounds = np.array([0.33, 0.66, 1.0])*Rout, ax2=ax_c)
+pick = Pick(model, residuals, R_prof, fold=True, color_bounds = np.array([0.33, 0.66, 1.0])*Rout, ax2=ax_c)
 folded_map = pick.make_2d_map() #Map where peaks will be picked from
 pick.find_peaks(clean_thres=args.clean_thres)
 
@@ -98,7 +91,6 @@ lev = pick.lev_list
 color = pick.color_list
 peak_resid = pick.peak_resid
 peak_angle = pick.peak_angle
-peak_resid = pick.peak_resid
 
 model.make_emission_surface(ax_c)
 model.make_disc_axes(ax_c)
@@ -169,13 +161,24 @@ if args.projection=='cartesian':
     
 
 plt.savefig('folded_residuals_deproj_%s_%s.png'%(mtags['base'], args.projection), bbox_inches='tight', dpi=200)
+plt.show()
 plt.close()
 
 #*************
 #FIND CLUSTERS
 #*************
-pick.find_clusters(n_phi=8, n_R=8)
+try:
+    pick.find_clusters(n_phi=args.nphi, n_R=args.nr)
+except np.linalg.LinAlgError:
+    print ('Cluster finder algorithm failed due to low amount of points')
 
 #*************
 #PLOT CLUSTERS
 #*************
+fig, ax = make_clusters_1d(pick, which='phi')
+plt.savefig('clusters_phi_peak_residuals_%s_%dclust.png'%(mtags['base'], args.nphi), bbox_inches='tight', dpi=200)
+plt.show()
+
+fig, ax = make_clusters_1d(pick, which='r')
+plt.savefig('clusters_r_peak_residuals_%s_%dclust.png'%(mtags['base'], args.nr), bbox_inches='tight', dpi=200)
+plt.show()

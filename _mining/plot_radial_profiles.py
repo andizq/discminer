@@ -5,6 +5,7 @@ from discminer.rail import Rail, Contours
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FormatStrFormatter
 from scipy.signal import savgol_filter
 from scipy.interpolate import interp1d
 
@@ -69,21 +70,14 @@ phi_s = phi[args.surface]
 
 #*************************
 #LOAD MOMENT MAPS
-moment_data, moment_model, mtags = load_moments(args)
-if mtags['surf']=='both':
-    surf_ref = 'upper'
-else:
-    surf_ref = args.surface
+moment_data, moment_model, residuals, mtags = load_moments(args, mask=mask)
+ref_surf = mtags['ref_surf']
 tag_base = mtags['base']
 
 #**************************
-#MASK AND COMPUTE RESIDUALS
-moment_data = np.where(mask, np.nan, moment_data)
-moment_model = np.where(mask, np.nan, moment_model)
-moment_residuals = moment_data - moment_model
-    
+#ABSOLUTE RESIDUALS    
 if args.moment=='velocity':
-    moment_residuals_abs = np.abs(moment_data-vsys) - np.abs(moment_model-vsys)
+    residuals_abs = np.abs(moment_data-vsys) - np.abs(moment_model-vsys)
 
 #**************************
 #MAKE PLOTS
@@ -111,31 +105,94 @@ def get_normalisation(mask_ang, component='z'):
 
 def make_savgol(prof):
     try:
-        ysav = savgol_filter(prof, 5, 3)
-        ysav_deriv = savgol_filter(prof, 5, 3, deriv=1)
+        ysav = savgol_filter(prof, 9, 3)
+        ysav_deriv = savgol_filter(prof, 9, 3, deriv=1)
     except np.linalg.LinAlgError:
         ysav = prof
         ysav_deriv = None
     return ysav, ysav_deriv 
 
+def make_basic_layout(ax):
+    ax.set_xlim(xlim0, xlim1)
+    ax.set_xlabel('Radius [au]', fontsize=MEDIUM_SIZE)
+    mod_major_ticks(ax, axis='x', nbins=10)
+    mod_minor_ticks(ax)
+    ax.axhline(0, lw=2, ls='--', color='0.7')
+
+def make_profile(ax, R_prof, ysav, y, yerr, kind='data', perr='bar', **kwargs):
+    if kind=='data':
+        label = 'Data'
+        color = 'tomato'
+        zorder = 9
+        lw = 3.5        
+    elif kind=='residuals':
+        label = 'Residuals'
+        color = '0.1'
+        zorder = 9
+        lw = 3.5
+    elif kind=='model':
+        label = 'Model'
+        color = 'dodgerblue'
+        zorder = 8
+        lw = 3.5
+    elif kind=='vphi':
+        label = r'$\Delta\upsilon_\phi$'
+        color = 'dodgerblue'
+        zorder = 9
+        lw = 3.0
+    elif kind=='vz':
+        label = r'$\upsilon_{\rm z}$'
+        color = 'k'
+        zorder = 8
+        lw = 3.0
+    elif kind=='vr':
+        label = r'$\upsilon_{\rm R}$'
+        color = '#FFB000'
+        zorder = 7
+        lw = 3.0
+    else:
+        raise ValueError(kind)
+
+    ax.plot(R_prof, ysav, c=color, lw=lw, label=label, zorder=zorder)
+
+    if kind!='model':
+        if perr=='bar':
+            ax.errorbar(R_prof, y, yerr=yerr, c=color,
+                        elinewidth=1.2, capsize=1.8, linestyle='none',
+                        marker='o', ms=6.5, markeredgewidth=1.7, markerfacecolor='0.8',
+                        alpha=0.7, zorder=zorder)
+        elif perr=='fill':
+            ax.fill_between(R_prof, y+yerr, y-yerr, color=color, alpha=0.15, zorder=zorder)
+        else:
+            raise ValueError(perr)
+        
+    if args.writetxt: writetxt([R_prof, y, yerr], tag=kind)
+
+
+    
+#*************
+#MAIN BODY
+#*************
 
 if args.moment=='velocity':
+
     mask_ang = args.mask_minor #+-mask around disc minor axis
+
     #*******************
     #VELOCITY COMPONENTS
     #*******************    
 
     #VZ
-    rail_vz = Rail(model, moment_residuals, R_prof)
-    vel_z, vel_z_error = rail_vz.get_average(mask_ang=mask_ang, surface=surf_ref)
+    rail_vz = Rail(model, residuals, R_prof)
+    vel_z, vel_z_error = rail_vz.get_average(mask_ang=mask_ang, surface=ref_surf)
     div_factor_z = get_normalisation(mask_ang, component='z')
 
     vel_z /= div_factor_z
     vel_z_error /= div_factor_z 
 
     #DVPHI
-    rail_phi = Rail(model, moment_residuals_abs, R_prof)
-    vel_phi, vel_phi_error = rail_phi.get_average(mask_ang=mask_ang, surface=surf_ref)
+    rail_phi = Rail(model, residuals_abs, R_prof)
+    vel_phi, vel_phi_error = rail_phi.get_average(mask_ang=mask_ang, surface=ref_surf)
     div_factor_phi = get_normalisation(mask_ang, component='phi')
 
     vel_phi /= div_factor_phi
@@ -143,7 +200,7 @@ if args.moment=='velocity':
 
     #VPHI
     rail_phi = Rail(model, np.abs(moment_data-vsys), R_prof)
-    vel_rot, _ = rail_phi.get_average(mask_ang=mask_ang, surface=surf_ref)
+    vel_rot, _ = rail_phi.get_average(mask_ang=mask_ang, surface=ref_surf)
     vel_rot /= div_factor_phi
     vel_rot_error = vel_phi_error
 
@@ -158,39 +215,25 @@ if args.moment=='velocity':
     vr = -1/(np.sin(phi_s)*np.sin(incl)) * (moment_data_r - vsys - vel_sign*f_vp(R_interp)*np.cos(phi_s)*np.sin(incl) + f_vz(R_interp)*np.cos(incl))
 
     rail_vr = Rail(model, vr, R_prof)
-    vel_r, vel_r_error = rail_vr.get_average(mask_ang=0.0, surface=surf_ref, av_func=np.nanmedian)
-
-    #WRITE?
-    if args.writetxt: writetxt([R_prof, vel_z, vel_z_error], tag='vz')
-    if args.writetxt: writetxt([R_prof, vel_r, vel_r_error], tag='vr')
-    if args.writetxt: writetxt([R_prof, vel_phi, vel_phi_error], tag='vphi')
-    if args.writetxt: writetxt([R_prof, vel_rot, vel_phi_error], tag='rotationcurve')
+    vel_r, vel_r_error = rail_vr.get_average(mask_ang=0.0, surface=ref_surf, av_func=np.nanmedian)
     
     #PLOT 3D VELOCITIES
-    fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(14,4))
+    fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(11,4))
         
     ysav_phi, ysav_phi_deriv = make_savgol(vel_phi)
-    ax.plot(R_prof, ysav_phi, c='dodgerblue', lw=3, label=r'$\Delta\upsilon_\phi$', zorder=12)
-    ax.fill_between(R_prof, vel_phi+vel_phi_error, vel_phi-vel_phi_error, color='dodgerblue', alpha=0.15, zorder=9)
+    make_profile(ax, R_prof, ysav_phi, vel_phi, vel_phi_error, kind='vphi', perr='fill')
 
     ysav_z, ysav_z_deriv = make_savgol(vel_z)    
-    ax.plot(R_prof, ysav_z, c='k', lw=3, label=r'$\upsilon_{\rm z}$', zorder=8)
-    ax.fill_between(R_prof, vel_z+vel_z_error, vel_z-vel_z_error, color='k', alpha=0.15, zorder=8)
-        
+    make_profile(ax, R_prof, ysav_z, vel_z, vel_z_error, kind='vz', perr='fill')
+    
     ysav_r, ysav_r_deriv = make_savgol(vel_r)
-    ax.plot(R_prof, ysav_r, c='#FFB000', lw=3, label=r'$\upsilon_{\rm R}$', zorder=7)
-    ax.fill_between(R_prof, vel_r+vel_r_error, vel_r-vel_r_error, color='#FFB000', alpha=0.15, zorder=7)
+    make_profile(ax, R_prof, ysav_r, vel_r, vel_r_error, kind='vr', perr='fill')    
 
-    ax.axhline(0, lw=2, ls='--', color='0.7')
-    
-    ax.set_xlabel('Radius [au]')
-    ax.set_xlim(xlim0, xlim1)
-    ax.set_ylabel(r'$\delta\upsilon$ [km/s]')
+    #DECORATIONS
+    make_basic_layout(ax)
+    ax.set_ylabel(r'$\delta\upsilon$ [km/s]', fontsize=MEDIUM_SIZE)
     ax.set_ylim(clim0_res, clim1_res)
-    mod_major_ticks(ax, axis='x', nbins=10)
-    mod_minor_ticks(ax)
-    make_1d_legend(ax, fontsize=MEDIUM_SIZE+1)
-    
+    make_1d_legend(ax, fontsize=MEDIUM_SIZE+1)    
     make_substructures(ax, gaps=gaps, rings=rings, label_gaps=True, label_rings=True)
     
     plt.savefig('velocity_components_%s.png'%tag_base, bbox_inches='tight', dpi=200)
@@ -199,38 +242,29 @@ if args.moment=='velocity':
     #*******************
     #ROTATION CURVE
     #*******************
-    fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(14,4))        
+    fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(11,4))        
 
     #DATA CURVE
     ysav_rot, ysav_rot_deriv = make_savgol(vel_rot)
-    ax.plot(R_prof, ysav_rot, c='tomato', lw=3.5, label=r'Data', zorder=12)
-    ax.fill_between(R_prof, vel_rot+vel_rot_error, vel_rot-vel_rot_error, color='tomato', alpha=0.15, zorder=9)
-    
-    #r"""
+    make_profile(ax, R_prof, ysav_rot, vel_rot, vel_rot_error, kind='data')
+
     #MODEL CURVE
     rail_phi = Rail(model, np.abs(moment_model-vsys), R_prof)
-    vel_phi, _ = rail_phi.get_average(mask_ang=mask_ang, surface=surf_ref)
+    vel_phi, _ = rail_phi.get_average(mask_ang=mask_ang, surface=ref_surf)
     vel_phi /= div_factor_phi
-    ysav_phi, ysav_phi_deriv = make_savgol(vel_phi)
-    ax.plot(R_prof, ysav_phi, c='0.7', lw=4.0, label=r'Model', zorder=11)
-    #"""
+    ysav_phi, ysav_phi_deriv_mod = make_savgol(vel_phi)
+    make_profile(ax, R_prof, ysav_phi, vel_phi, _, kind='model')
     
     #PERFECT KEPLERIAN
     coords = {'R': R_prof*u.au.to('m')}
-    velocity_upper = model.get_attribute_map(coords, 'velocity', surface=surf_ref) * vel_sign
+    velocity_upper = model.get_attribute_map(coords, 'velocity', surface=ref_surf) * vel_sign
     ax.plot(R_prof, velocity_upper, c='k', lw=2.5, ls='--', label=r'Keplerian (%.2f Msun)'%Mstar, zorder=13)
 
     #DECORATIONS
-    ax.axhline(0, lw=2, ls='--', color='0.7')
-
-    ax.set_xlabel('Radius [au]')
-    ax.set_xlim(xlim0, xlim1)    
-    ax.set_ylabel(r'Rotation velocity [km/s]')
+    make_basic_layout(ax)
+    ax.set_ylabel(r'Rotation velocity [km/s]', fontsize=MEDIUM_SIZE)
     ax.set_ylim(clim0, 1.2*np.nanmax(vel_phi))
-    mod_major_ticks(ax, axis='x', nbins=10)
-    mod_minor_ticks(ax)    
-    make_1d_legend(ax)
-
+    make_1d_legend(ax, fontsize=MEDIUM_SIZE-3)
     make_substructures(ax, gaps=gaps, rings=rings, label_gaps=True, label_rings=True)  
     
     plt.savefig('rotation_curve_%s.png'%tag_base, bbox_inches='tight', dpi=200)
@@ -244,76 +278,96 @@ if args.moment=='velocity':
     """
     
 else:
-    mask_ang = 0.0
+
+    mask_ang = args.mask_minor
+
+    if args.surface in ['low', 'lower']:
+        mask_r = mask | (np.abs(phi_s) < np.radians(args.mask_major)) | (np.abs(phi_s) > np.radians(180-args.mask_major))
+        moment_data = np.where(mask_r, np.nan, moment_data) 
+    
     #*****************
     #ABSOLUTE PROFILES
     #*****************
-    kw_avg = dict(surface=surf_ref, av_func=np.nanmedian, mask_ang=mask_ang)
+    kw_avg = dict(surface=ref_surf, av_func=np.nanmedian, mask_ang=mask_ang)
     
-    fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(14,4))
+    fig, ax = plt.subplots(ncols=1, nrows=2, figsize=(11,7))
 
     #DATA CURVE
     rail_phi = Rail(model, moment_data, R_prof)
     vel_phi, vel_phi_error = rail_phi.get_average(**kw_avg)
 
     ysav_phi, ysav_phi_deriv = make_savgol(vel_phi)    
-    ax.plot(R_prof, ysav_phi, c='tomato', lw=4.0, label=r'Data', zorder=12)
-    ax.fill_between(R_prof, vel_phi+vel_phi_error, vel_phi-vel_phi_error, color='tomato', alpha=0.15, zorder=9)
-
-    if args.writetxt: writetxt([R_prof, vel_phi, vel_phi_error], tag='data')
+    make_profile(ax[0], R_prof, ysav_phi, vel_phi, vel_phi_error, kind='data')    
 
     #MODEL CURVE
     rail_phi = Rail(model, moment_model, R_prof)
     vel_phi, vel_phi_error = rail_phi.get_average(**kw_avg)
 
-    ysav_phi, ysav_phi_deriv = make_savgol(vel_phi)    
-    ax.plot(R_prof, ysav_phi, c='dodgerblue', lw=3.5, label=r'Model', zorder=11)
+    ysav_phi, ysav_phi_deriv = make_savgol(vel_phi)
+    make_profile(ax[0], R_prof, ysav_phi, vel_phi, vel_phi_error, kind='model')        
 
-    if args.writetxt: writetxt([R_prof, vel_phi, vel_phi_error], tag='model')
-    
+    #RESIDUALS
+    rail_phi = Rail(model, residuals, R_prof)
+    vel_phi, vel_phi_error = rail_phi.get_average(**kw_avg)
+
+    ysav_phi, ysav_phi_deriv = make_savgol(vel_phi)
+    make_profile(ax[1], R_prof, ysav_phi, vel_phi, vel_phi_error, kind='residuals')
+
+    #***********
     #DECORATIONS
-    ax.axhline(0, lw=2, ls='--', color='0.7')
+    #***********
+    ax[0].set_ylim(clim0, clim1)
+    ax[1].set_ylim(clim0_res, clim1_res)
 
-    ax.set_xlabel('Radius [au]')
-    ax.set_xlim(xlim0, xlim1)    
-    ax.set_ylabel(clabel)
-    ax.set_ylim(clim0, clim1)
-    mod_major_ticks(ax, axis='x', nbins=10)
-    mod_minor_ticks(ax)
-    make_1d_legend(ax)
+    #fmt
+    #******    
+    ticks = ax[1].get_yticks()
 
-    make_substructures(ax, gaps=gaps, rings=rings, label_gaps=True, label_rings=True)  
+    makeint = False
+    for tick in ticks:
+        if str(tick)[-2:] != '.0':
+            break
+        else:
+            makeint = True
+
+    ftick = round(ticks[0], 2)
+    ftick = int(ftick) if makeint else ftick
+    
+    isfloat = isinstance(ftick, float)
+    lfmt = len(str(ftick))
+    
+    if isfloat:
+        if ftick<0.2:
+            ftick_res = str(ftick)+'0'
+            lfmt+=1
+
+        ndec = len(str(ftick).split('.')[-1])
+        ndec_res = len(str(ftick_res).split('.')[-1])
+        
+        cfmt = '%'+'%d.%df'%(lfmt, ndec)
+        cfmt_res = '%'+'%d.%df'%(lfmt, ndec_res)
+        
+    else:
+        cfmt = cfmt_res = '%'+'%dd'%lfmt
+    
+    #******
+    #Axes
+    #****
+    for axi in ax:
+        make_basic_layout(axi)
+        axi.tick_params(which='both', labelsize=MEDIUM_SIZE-2)
+
+    ax[0].yaxis.set_major_formatter(FormatStrFormatter(cfmt))
+    ax[1].yaxis.set_major_formatter(FormatStrFormatter(cfmt_res))            
+    ax[0].set_xlabel(None)
+    ax[1].set_xlabel('Radius [au]', fontsize=MEDIUM_SIZE)
+    ax[0].set_ylabel(clabel, fontsize=MEDIUM_SIZE)
+    ax[1].set_ylabel('Residuals'+clabel_res.split('residuals')[-1], fontsize=MEDIUM_SIZE)
+
+    make_1d_legend(ax[0], ncol=2)
+
+    make_substructures(ax[0], gaps=gaps, rings=rings, label_gaps=True, label_rings=True)  
+    make_substructures(ax[1], gaps=gaps, rings=rings)
     
     plt.savefig('radial_profile_%s.png'%tag_base, bbox_inches='tight', dpi=200)
     plt.show()
-
-    #****************
-    #RESIDUALS
-    #****************    
-    fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(14,4))
-
-    rail_phi = Rail(model, moment_residuals, R_prof)
-    vel_phi, vel_phi_error = rail_phi.get_average(**kw_avg)
-
-    ysav_phi, ysav_phi_deriv = make_savgol(vel_phi)    
-    ax.plot(R_prof, ysav_phi, c='tomato', lw=4.0, label=r'Residuals', zorder=12)
-    ax.fill_between(R_prof, vel_phi+vel_phi_error, vel_phi-vel_phi_error, color='tomato', alpha=0.15, zorder=9)
-
-    if args.writetxt: writetxt([R_prof, vel_phi, vel_phi_error], tag='residuals')    
-
-    #DECORATIONS
-    ax.axhline(0, lw=2, ls='--', color='0.7')
-
-    ax.set_xlabel('Radius [au]')
-    ax.set_xlim(xlim0, xlim1)    
-    ax.set_ylabel(clabel_res)
-    ax.set_ylim(clim0_res, clim1_res)
-    mod_major_ticks(ax, axis='x', nbins=10)
-    mod_minor_ticks(ax)
-
-    make_substructures(ax, gaps=gaps, rings=rings, label_gaps=True, label_rings=True)
-        
-    plt.savefig('radial_profile_residuals_%s.png'%tag_base, bbox_inches='tight', dpi=200)
-    plt.show()
-    
-

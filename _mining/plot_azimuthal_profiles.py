@@ -13,17 +13,18 @@ import copy
 import sys
 
 from argparse import ArgumentParser
-from utils import init_data_and_model, get_noise_mask, get_1d_plot_decorators
+from utils import (add_parser_args,
+                   load_moments,
+                   init_data_and_model,
+                   get_noise_mask,
+                   get_1d_plot_decorators)
 
 use_discminer_style()
 
 parser = ArgumentParser(prog='plot azimuthal contours', description='Plot azimuthal contours from a given moment map [velocity, linewidth, [peakintensity, peakint]?')
-parser.add_argument('-m', '--moment', default='velocity', type=str, choices=['velocity', 'linewidth', 'lineslope', 'peakint', 'peakintensity'], help="velocity, linewidth or peakintensity")
-parser.add_argument('-k', '--kind', default='residuals', type=str, choices=['data', 'model', 'residuals'], help="data, model or residuals")
+args = add_parser_args(parser, moment=True, kind=True, surface=True, Rinner=True, Router=True)
+parser.add_argument('-t', '--type', default='residuals', type=str, choices=['data', 'model', 'residuals'], help="data, model or residuals")
 args = parser.parse_args()
-
-if args.moment=='peakint':
-     args.moment = 'peakintensity'
 
 #**********************
 #JSON AND PARSER STUFF
@@ -39,18 +40,18 @@ vsys = best['velocity']['vsys']
 incl = best['orientation']['incl']
 Rout = best['intensity']['Rout']
 
-clabel, clabel_res, clim0, clim0_res, clim1, clim1_res, unit = get_1d_plot_decorators(args.moment, tag=args.kind)
+clabel, clabel_res, clim0, clim0_res, clim1, clim1_res, unit = get_1d_plot_decorators(args.moment, tag=args.type)
 
-if args.kind=='residuals':
+if args.type=='residuals':
     clim0 = clim0_res
     clim1 = clim1_res
     clabel = clabel_res
 
 if args.moment=='velocity':
-    if args.kind=='residuals':
-        clabel = r'Velocity %s %s'%(args.kind, unit)
+    if args.type=='residuals':
+        clabel = r'Velocity %s %s'%(args.type, unit)
     else:
-        clabel = r'Deprojected Velocity %s %s'%(args.kind, unit)        
+        clabel = r'Deprojected Velocity %s %s'%(args.type, unit)        
 
 #*******************
 #LOAD DATA AND MODEL
@@ -63,29 +64,20 @@ model.make_model()
 
 #*************************
 #LOAD MOMENT MAPS
-moment_data = fits.getdata('%s_gaussian_data.fits'%args.moment)
-moment_model = fits.getdata('%s_gaussian_model.fits'%args.moment) 
-#moment_data = fits.getdata('%s_up_doublebell_mask_data.fits'%args.moment)
-#moment_model = fits.getdata('%s_up_doublebell_mask_model.fits'%args.moment) 
+moment_data, moment_model, residuals, mtags = load_moments(args, mask=mask)
 
-#**************************
-#MASK AND COMPUTE RESIDUALS
-moment_data = np.where(mask, np.nan, moment_data)
-moment_model = np.where(mask, np.nan, moment_model)
-moment_residuals = moment_data - moment_model
+if args.type=='residuals': map2d = residuals
+elif args.type=='data': map2d = moment_data
+elif args.type=='model': map2d = moment_model
 
-if args.kind=='residuals': map2d = moment_residuals
-elif args.kind=='data': map2d = moment_data
-elif args.kind=='model': map2d = moment_model
-
-if args.kind!='residuals' and args.moment=='velocity': #deproject velocity field
+if args.type!='residuals' and args.moment=='velocity': #deproject velocity field
     map2d = (map2d-vsys)/(np.cos(model.projected_coords['phi']['upper'])*np.sin(incl))
     
 #**************************
 #MAKE PLOT
 
 beam_au = datacube.beam_size.to('au').value
-R_prof = np.arange(2*beam_au, 0.8*Rout, beam_au/4)
+R_prof = np.arange(args.Rinner*beam_au, args.Router*Rout, beam_au/5)
 
 color_bounds = np.array([0.5, 1.0])*Rout
 
@@ -113,6 +105,6 @@ make_up_ax(ax, labeltop=False)
 make_up_ax(ax2, labelbottom=False, labelleft=False, labeltop=True)
 ax.tick_params(labelbottom=True, top=True, right=True, which='both', direction='in')
 
-plt.savefig('azimuthal_%s_%s.png'%(args.moment, args.kind), bbox_inches='tight', dpi=200)
+plt.savefig('azimuthal_%s_%s.png'%(args.moment, args.type), bbox_inches='tight', dpi=200)
 plt.show()
 plt.close()

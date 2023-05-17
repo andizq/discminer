@@ -66,14 +66,10 @@ R, phi, z = load_disc_grid()
 
 #*************************
 #LOAD MOMENT MAPS    
-moment_data, moment_model, mtags = load_moments(args)
+moment_data, moment_model, residuals, mtags = load_moments(args, mask=mask)
         
 #**************************
 #MASK AND COMPUTE RESIDUALS
-moment_data = np.where(mask, np.nan, moment_data)
-moment_model = np.where(mask, np.nan, moment_model)
-residuals = moment_data - moment_model
-
 """
 from scipy.ndimage import gaussian_filter
 moment_data = gaussian_filter(moment_data, sigma=1.5)

@@ -1,5 +1,5 @@
 from discminer.plottools import use_discminer_style, make_up_ax
-from utils import init_data_and_model, get_noise_mask
+from utils import init_data_and_model
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -32,9 +32,6 @@ Rmax = 1.1*best['intensity']['Rout']*u.au #Max model radius, 10% larger than dis
 #LOAD DATA AND MODEL
 #*******************
 datacube, model = init_data_and_model()
-
-noise_mean, mask = get_noise_mask(datacube, thres=2)
-vchannels = datacube.vchannels
 model.make_model()
 
 #**************

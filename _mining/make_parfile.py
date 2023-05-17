@@ -19,7 +19,7 @@ args = parser.parse_args()
 #Put here any info you'd like to have access through the parfile.json in the analysis scripts 
 
 custom_dict = {
-    'chan_step': 2, #Plot channels every n steps
+    'chan_step': 4, #Plot channels every n steps
     'nchans': 15, #Plot n channels
     'vlim': 0.2, #Velocity max and min plot limit
     'Llim': 0.2, #Line width max and min
@@ -31,21 +31,30 @@ custom_dict = {
 #****************
 #DISCS BASIC INFO
 #****************
-incl_dict = { #if fixincl is found in log_pars tag take inclination from mm continuum
+discs = 'mwc480 twhyd imlup hd163296'
+vel_sign = '-1 1 1 1'
+vel_sign_dict = dict(zip(discs.split(), np.asarray(vel_sign.split()).astype(int)))
+
+incl_dict = {
     'mwc480': -37.0,
-} #sign assumes discminer convention
+    'twhyd': 5.8,
+    'imlup': -47.5,
+    'hd163296': 46.7
+}
 
 gaps_dict = {
     'mwc480': [76, 149],
+    'twhyd': [82],
+    'imlup': [116, 209],
+    'hd163296': [49, 85, 145]
 } #mm dust gaps
 
 rings_dict = {
     'mwc480': [98, 165],
+    'twhyd': [70, 160], #rings of elevated optical depth (Teague+2022)
+    'imlup': [133, 220],
+    'hd163296': [67, 101, 159]
 } #mm dust rings
-
-kinks_dict = {
-    'mwc480': [245],
-} #intensity kinks
 
 #**************************
 #GET TAGS AND PARS FROM LOG 
@@ -147,7 +156,10 @@ def get_base_pars(log_file, kind=[]):
         if 'fixincl' in kind:
             log_pars = np.append(log_pars, np.radians(incl_dict[tag_disc]))
             header += ['incl']
-                    
+            
+        log_pars = np.append(log_pars, vel_sign_dict[tag_disc])
+        header += ['vel_sign']
+        
         for i in range(len(header)):
             hdr = header[i]
             if hdr in ['p', 'q', 'Rb', 'p0', 'p1']:
@@ -269,6 +281,6 @@ if __name__ == '__main__':
             units_dict['intensity'].update({'q': "none"})            
             pars_dict['linewidth'].update({'q': 0.0})
             units_dict['linewidth'].update({'q': "none"})
-            
-    custom_dict.update(gaps=gaps_dict[tags_dict['disc']], rings=rings_dict[tags_dict['disc']], kinks=kinks_dict[tags_dict['disc']]) 
+
+    custom_dict.update(gaps=gaps_dict[tags_dict['disc']], rings=rings_dict[tags_dict['disc']]) 
     make_json(dicts_list = [custom_dict, tags_dict, pars_dict, units_dict], keys_list = ['custom', 'metadata', 'best_fit', 'units'])

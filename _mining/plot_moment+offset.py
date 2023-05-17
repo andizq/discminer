@@ -36,6 +36,10 @@ custom = pars['custom']
 vsys = best['velocity']['vsys']
 Rout = best['intensity']['Rout']
 
+rings = custom['rings']
+gaps = custom['gaps']
+kinks = []
+
 ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get_2d_plot_decorators(args.moment)
     
 #****************
@@ -67,16 +71,10 @@ R, phi, z = load_disc_grid()
 
 #*************************
 #LOAD MOMENT MAPS
-moment_data, moment_model, mtags = load_moments(args)
-
-#**************************
-#MASK MOMENTS
-moment_data = np.where(mask, np.nan, moment_data)
-moment_model = np.where(mask, np.nan, moment_model)
+moment_data, moment_model, residuals, mtags = load_moments(args, mask=mask)
 
 #**************************
 #MAKE PLOT + ZOOM-IN PANEL
-
 fig, ax = plt.subplots(ncols=2, nrows=1, figsize=(15,8))
 ax_cbar0 = fig.add_axes([0.13, 0.09, 0.77, 0.05])
 
@@ -85,10 +83,11 @@ kwargs_cc = dict(colors='k', linestyles='-', extent=extent, levels=levels_cc, li
 kwargs_cbar = dict(orientation='horizontal', pad=0.03, shrink=0.95, aspect=15)
 zoomcolor = '0.3'
 zoomwidth = 90
-          
+        
 def make_plot(ax, xlim=xlim, color='k', labelcolor='k'):
     im = ax.contourf(moment_data, extend='both', **kwargs_im)
-    cc = ax.contour(moment_data, **kwargs_cc)
+    if args.surface!='lower':
+        cc = ax.contour(moment_data, **kwargs_cc)
     make_up_ax(axi, xlims=(-xlim, xlim), ylims=(-xlim, xlim), labelsize=17, color=color, labelcolor=labelcolor)
     return im
 
@@ -114,7 +113,7 @@ for axi in ax[1:]:
     
 for i,axi in enumerate(ax):
     Contours.emission_surface(axi, R, phi, extent=extent, R_lev=np.linspace(0.1, 1.0, 10)*Rout*u.au.to('m'), which=mtags['surf'])
-     
+        
 patch = Rectangle([-zoomwidth]*2, 2*zoomwidth, 2*zoomwidth, edgecolor=zoomcolor, facecolor='none',
                   lw=2.0, ls=(0, (1,1.5)), capstyle='round')
 ax[0].add_artist(patch)

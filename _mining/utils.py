@@ -8,6 +8,7 @@ import copy
 
 from discminer.plottools import get_discminer_cmap
 from discminer.core import Data
+from discminer.rail import Rail
 from discminer.disc2d import Model
 import discminer.cart as cart
 
@@ -15,6 +16,7 @@ from astropy.io import fits
 import astropy.units as u
 
 import numpy as np
+import matplotlib
 
 molplot = {
     '12co': r'$^{\rm 12}$CO',
@@ -39,7 +41,7 @@ def add_parser_args(parser,
         parser.add_argument('-m', '--moment', default='velocity', type=str, choices=['velocity', 'linewidth', 'lineslope', 'peakint', 'peakintensity'], help="velocity, linewidth or peakintensity")
 
     if mask_minor:
-        parser.add_argument('-b', '--mask_minor', default=60.0, type=float, help="+- azimuthal mask around disc minor axis for computation of vphi and vz velocity components")
+        parser.add_argument('-b', '--mask_minor', default=30.0, type=float, help="+- azimuthal mask around disc minor axis for computation of vphi and vz velocity components")
     if mask_major:
         parser.add_argument('-a', '--mask_major', default=30.0, type=float, help="+- azimuthal mask around disc major axis for computation of vR velocity component")
     if kind:
@@ -51,11 +53,11 @@ def add_parser_args(parser,
     if projection:
         parser.add_argument('-p', '--projection', default='cartesian', type=str, choices=['cartesian', 'polar'], help="Project residuals onto a cartesian or a polar map")
     if writetxt:
-        parser.add_argument('-w', '--writetxt', default=False, type=bool, help="write txt files")
+        parser.add_argument('-w', '--writetxt', default=1, type=int, choices=[0, 1], help="write txt files")
     if Rinner:
         parser.add_argument('-i', '--Rinner', default=1.0, type=float, help="Number of beams to mask out from inner region")
     if Router:
-        parser.add_argument('-o', '--Router', default=0.9, type=float, help="Fraction of Rout to consider as the outer radius for the analysis")
+        parser.add_argument('-o', '--Router', default=0.98, type=float, help="Fraction of Rout to consider as the outer radius for the analysis")
 
     args = parser.parse_args()
 
@@ -88,12 +90,10 @@ def init_data_and_model(parfile='parfile.json', Rmin=0, Rmax=1.1, init_model=Tru
         Rmax = Rmax*Rout*u.au
         model = Model(datacube, Rmax=Rmax, Rmin=Rmin, prototype=True)
         
-        model.z_upper_func = cart.z_upper_exp_tapered
-        model.z_lower_func = cart.z_lower_exp_tapered
         model.velocity_func = model.keplerian_vertical # vrot = sqrt(GM/r**3)*R
         model.line_profile = model.line_profile_bell
         model.line_uplow = model.line_uplow_mask
-    
+
         if 'I2pwl' in meta['kind']:
             model.intensity_func = cart.intensity_powerlaw_rbreak
         elif 'I2pwlnosurf' in meta['kind']:
@@ -101,6 +101,14 @@ def init_data_and_model(parfile='parfile.json', Rmin=0, Rmax=1.1, init_model=Tru
         else:
             model.intensity_func = cart.intensity_powerlaw_rout
 
+        if 'surf2pwl' in meta['kind']:
+            model.z_upper_func = cart.z_upper_powerlaw
+            model.z_lower_func = cart.z_lower_powerlaw
+        else:
+            model.z_upper_func = cart.z_upper_exp_tapered
+            model.z_lower_func = cart.z_lower_exp_tapered
+
+            
         #****************
         #PROTOTYPE PARAMS
         #****************
@@ -249,19 +257,25 @@ def get_noise_mask(datacube, thres=4, return_mean=True):
     else:
         mask = np.nanmax(data, axis=0) < thres*noise
         return noise, mask
-    
-def load_moments(args, moment=None):
-    if moment is None: moment = args.moment
-    if moment=='peakint': moment='peakintensity'
+
+def load_moments(
+        args, moment=None, mask=[],
+        clip_Rgrid=None, clip_Rmin=0*u.au, clip_Rmax=np.inf*u.au
+):    
+    if moment is None:
+        moment = args.moment
     
     if args.kind in ['gauss', 'gaussian', 'bell']:
-        tag_surf = 'both' 
+        tag_surf = 'both'
+        ref_surf = 'upper' #For contour plots
     else:
         if args.surface in ['up', 'upper']:
-            tag_surf = 'up' 
+            tag_surf = 'up'
+            ref_surf = 'upper'
         elif args.surface in ['low', 'lower']:
             tag_surf = 'low'
-
+            ref_surf = 'lower'
+            
     if args.kind in ['gauss', 'gaussian']:
         tag_base = f'{moment}_gaussian'
     elif args.kind in ['bell']:
@@ -271,11 +285,34 @@ def load_moments(args, moment=None):
     elif args.kind in ['dbell', 'doublebell']:
         tag_base = f'{moment}_{tag_surf}_doublebell_mask'
 
+    #Read and mask moment maps, and compute residuals
     moment_data = fits.getdata(tag_base+'_data.fits')
     moment_model = fits.getdata(tag_base+'_model.fits')
-    
-    return moment_data, moment_model, dict(surf=tag_surf, base=tag_base)
 
+    moment_data[mask] = np.nan
+    moment_model[mask] = np.nan
+    
+    def clip_radially(prop2d): #should be within masking function in discminer         
+        Rmin = clip_Rmin.to('au').value
+        Rgrid = np.nan_to_num(clip_Rgrid).to('au').value
+        Rmax = clip_Rmax.to('au').value
+        return np.where((Rgrid<Rmin) | (Rgrid>Rmax), np.nan, prop2d)    
+
+    if isinstance(clip_Rgrid, np.ndarray):        
+        moment_data = clip_radially(moment_data)
+        moment_model = clip_radially(moment_model)
+        
+    residuals = moment_data - moment_model
+        
+    if args.surface in ['low', 'lower']:
+        pass
+        #from scipy.ndimage import gaussian_filter
+        #moment_data = gaussian_filter(moment_data, 0.5)
+        #moment_data[moment_data > 50.0] = np.nan
+        
+    return moment_data, moment_model, residuals, dict(surf=tag_surf, ref_surf=ref_surf, base=tag_base)
+    
+    
 def load_disc_grid():
     R = dict(
         upper=np.load('upper_R.npy'),
@@ -294,6 +331,68 @@ def load_disc_grid():
     return R, phi, z
 
 def make_1d_legend(ax, **kwargs):
-    kwargs_def = dict(frameon=False, fontsize=MEDIUM_SIZE-2, ncol=3, loc='lower right', bbox_to_anchor=(1.0, 1.0))
+    kwargs_def = dict(
+        frameon=False,
+        fontsize=MEDIUM_SIZE,
+        ncol=3,
+        handlelength=2.0,
+        handletextpad=0.5,
+        borderpad=0.0,
+        columnspacing=1.5,
+        loc='lower right',
+        bbox_to_anchor=(1.0, 1.0)
+    )
     kwargs_def.update(kwargs)
     return ax.legend(**kwargs_def)
+
+def make_and_save_filaments(model, map2d,
+                            writefits=True, tag='',
+                            return_all=True, cmap='jet'
+):
+    mrail = Rail(model, map2d)
+    fil_pos, fil_neg = mrail.make_filaments(
+        smooth_size=0.1*model.beam_size,
+        adapt_thresh=model.beam_size,
+        size_thresh=100*u.pix**2
+    )
+    masked_pos = np.ma.masked_where(fil_pos.skeleton!=1, fil_pos.skeleton)
+    masked_neg = np.ma.masked_where(fil_neg.skeleton!=1, fil_neg.skeleton)
+
+    #ax.imshow(masked_pos, cmap='Reds_r', alpha=1, zorder=3, extent = [mm.X.min(),mm.X.max(), mm.Y.min(),mm.Y.max()], origin='lower')
+    #ax.imshow(masked_neg, cmap='Blues_r', alpha=1, zorder=3, extent = [mm.X.min(),mm.X.max(), mm.Y.min(),mm.Y.max()], origin='lower')
+    
+    fil_pos_list = [fil_pos.skeleton, fil_pos.skeleton_longpath]
+    fil_neg_list = [fil_neg.skeleton, fil_neg.skeleton_longpath]
+        
+    for fil in fil_pos.filaments:
+        fil_i = np.zeros_like(fil_pos.skeleton)
+        fil_i[fil.pixel_coords] = 1 
+        fil_pos_list.append(fil_i)
+            
+    for fil in fil_neg.filaments:
+        fil_i = np.zeros_like(fil_neg.skeleton)
+        fil_i[fil.pixel_coords] = 1 
+        fil_neg_list.append(fil_i)
+
+    if writefits:
+        if len(tag)>0:
+            if tag[0]!='_':
+                tag='_'+tag
+                
+        fits.writeto('filaments_pos%s.fits'%tag, np.asarray(fil_pos_list), header=model.header, overwrite=True)
+        fits.writeto('filaments_neg%s.fits'%tag, np.asarray(fil_neg_list), overwrite=True)
+
+    if return_all:
+        cmap = matplotlib.cm.get_cmap(cmap)
+        npos = len(fil_pos.filaments)
+        nneg = len(fil_neg.filaments)
+        cpos = np.linspace(0.6, 1.0, npos)        
+        cneg = np.linspace(0.4, 0.0, nneg)
+        colors_dict = {}
+        colors_dict.update({i+1: matplotlib.colors.to_hex(cmap(cpos[i])) for i in range(npos)})
+        colors_dict.update({-i-1: matplotlib.colors.to_hex(cmap(cneg[i])) for i in range(nneg)})
+
+        return fil_pos_list, fil_neg_list, colors_dict
+
+    else:
+        return fil_pos, fil_neg
