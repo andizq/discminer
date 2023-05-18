@@ -71,7 +71,7 @@ elif args.type=='data': map2d = moment_data
 elif args.type=='model': map2d = moment_model
 
 if args.type!='residuals' and args.moment=='velocity': #deproject velocity field
-    map2d = (map2d-vsys)/(np.cos(model.projected_coords['phi']['upper'])*np.sin(incl))
+    map2d = np.abs((map2d-vsys)/(np.cos(model.projected_coords['phi']['upper'])*np.sin(incl)))
     
 #**************************
 #MAKE PLOT
