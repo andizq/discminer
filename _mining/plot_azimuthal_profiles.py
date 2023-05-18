@@ -22,8 +22,8 @@ from utils import (add_parser_args,
 use_discminer_style()
 
 parser = ArgumentParser(prog='plot azimuthal contours', description='Plot azimuthal contours from a given moment map [velocity, linewidth, [peakintensity, peakint]?')
-args = add_parser_args(parser, moment=True, kind=True, surface=True, Rinner=True, Router=True)
 parser.add_argument('-t', '--type', default='residuals', type=str, choices=['data', 'model', 'residuals'], help="data, model or residuals")
+args = add_parser_args(parser, moment=True, kind=True, surface=True, Rinner=True, Router=True)
 args = parser.parse_args()
 
 #**********************
