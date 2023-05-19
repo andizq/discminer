@@ -177,8 +177,8 @@ class Rail(object):
             if len(contour)==0:
                 print ('no contours found for phi =', lev)
                 continue
-            ind_good = np.argmin([np.abs(lev-coords[0][tuple(np.round(contour[i][0]).astype(np.int))]) for i in range(len(contour))]) #get contour id closest to lev
-            inds_cont = np.round(contour[ind_good]).astype(np.int)
+            ind_good = np.argmin([np.abs(lev-coords[0][tuple(np.round(contour[i][0]).astype(int))]) for i in range(len(contour))]) #get contour id closest to lev
+            inds_cont = np.round(contour[ind_good]).astype(int)
             inds_cont = [tuple(f) for f in inds_cont]
             first_cont = np.array([coords[0][i] for i in inds_cont])
             second_cont = np.array([coords[1][i] for i in inds_cont])
