@@ -71,41 +71,7 @@ class Rail(object):
         self._resid_list = None
         self._color_list = None
 
-    def make_filaments(self, surface='upper', **kwargs):
-        #FIND FILAMENTS
-        #adapt_thresh is the width of the element used for the adaptive thresholding mask.
-        # This is primarily the step that picks out the filamentary structure. The element size should be similar to the width of the expected filamentary structure
-
-        from fil_finder import FilFinder2D
-
-        kw_fil_mask = dict(
-            verbose=False,
-            border_masking=False,
-            adapt_thresh=self.beam_size,
-            smooth_size=0.2*self.beam_size,
-            size_thresh=500*u.pix**2,
-            fill_hole_size=0.01*u.arcsec**2
-        )
-        kw_fil_mask.update(kwargs)
-        
-        Rgrid = self.R_nonan[surface]        
-        R_min_m=self.Rmin.to('m').value
-        ang_scale = np.abs(self.header['CDELT1'])*u.Unit(self.header['CUNIT1']) #pix size
-                       
-        Rind = (Rgrid>R_min_m) #& (Rgrid<R_max)
-        fil_pos = FilFinder2D(np.where(Rind & (self.prop>0), np.abs(self.prop), 0), ang_scale=ang_scale, distance=self.dpc)
-        fil_pos.preprocess_image(skip_flatten=True) 
-        fil_pos.create_mask(**kw_fil_mask)
-        fil_pos.medskel(verbose=False)
-        
-        fil_neg = FilFinder2D(np.where(Rind & (self.prop<0), np.abs(self.prop), 0), ang_scale=ang_scale, distance=self.dpc)
-        fil_neg.preprocess_image(skip_flatten=True) 
-        fil_neg.create_mask(**kw_fil_mask)
-        fil_neg.medskel(verbose=False)
-        
-        fil_pos.analyze_skeletons(prune_criteria='length')
-        fil_neg.analyze_skeletons(prune_criteria='length')
-        return fil_pos, fil_neg
+        self.model = model
         
     def prop_along_coords(self,
                           coord_ref=None,
@@ -315,12 +281,13 @@ class Rail(object):
         ]
 
     
-    def get_average(self, surface='upper',
-                    av_func=np.nanmean, mask_ang=0, resid_thres='3sigma',
+    def get_average(self, surface='upper', 
+                    av_func=np.nanmean, mask_ang=0,
+                    sigma_thres=np.inf,
+                    mask_from_map=None, mask_perc_init=0.2, plot_diagnostics=False, tag='', forward_error=False,
                     error_func=True, error_unit=1.0, error_thres=np.inf,
                     **kwargs_along_coords):
         #mask_ang: +- angles to reject around minor axis (i.e. phi=+-90) 
-        #resid_thres: None, '3sigma', or list of thresholds with size len(lev_list)        
 
         if self._lev_list is None:
             kwargs_along_coords.update({'surface': surface})
@@ -334,13 +301,67 @@ class Rail(object):
         
         frac_annulus = 1.0 #if halves, 0.5; if quadrants, 0.25
         nconts = len(lev_list)
-        if resid_thres is None: resid_thres = [np.inf]*nconts #consider all values for the average
-        elif resid_thres == '3sigma': resid_thres = [3*np.nanstd(resid_list[i]) for i in range(nconts)] #anything higher than 3sigma is rejected from annulus
-        # -np.pi<coord_list<np.pi        
-        ind_accep = [(((coord_list[i]<90-mask_ang) & (coord_list[i]>-90+mask_ang)) |
-                      ((coord_list[i]>90+mask_ang) | (coord_list[i]<-90-mask_ang))) &
-                     (np.abs(resid_list[i]-np.nanmean(resid_list[i]))<resid_thres[i])
-                     for i in range(nconts)]
+
+        if mask_from_map is not None:
+            mrail = Rail(self.model, mask_from_map, lev_list)
+            _, coord_list2, resid_list2, _ = mrail.prop_along_coords(surface=surface)
+            
+            resid_thres = []
+            ind_accep = []
+            mean_list, sigma_list = [], []
+            
+            for i in range(nconts):
+                psig = int(mask_perc_init*len(resid_list2[i]))
+                isort = np.argsort(resid_list2[i])
+                sigma = np.nanstd(resid_list2[i][isort][psig:-psig])
+                mean_val = np.nanmean(resid_list2[i][isort][psig:-psig])
+                ind = np.abs(resid_list2[i]-mean_val)<sigma_thres*sigma
+                ind_accep.append(
+                    (
+                        ((coord_list[i]<90-mask_ang) & (coord_list[i]>-90+mask_ang)) |
+                        ((coord_list[i]>90+mask_ang) | (coord_list[i]<-90-mask_ang))
+                    )
+                    & ind
+                    )
+                mean_list.append(mean_val)
+                sigma_list.append(sigma)
+                
+            if plot_diagnostics:
+                fig, ax = plt.subplots(nrows=2, figsize=(12,10))                
+                ax0, ax1 = ax
+                idiag = (np.array([0.3, 0.6, 0.9])*nconts).astype(int) #ind of radii to be plotted
+
+                for i in idiag:
+                    ax0.plot(coord_list2[i], resid_list2[i], lw=2.5, alpha=0.5, label='R=%.1f'%lev_list[i])
+                    ax0.scatter(coord_list2[i][ind_accep[i]], resid_list2[i][ind_accep[i]], ec='k', fc='none', s=40, lw=1.2)
+                    ax1.plot(coord_list[i], resid_list[i], lw=2.5, alpha=0.5)
+                    ax1.scatter(coord_list[i][ind_accep[i]], resid_list[i][ind_accep[i]], ec='k', fc='none', s=40, lw=1.2)
+
+                i = idiag[0]
+                yfac = 10                
+                ax0.set_ylim(mean_list[idiag[-1]]-yfac*sigma_list[idiag[-1]], mean_list[i]+yfac*sigma_list[i])
+                mean_eval_map = np.nanmean(resid_list[i][ind_accep[i]])
+                sigma_eval_map = np.nanstd(resid_list[i][ind_accep[i]])
+                ax1.set_ylim(mean_eval_map-yfac*sigma_eval_map, mean_eval_map+yfac*sigma_eval_map)
+
+                tick_angles = np.arange(-150, 180, 30)
+                ax0.legend(frameon=False, fontsize=15)
+
+                for axi in ax:
+                    axi.set_xticks(tick_angles)
+                    axi.set_xlabel(r'Azimuth [deg]')                        
+
+                fig.savefig('diagnostics_mask_average_from_map_%s.png'%tag)
+                plt.close()
+                
+        else:
+            #anything higher than sigma_thres will be rejected from annulus
+            resid_thres = [sigma_thres*np.nanstd(resid_list[i]) for i in range(nconts)] 
+
+            ind_accep = [(((coord_list[i]<90-mask_ang) & (coord_list[i]>-90+mask_ang)) |
+                          ((coord_list[i]>90+mask_ang) | (coord_list[i]<-90-mask_ang))) &
+                         (np.abs(resid_list[i]-np.nanmean(resid_list[i]))<resid_thres[i])
+                         for i in range(nconts)]
 
         av_annulus = np.array([av_func(resid_list[i][ind_accep[i]]) for i in range(nconts)])
         
@@ -356,7 +377,11 @@ class Rail(object):
                     Np_accep = len(coord_list[i][ind_accep[i]])
                     av_error[i] = np.sqrt(np.nansum(sigma2_accep)/Np_accep)/beams_ring_sqrt[i]  
             else: #compute standard error of mean value
-                av_error = np.array([np.std(resid_list[i][ind_accep[i]], ddof=1) for i in range(nconts)])/beams_ring_sqrt
+                if mask_from_map is not None and forward_error:
+                    resid = resid_list2
+                else:
+                    resid = resid_list
+                av_error = np.array([np.std(resid[i][ind_accep[i]], ddof=1) for i in range(nconts)])/beams_ring_sqrt
                 
         return av_annulus, av_error
 
@@ -381,6 +406,42 @@ class Rail(object):
             return x, y, prop, prop2D
         else:
             return prop2D
+
+    def make_filaments(self, surface='upper', **kwargs):
+        #FIND FILAMENTS
+        #kwargs docs at https://fil-finder.readthedocs.io/en/latest/tutorial.html#masking
+
+        from fil_finder import FilFinder2D
+
+        kw_fil_mask = dict(
+            verbose=False,
+            border_masking=False,
+            adapt_thresh=self.beam_size,
+            smooth_size=0.2*self.beam_size,
+            size_thresh=500*u.pix**2,
+            fill_hole_size=0.01*u.arcsec**2
+        )
+        kw_fil_mask.update(kwargs)
+        
+        Rgrid = self.R_nonan[surface]        
+        R_min_m=self.Rmin.to('m').value
+        ang_scale = np.abs(self.header['CDELT1'])*u.Unit(self.header['CUNIT1']) #pix size
+                       
+        Rind = (Rgrid>R_min_m) #& (Rgrid<R_max)
+        fil_pos = FilFinder2D(np.where(Rind & (self.prop>0), np.abs(self.prop), 0), ang_scale=ang_scale, distance=self.dpc)
+        fil_pos.preprocess_image(skip_flatten=True) 
+        fil_pos.create_mask(**kw_fil_mask)
+        fil_pos.medskel(verbose=False)
+        
+        fil_neg = FilFinder2D(np.where(Rind & (self.prop<0), np.abs(self.prop), 0), ang_scale=ang_scale, distance=self.dpc)
+        fil_neg.preprocess_image(skip_flatten=True) 
+        fil_neg.create_mask(**kw_fil_mask)
+        fil_neg.medskel(verbose=False)
+        
+        fil_pos.analyze_skeletons(prune_criteria='length')
+        fil_neg.analyze_skeletons(prune_criteria='length')
+        return fil_pos, fil_neg
+
     
 class Contours(object):
     @staticmethod
@@ -635,34 +696,3 @@ class Contours(object):
                 av_error = [np.array([np.std(resid_list[i][inds[j][i]], ddof=1)/beams_zone_sqrt[i][j] for i in range(nconts)]) for j in range(nzones)]
 
         return av_on_inds, av_error    
-
-    @staticmethod
-    def make_filaments(prop_2D, R_nonan_up_au, R_inner_au, beam_size_au, distance_pc, dpix_arcsec, **kwargs):
-        #FIND FILAMENTS
-        #adapt_thresh is the width of the element used for the adaptive thresholding mask.
-        # This is primarily the step that picks out the filamentary structure. The element size should be similar to the width of the expected filamentary structure
-
-        from fil_finder import FilFinder2D
-        from astropy import units as apu
-
-        distance=distance_pc*apu.pc
-        ang_scale=dpix_arcsec*apu.arcsec
-        R_min=R_inner_au
-        
-        kw_fil_mask = dict(verbose=False, adapt_thresh=1*beam_size_au*apu.au, smooth_size=0.2*beam_size_au*apu.au, size_thresh=500*apu.pix**2, border_masking=False, fill_hole_size=0.01*apu.arcsec**2)
-        kw_fil_mask.update(kwargs)
-        Rgrid = R_nonan_up_au
-        Rind = (Rgrid>R_min) #& (Rgrid<R_max)
-        fil_pos = FilFinder2D(np.where(Rind & (prop_2D>0), np.abs(prop_2D), 0), ang_scale=ang_scale, distance=distance)
-        fil_pos.preprocess_image(skip_flatten=True) 
-        fil_pos.create_mask(**kw_fil_mask)
-        fil_pos.medskel(verbose=False)
-        
-        fil_neg = FilFinder2D(np.where(Rind & (prop_2D<0), np.abs(prop_2D), 0), ang_scale=ang_scale, distance=distance)
-        fil_neg.preprocess_image(skip_flatten=True) 
-        fil_neg.create_mask(**kw_fil_mask)
-        fil_neg.medskel(verbose=False)
-        
-        fil_pos.analyze_skeletons(prune_criteria='length')
-        fil_neg.analyze_skeletons(prune_criteria='length')
-        return fil_pos, fil_neg
