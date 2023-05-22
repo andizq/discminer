@@ -147,8 +147,8 @@ p0 = [Mstar, vsys,                              #Velocity
 filename = "backend_%s.h5"%tag_out
 backend = None
 
-#try and except statement failing to with FileNotFoundError/OSError
-if args.backend
+#try and except statement failing with FileNotFoundError/OSError
+if args.backend:
     #Succesive runs
     backend = emcee.backends.HDFBackend(filename)
 else:
