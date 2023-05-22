@@ -31,7 +31,7 @@ Next, two additional *make* scripts must be run in order to produce the model ch
 .. code-block:: bash
 
    python ../_mining/make_channels.py
-   python ../_mining/make_single_moments.py -k gaussian
+   python ../_mining/make_single_moments.py -m gaussian
 
 The former command displays the data and best-fit model channel maps interactively, and stores residuals resulting from the subtraction of data and model channel intensities,
 

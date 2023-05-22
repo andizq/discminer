@@ -7,7 +7,11 @@ import matplotlib.pyplot as plt
 from astropy import units as u
 import emcee
 
-au_to_m = u.au.to('m')
+from argparse import ArgumentParser
+
+parser = ArgumentParser(prog='Handle emcee backend', description='Handle emcee backend')
+parser.add_argument('-b', '--backend', default=1, type=int, choices=[0, 1], help="If 0, create new backend. If 1, reuse existing backend")
+args = parser.parse_args()
 
 #****************
 #SOME DEFINITIONS
@@ -21,6 +25,8 @@ nsteps = 15000
 
 dpc = 162.0*u.pc
 vel_sign = -1 #Rotation direction: -1 or 1
+
+au_to_m = u.au.to('m')
 
 #*********
 #READ DATA
@@ -141,10 +147,11 @@ p0 = [Mstar, vsys,                              #Velocity
 filename = "backend_%s.h5"%tag_out
 backend = None
 
-try:
+#try and except statement failing to with FileNotFoundError/OSError
+if args.backend
     #Succesive runs
     backend = emcee.backends.HDFBackend(filename)
-except OSError:
+else:
     #First run: Initialise backend
     backend = emcee.backends.HDFBackend(filename)
     backend.reset(nwalkers, len(p0))
