@@ -145,28 +145,43 @@ def make_savgol(prof):
 def clean_filament_xy(xp, yp):
     ind = np.argsort(xp)
     xp = xp[ind]
+    yp = yp[ind]
     dx = np.abs(xp[1:] - xp[:-1])
     ind2 = np.append([True], [dx > 0.5*np.median(dx)])
     xp = xp[ind2]
+    yp = yp[ind2]
     dx = np.abs(xp[1:] - xp[:-1])
-    indc = dx > 10*np.median(dx) #spiral possibly split across phi axis boundary
+    dy = np.abs(yp[1:] - yp[:-1])
+    
+    #spiral possibly split across phi axis boundary
+    # Fails if spiral crosses axis boundary multiple times:
+    #  See e.g. mwc758 12co peakint. 
+    indc = dx > 10*np.median(dx)
+    indj = dy > 10*np.median(dy)
 
-    if np.sum(indc):
-        indp = np.arange(1, len(xp))[indc]
+    def shift(xp, ind):
+        indp = np.arange(1, len(xp))[ind]
         for i in indp:
             left = xp[:i]
             right = xp[i:]
-            print(len(left),len(right))
-
+            #print(len(left),len(right))
             if len(left)<=len(right):
                 xp[:i] += 360
             else:
                 xp[i:] -= 360
-
+        return xp
+    
+    if np.sum(indc):
+        xp = shift(xp, indc)
+        
+    # Attempt to do the same using dy
+    #elif np.sum(indj):
+    #    xp = shift(xp, indj)        
+        
     ind3 = np.argsort(xp)
     xp = xp[ind3]
-
-    yp = yp[ind][ind2][ind3]
+    yp = yp[ind3]
+    
     return xp, yp
 
 
@@ -189,7 +204,7 @@ def fit_and_plot(ax, xp, yp, color=None, kind='positive'):
     ax.scatter(xp, yp, s=20, color=color)
 
     popt, pcov = curve_fit(sp_lin, xp, yp) #, sigma=20*np.ones_like(yn))
-    ax.scatter(xp, sp_lin(xp, *popt), fc=lin_c, marker='s', lw=1, s=30)
+    #ax.scatter(xp, sp_lin(xp, *popt), fc=lin_c, marker='s', lw=1, s=30)
 
     xlin = np.linspace(xp.min(), xp.max(), 50)
     ylin = sp_lin(xp, *popt)
@@ -212,7 +227,7 @@ for i,fil in enumerate(fil_pos_list[2:]):
     xp, yp = clean_filament_xy(xp, yp)
     yfp, dyp = fit_and_plot(axf, xp, yp, color=colors_dict[i+1])
     pitchp = np.degrees(np.arctan(np.abs(dyp)/yfp))
-    axp.plot(yfp, pitchp, c=colors_dict[i+1])
+    axp.plot(yfp, pitchp, lw=3, c=colors_dict[i+1])
 
 for i,fil in enumerate(fil_neg_list[2:]):    
     fn = fil.astype(bool)
@@ -221,7 +236,7 @@ for i,fil in enumerate(fil_neg_list[2:]):
     xn, yn = clean_filament_xy(xn, yn)
     yfn, dyn = fit_and_plot(axf, xn, yn, color=colors_dict[-i-1], kind='neg')
     pitchn = np.degrees(np.arctan(np.abs(dyn)/yfn))
-    axp.plot(yfn, pitchn, c=colors_dict[-i-1])
+    axp.plot(yfn, pitchn, lw=3, c=colors_dict[-i-1])
     
 axf.set_xlim(-270, 270)
 axf.set_ylim(0, None)

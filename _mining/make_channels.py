@@ -49,7 +49,11 @@ model = General2d(datacube, Rmax, Rmin=0, prototype=True)
 
 model.velocity_func = model.keplerian_vertical # vrot = sqrt(GM/r**3)*R
 model.line_profile = model.line_profile_bell
-model.line_uplow = model.line_uplow_mask
+
+if 'sum' in meta['kind']:
+    model.line_uplow = model.line_uplow_sum
+else:
+    model.line_uplow = model.line_uplow_mask
 
 if 'I2pwl' in meta['kind']:
     model.intensity_func = cart.intensity_powerlaw_rbreak

@@ -12,6 +12,7 @@ from argparse import ArgumentParser
 
 parser = ArgumentParser(prog='make moments', description='Make double gauss or double bell moments and save outputs into .fits files')
 parser.add_argument('-m', '--method', default='doublebell', type=str, choices=['dgauss', 'dbell', 'doublegaussian', 'doublebell'], help="Type of two-component kernel to fit")
+parser.add_argument('-k', '--kind', default='mask', type=str, choices=['mask', 'sum'], help="How the two kernels must be merged")
 parser.add_argument('-s', '--sigma', default=5, type=float, help='Mask out pixels with peak intensities below sigma threshold')
 args = parser.parse_args()
 
@@ -48,7 +49,11 @@ model = General2d(datacube, Rmax, Rmin=0, prototype=True)
 
 model.velocity_func = model.keplerian_vertical # vrot = sqrt(GM/r**3)*R
 model.line_profile = model.line_profile_bell
-model.line_uplow = model.line_uplow_mask
+
+if 'sum' in meta['kind']:
+    model.line_uplow = model.line_uplow_sum
+else:
+    model.line_uplow = model.line_uplow_mask
 
 if 'I2pwl' in meta['kind']:
     model.intensity_func = cart.intensity_powerlaw_rbreak
@@ -81,6 +86,9 @@ modelcube = Data(file_model, dpc) # Read model and convert to Cube object
 #**********************
 #MAKE MOMENT MAPS
 #**********************
-moments_data = datacube.make_moments(model=model, method=args.method, kind='mask', writecomp=True, parcube=True, tag='_data') #Use model priors + kernel
-moments_model = modelcube.make_moments(model=model, method=args.method, kind='mask', writecomp=True, parcube=True, tag='_model') #Use model priors + kernel
+#Use model priors + kernel
+moments_data = datacube.make_moments(model=model, method=args.method, kind=args.kind, sigma_thres=args.sigma,
+                                     writecomp=True, parcube=True, tag='_data') 
+moments_model = modelcube.make_moments(model=model, method=args.method, kind=args.kind, sigma_thres=args.sigma,
+                                       writecomp=True, parcube=True, tag='_model') 
 

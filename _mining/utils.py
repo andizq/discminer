@@ -34,7 +34,7 @@ MEDIUM_SIZE = 15
 def add_parser_args(parser,
                     moment=False, kind=False, surface=False, projection=False,
                     mask_minor=False, mask_major=False, Rinner=False, Router=False,
-                    fold=False, writetxt=False, 
+                    fold=False, writetxt=False, sigma=False
 ):
 
     if moment:
@@ -58,6 +58,9 @@ def add_parser_args(parser,
         parser.add_argument('-i', '--Rinner', default=1.0, type=float, help="Number of beams to mask out from inner region")
     if Router:
         parser.add_argument('-o', '--Router', default=0.98, type=float, help="Fraction of Rout to consider as the outer radius for the analysis")
+    if sigma:
+        parser.add_argument('-c', '--sigma', default=5, type=float, help='Mask out pixels with values below sigma threshold')
+
 
     args = parser.parse_args()
 
@@ -67,6 +70,30 @@ def add_parser_args(parser,
     except AttributeError:
         pass
 
+    try:
+        if args.surface=='up':
+            args.surface = 'upper'
+    except AttributeError:
+        pass
+
+    try:
+        if args.surface=='low':
+            args.surface = 'lower'
+    except AttributeError:
+        pass
+
+    try:
+        if args.kind=='dbell':
+            args.kind = 'doublebell'
+    except AttributeError:
+        pass
+
+    try:
+        if args.kind=='dgauss':
+            args.kind = 'doublegaussian'
+    except AttributeError:
+        pass
+    
     return args
 
 
@@ -92,7 +119,11 @@ def init_data_and_model(parfile='parfile.json', Rmin=0, Rmax=1.1, init_model=Tru
         
         model.velocity_func = model.keplerian_vertical # vrot = sqrt(GM/r**3)*R
         model.line_profile = model.line_profile_bell
-        model.line_uplow = model.line_uplow_mask
+
+        if 'sum' in meta['kind']:
+            model.line_uplow = model.line_uplow_sum
+        else:
+            model.line_uplow = model.line_uplow_mask
 
         if 'I2pwl' in meta['kind']:
             model.intensity_func = cart.intensity_powerlaw_rbreak

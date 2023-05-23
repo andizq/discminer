@@ -123,6 +123,7 @@ ax[0].legend(frameon=False, fontsize=15, handlelength=1.0, loc='lower left', bbo
 make_substructures(ax[1], gaps=gaps, rings=rings)
 append_sigma_panel(fig, ax, peak_resid, weights=pick.peak_weight, hist=True)
 plt.savefig('peak_residuals_%s.png'%mtags['base'], bbox_inches='tight', dpi=200)
+plt.show()
 plt.close()
 
 #***************

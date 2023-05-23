@@ -28,7 +28,7 @@ from argparse import ArgumentParser
 use_discminer_style()
 
 parser = ArgumentParser(prog='plot radial profiles', description='Plot radial profiles from moments and residuals [velocity, linewidth, [peakintensity, peakint]?')
-args = add_parser_args(parser, moment=True, kind=True, surface=True, writetxt=True, mask_minor=True, mask_major=True, Rinner=True, Router=True)
+args = add_parser_args(parser, moment=True, kind=True, surface=True, writetxt=True, mask_minor=True, mask_major=True, Rinner=True, Router=True, sigma=True)
 
 #**********************
 #JSON AND PARSER STUFF
@@ -182,9 +182,25 @@ if args.moment=='velocity':
     #VELOCITY COMPONENTS
     #*******************    
 
+    """    
+    if args.surface in ['low', 'lower']:
+        mask_r = mask | (np.abs(phi_s) < np.radians(args.mask_major)) | (np.abs(phi_s) > np.radians(180-args.mask_major))
+        moment_data = np.where(mask_r, np.nan, moment_data)
+        if args.moment=='velocity':
+            pass
+            moment_data = np.where(np.abs(moment_data-vsys)>5, np.nan, moment_data)    
+    """
+    if args.kind in ['doublebell', 'doublegaussian']:
+        mask_map_ref = np.abs((moment_data-vsys)/(np.cos(model.projected_coords['phi'][args.surface])*np.sin(incl)))
+    else:
+        mask_map_ref = None
+        
+    kw_avg2 = dict(surface=ref_surf, av_func=np.nanmean, mask_ang=mask_ang, sigma_thres=args.sigma)
+    kw_avg = dict(surface=ref_surf, av_func=np.nanmean, mask_ang=mask_ang, sigma_thres=args.sigma, mask_from_map=mask_map_ref)
+    
     #VZ
     rail_vz = Rail(model, residuals, R_prof)
-    vel_z, vel_z_error = rail_vz.get_average(mask_ang=mask_ang, surface=ref_surf)
+    vel_z, vel_z_error = rail_vz.get_average(tag='vz', **kw_avg)
     div_factor_z = get_normalisation(mask_ang, component='z')
 
     vel_z /= div_factor_z
@@ -192,7 +208,7 @@ if args.moment=='velocity':
 
     #DVPHI
     rail_phi = Rail(model, residuals_abs, R_prof)
-    vel_phi, vel_phi_error = rail_phi.get_average(mask_ang=mask_ang, surface=ref_surf)
+    vel_phi, vel_phi_error = rail_phi.get_average(**kw_avg)
     div_factor_phi = get_normalisation(mask_ang, component='phi')
 
     vel_phi /= div_factor_phi
@@ -200,7 +216,7 @@ if args.moment=='velocity':
 
     #VPHI
     rail_phi = Rail(model, np.abs(moment_data-vsys), R_prof)
-    vel_rot, _ = rail_phi.get_average(mask_ang=mask_ang, surface=ref_surf)
+    vel_rot, vel_rot_error = rail_phi.get_average(tag=tag_base+'_vphi_data', plot_diagnostics=True, forward_error=True, **kw_avg)
     vel_rot /= div_factor_phi
     vel_rot_error = vel_phi_error
 
@@ -250,8 +266,11 @@ if args.moment=='velocity':
 
     #MODEL CURVE
     rail_phi = Rail(model, np.abs(moment_model-vsys), R_prof)
-    vel_phi, _ = rail_phi.get_average(mask_ang=mask_ang, surface=ref_surf)
-    vel_phi /= div_factor_phi
+    #vel_phi, _ = rail_phi.get_average(mask_ang=mask_ang, surface=ref_surf)
+    vel_phi, _ = rail_phi.get_average(surface=ref_surf, av_func=np.nanmean, mask_ang=mask_ang, sigma_thres=np.inf,
+                                      mask_from_map=mask_map_ref, tag=tag_base+'_vphi_model', plot_diagnostics=True)
+    div_factor_model = get_normalisation(mask_ang, component='phi')
+    vel_phi /= div_factor_model
     ysav_phi, ysav_phi_deriv_mod = make_savgol(vel_phi)
     make_profile(ax, R_prof, ysav_phi, vel_phi, _, kind='model')
     
@@ -280,16 +299,21 @@ if args.moment=='velocity':
 else:
 
     mask_ang = args.mask_minor
-
-    if args.surface in ['low', 'lower']:
-        mask_r = mask | (np.abs(phi_s) < np.radians(args.mask_major)) | (np.abs(phi_s) > np.radians(180-args.mask_major))
-        moment_data = np.where(mask_r, np.nan, moment_data) 
     
+    if args.surface in ['low', 'lower']:
+        mask_r = mask | (np.abs(phi_s) < np.radians(args.mask_major)) | (np.abs(phi_s) > np.radians(180-args.mask_major)) | (moment_data>40)
+        moment_data = np.where(mask_r, np.nan, moment_data)
+
+    if args.kind in ['doublebell', 'doublegaussian']:
+        mask_map_ref = moment_data
+    else:
+        mask_map_ref = None
+        
     #*****************
     #ABSOLUTE PROFILES
     #*****************
-    kw_avg = dict(surface=ref_surf, av_func=np.nanmedian, mask_ang=mask_ang)
-    
+    kw_avg = dict(surface=ref_surf, av_func=np.nanmedian, mask_ang=mask_ang, sigma_thres=args.sigma, mask_from_map=mask_map_ref, plot_diagnostics=True)
+        
     fig, ax = plt.subplots(ncols=1, nrows=2, figsize=(11,7))
 
     #DATA CURVE

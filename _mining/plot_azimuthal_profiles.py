@@ -24,7 +24,6 @@ use_discminer_style()
 parser = ArgumentParser(prog='plot azimuthal contours', description='Plot azimuthal contours from a given moment map [velocity, linewidth, [peakintensity, peakint]?')
 parser.add_argument('-t', '--type', default='residuals', type=str, choices=['data', 'model', 'residuals'], help="data, model or residuals")
 args = add_parser_args(parser, moment=True, kind=True, surface=True, Rinner=True, Router=True)
-args = parser.parse_args()
 
 #**********************
 #JSON AND PARSER STUFF
@@ -71,7 +70,7 @@ elif args.type=='data': map2d = moment_data
 elif args.type=='model': map2d = moment_model
 
 if args.type!='residuals' and args.moment=='velocity': #deproject velocity field
-    map2d = np.abs((map2d-vsys)/(np.cos(model.projected_coords['phi']['upper'])*np.sin(incl)))
+    map2d = np.abs((map2d-vsys)/(np.cos(model.projected_coords['phi'][args.surface])*np.sin(incl)))
     
 #**************************
 #MAKE PLOT
@@ -87,7 +86,7 @@ fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(14,6))
 ax2 = fig.add_axes([0.85,0.6,0.3*6/14,0.3])
 
 R_ref = 100
-R_list, phi_list, resid_list, color_list = rail.prop_along_coords(coord_ref=R_ref,
+R_list, phi_list, resid_list, color_list = rail.prop_along_coords(coord_ref=R_ref, surface=args.surface,
                                                                   color_bounds=color_bounds,
                                                                   ax=ax, ax2=ax2)
 
@@ -99,7 +98,7 @@ ax.set_xlim(-180,180)
 ax.set_ylim(clim0, clim1)
 ax.grid()
 
-model.make_emission_surface(ax2)
+model.make_emission_surface(ax2, which=mtags['surf'])
 model.make_disc_axes(ax2)
 make_up_ax(ax, labeltop=False)
 make_up_ax(ax2, labelbottom=False, labelleft=False, labeltop=True)
