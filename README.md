@@ -70,6 +70,12 @@
 pip install discminer
 ```
 
+To update the code,
+
+```bash
+pip install -U discminer
+```
+
 ### Optional Dependencies
 
 - [termtables](https://pypi.org/project/termtables)
