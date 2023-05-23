@@ -59,7 +59,7 @@ setup(
     [
         'numpy>=1.18',
         'scipy>=1.5',
-        'matplotlib>=3',
+        'matplotlib<3.5',
         'astropy>=3',
         'emcee>=3',
         'radio-beam',

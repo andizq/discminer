@@ -263,11 +263,12 @@ class Rail(object):
             if ax2 is not None:
                 x_cont = np.array([X[i] for i in inds_cont])
                 y_cont = np.array([Y[i] for i in inds_cont])
-            if isinstance(ax2, matplotlib.axes._subplots.Axes): 
+            if isinstance(ax2, matplotlib.axes._axes.Axes): 
                 ax2.plot(x_cont[corr_inds], y_cont[corr_inds], color=color, lw=lw*lw_ax2_factor)
             elif isinstance(ax2, list):
                 for axi in ax2: 
-                    if isinstance(axi, matplotlib.axes._subplots.Axes): axi.plot(x_cont[corr_inds], y_cont[corr_inds], color=color, lw=lw*lw_ax2_factor)
+                    if isinstance(axi, matplotlib.axes._axes.Axes):
+                        axi.plot(x_cont[corr_inds], y_cont[corr_inds], color=color, lw=lw*lw_ax2_factor)
 
         self._lev_list = lev_list
         self._coord_list = coord_list
