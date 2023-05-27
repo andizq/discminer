@@ -49,13 +49,36 @@ _break_line = FrontendUtils._break_line
 SMALL_SIZE = 10
 MEDIUM_SIZE = 15
 
-def _compute_prop(grid, prop_funcs, prop_kwargs):
+def _compute_prop_standard(grid, prop_funcs, prop_kwargs):
     n_funcs = len(prop_funcs)
     props = [{} for i in range(n_funcs)]
     for side in ['upper', 'lower']:
         x, y, z, R, phi, R_1d, z_1d = grid[side]
         coord = {'x': x, 'y': y, 'z': z, 'phi': phi, 'R': R, 'R_1d': R_1d, 'z_1d': z_1d}
         for i in range(n_funcs): props[i][side] = prop_funcs[i](coord, **prop_kwargs[i])
+    return props
+
+def _compute_prop_mirror(grid, prop_funcs, prop_kwargs):
+    n_funcs = len(prop_funcs)
+    props = [{} for i in range(n_funcs)]
+    sides = np.asarray(['upper', 'lower'])
+
+    def get_coord_dict(side):
+        x, y, z, R, phi, R_1d, z_1d = grid[side]
+        return {'x': x, 'y': y, 'z': z, 'phi': phi, 'R': R, 'R_1d': R_1d, 'z_1d': z_1d}
+        
+    for i in range(n_funcs):
+        pkw = prop_kwargs[i]        
+        if 'mirror' in pkw:
+            ref_side = pkw['mirror']
+            coord = get_coord_dict(ref_side)
+            pkw.pop('mirror')            
+            props[i][ref_side] = prop_funcs[i](coord, **pkw)                
+            props[i][sides[sides!=ref_side][0]] = 1*props[i][ref_side]            
+        else:
+            for side in sides:
+                coord = get_coord_dict(side)                
+                props[i][side] = prop_funcs[i](coord, **pkw)                
     return props
 
 #********************
@@ -934,6 +957,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         self._lineslope_func = Model.lineslope_powerlaw
         self._line_profile = Model.line_profile_bell
         self._line_uplow = Model.line_uplow_mask
+        self._compute_prop = _compute_prop_standard
         self._use_temperature = False
         self._use_full_channel = False
  
@@ -1408,7 +1432,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
 
                     subpix_grid_true = {'upper': [self.sub_x_true[j], self.sub_y_true[i], z_true, self.sub_R_true[i][j], self.sub_phi_true[i][j]], 
                                         'lower': [self.sub_x_true[j], self.sub_y_true[i], z_true_far, self.sub_R_true[i][j], self.sub_phi_true[i][j]]}
-                    subpix_vel.append(_compute_prop(subpix_grid_true, [self.velocity_func], [vel_kwargs])[0])
+                    subpix_vel.append(self._compute_prop(subpix_grid_true, [self.velocity_func], [vel_kwargs])[0])
 
             ang_fac = sin_incl * np.cos(self.phi_true) 
             for i in range(self.subpixels_sq):
@@ -1416,11 +1440,11 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                     subpix_vel[i][side] *= ang_fac
                     subpix_vel[i][side] += vel_kwargs['vsys']
                     
-            props = _compute_prop(grid_true, prop_funcs[1:], prop_kwargs[1:])
+            props = self._compute_prop(grid_true, prop_funcs[1:], prop_kwargs[1:])
             props.insert(0, subpix_vel)
             
         else: 
-            props = _compute_prop(grid_true, prop_funcs, prop_kwargs)
+            props = self._compute_prop(grid_true, prop_funcs, prop_kwargs)
             if true_kwargs[0]: #Convention: positive vel (+) means gas receding from observer
                 phi_fac = sin_incl * np.cos(self.phi_true) #phi component
                 for side in ['upper', 'lower']:
@@ -1577,7 +1601,7 @@ class _Rosenfeld2d(Velocity, Intensity, Linewidth, GridTools): #Deprecated
         true_kwargs = [isinstance(kwarg, dict) for kwarg in avai_kwargs]
         prop_kwargs = [kwarg for i, kwarg in enumerate(avai_kwargs) if true_kwargs[i]]
         prop_funcs = [func for i, func in enumerate(avai_funcs) if true_kwargs[i]]
-        props = _compute_prop(grid_true, prop_funcs, prop_kwargs)
+        props = self._compute_prop(grid_true, prop_funcs, prop_kwargs)
         #Positive vel is positive along z, i.e. pointing to the observer, for that reason imposed a (-) factor to convert to the standard convention: (+) receding  
         if true_kwargs[0]:
             ang_fac_near = -sin_incl * np.cos(phi_true_near)
