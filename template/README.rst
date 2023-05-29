@@ -31,7 +31,7 @@ Next, two additional *make* scripts must be run in order to produce the model ch
 .. code-block:: bash
 
    python ../_mining/make_channels.py
-   python ../_mining/make_single_moments.py -m gaussian
+   python ../_mining/make_single_moments.py -k gaussian
 
 The former command displays the data and best-fit model channel maps interactively, and stores residuals resulting from the subtraction of data and model channel intensities,
 
@@ -70,16 +70,19 @@ The latter command produces three different types of moment maps: (a) **peak int
 
    .. code-block:: bash
 
-      Plot moment map [velocity, linewidth, [peakintensity, peakint]?
-
+      Plot moment map from data and zoom-in around central region
+      
       optional arguments:
-		-h, --help            show this help message and exit
-		-m {velocity,linewidth,lineslope,peakint,peakintensity}, --moment {velocity,linewidth,lineslope,peakint,peakintensity}
-		velocity, linewidth or peakintensity
-		-k {gauss,gaussian,bell,dgauss,doublegaussian,dbell,doublebell}, --kind {gauss,gaussian,bell,dgauss,doublegaussian,dbell,doublebell}
-		gauss(or gaussian), dbell(or doublebell)
-		-s {up,upper,low,lower}, --surface {up,upper,low,lower}
-                upper or lower surface moment map		
+		   -h, --help            show this help message and exit
+		   -m {velocity,linewidth,lineslope,peakint,peakintensity}, --moment {velocity,linewidth,lineslope,peakint,peakintensity}
+		   Type of moment map to be analysed. DEFAULTS to 'velocity'
+		   -k {gauss,gaussian,bell,dgauss,doublegaussian,dbell,doublebell}, --kernel {gauss,gaussian,bell,dgauss,doublegaussian,dbell,doublebell}
+                   Kernel utilised for line profile fit and computation of moment maps. DEFAULTS to 'gaussian'
+		   -ki {mask,sum}, --kind {mask,sum}
+                   How the upper and lower surface kernel profiles must be merged. DEFAULTS to 'mask'
+		   -s {up,upper,low,lower}, --surface {up,upper,low,lower}
+                   Use upper or lower surface moment map. DEFAULTS to 'upper'
+			
 
 Carrying on with the tutorial, you can also have a quick look at the radial dependence of the main model attributes retrieved for both upper and lower emitting surfaces of the disc via,
 
@@ -148,9 +151,9 @@ Additionally, you can use these residual maps to reveal asymmetric and localised
 Velocity and intensity profiles
 ===============================
 
-With ``discminer`` you can also compute azimuthally averaged profiles of (a) **velocity**; to investigate azimuthal or vertical gas flows in your disc, (b) **intensity**; which gives access to the overall disc temperature and density structure, and (c) **line width**, which traces thermal and non-thermal fluctuations but also surface density variations probed by optically thick lines. 
+With ``discminer`` you can also compute azimuthally averaged profiles of (a) **velocity**; to investigate azimuthal, radial and vertical gas flows in your disc, (b) **intensity**; which gives access to the overall disc temperature and density structure, and (c) **line width**, which traces thermal and non-thermal fluctuations but also surface density variations probed by optically thick lines. 
 
-The following command produces model and data rotation curves, as well as radial profiles of **dvphi** to quantify azimuthal velocity flows referred to Keplerian rotation, and **vz** to highlight vertical flows possibly associated with meridional circulation of material, winds, or even planet-driven buoyancy spirals.
+The following command produces model and data rotation curves, as well as radial profiles of **dvphi** to quantify azimuthal velocity flows referred to Keplerian rotation, as well as **vr** and **vz** to highlight radial and vertical flows possibly associated with meridional circulation of material, winds, or even planet-driven buoyancy spirals.
 
 .. code-block:: bash
 

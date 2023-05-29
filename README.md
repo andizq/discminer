@@ -70,7 +70,7 @@
 pip install discminer
 ```
 
-To update the code,
+To upgrade the code,
 
 ```bash
 pip install -U discminer
