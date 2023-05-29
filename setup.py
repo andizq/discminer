@@ -65,7 +65,7 @@ setup(
         'radio-beam',
         'scikit-image',
         'scikit-learn',
-        'spectral-cube'
+        'spectral-cube>=0.6'
     ], 
     # If there are data files included in your packages that need to be
     # installed, specify them here.

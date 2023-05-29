@@ -383,7 +383,7 @@ class Rail(object):
                 else:
                     resid = resid_list
                 av_error = np.array([np.std(resid[i][ind_accep[i]], ddof=1) for i in range(nconts)])/beams_ring_sqrt
-                
+
         return av_annulus, av_error
 
     def make_2d_map(self, prop_thres=np.inf, return_coords=False): 
@@ -525,7 +525,8 @@ class Contours(object):
     @staticmethod
     def make_contour_lev(prop, lev, X, Y, acc_threshold=20): 
         contour = measure.find_contours(prop, lev)
-        inds_cont = np.round(contour[-1]).astype(int)
+        ind_good = np.argmin([np.abs(lev-prop[tuple(np.round(contour[i][0]).astype(int))]) for i in range(len(contour))]) #get contour id closest to lev              
+        inds_cont = np.round(contour[ind_good]).astype(int)
         inds_cont = [tuple(f) for f in inds_cont]
         first_cont = np.array([prop[i] for i in inds_cont])
         corr_inds = np.abs(first_cont-lev) < acc_threshold
