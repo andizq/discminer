@@ -96,6 +96,7 @@ def get_channels_from_parcube(parcube_up, parcube_low, vchannels, method='double
 def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
                      method='doublegaussian', kind='mask', sigma_thres=5,
                      sigma_fit=None,
+                     niter=4, neighs=5, av_func=np.nanmedian
 ):
 
     data = cube.data    
@@ -201,6 +202,29 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
     else:
         _not_available(method)
 
+    def fill_props(i, j, coeff):
+        peak_up[i,j] = coeff[0]
+        centroid_up[i,j] = coeff[1]
+        linewidth_up[i,j] = coeff[2]
+        
+        peak_low[i,j] = coeff[idlow[0]]
+        centroid_low[i,j] = coeff[idlow[1]]
+        linewidth_low[i,j] = coeff[idlow[2]]
+
+        dpeak_up[i,j] = deltas[0]
+        dcentroid_up[i,j] = deltas[1]
+        dlinewidth_up[i,j] = deltas[2]
+
+        dpeak_low[i,j] = deltas[idlow[0]]
+        dcentroid_low[i,j] = deltas[idlow[1]]
+        dlinewidth_low[i,j] = deltas[idlow[2]]
+
+        if is_dbell:
+            lineslope_up[i,j] = coeff[3]
+            lineslope_low[i,j] = coeff[idlow[3]]
+            dlineslope_up[i,j] = deltas[3]
+            dlineslope_low[i,j] = deltas[idlow[3]]
+        
     print ('Fitting two-component function along velocity axis of the input cube...')
 
     #********
@@ -254,47 +278,33 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
                 coeff = np.append(coeff[idlow[0]:idlow[-1]+1], coeff[0:idlow[0]])
                 deltas = np.append(deltas[idlow[0]:idlow[-1]+1], deltas[0:idlow[0]])
             #""" 
-            peak_up[i,j] = coeff[0]
-            centroid_up[i,j] = coeff[1]
-            linewidth_up[i,j] = coeff[2]
-            
-            peak_low[i,j] = coeff[idlow[0]]
-            centroid_low[i,j] = coeff[idlow[1]]
-            linewidth_low[i,j] = coeff[idlow[2]]
 
-            dpeak_up[i,j] = deltas[0]
-            dcentroid_up[i,j] = deltas[1]
-            dlinewidth_up[i,j] = deltas[2]
-
-            dpeak_low[i,j] = deltas[idlow[0]]
-            dcentroid_low[i,j] = deltas[idlow[1]]
-            dlinewidth_low[i,j] = deltas[idlow[2]]
-
-            if is_dbell:
-                lineslope_up[i,j] = coeff[3]
-                lineslope_low[i,j] = coeff[idlow[3]]
-                dlineslope_up[i,j] = deltas[3]
-                dlineslope_low[i,j] = deltas[idlow[3]]
+            fill_props(i,j,coeff)
                         
         _progress_bar(int(100*i/nx))
     _progress_bar(100)
 
     #*****************************
-    #KEEPING TRACK OF 'HOT' PIXELS
+    #KEEP TRACK OF 'HOT' PIXELS
     #*****************************
     #Hot pixels will be tagged as -1
-    mm = n_fit == -10 #noise
-    ii = ((peak_up < 0.0) | (peak_low < 0.0)) & (~mm) #negative intensities
-    peak_thres = 2*np.nanmax(cube_max)
-    jj = ((peak_up > peak_thres) | (peak_low > peak_thres)) & (~mm) #too large intensities
-    cc = (centroid_up == centroid_low) & (n_fit != 1) & (~mm) #up==low
-    ww = ((np.abs(linewidth_up) <= 0.5*np.abs(dv)) | (np.abs(linewidth_low) <= 0.5*np.abs(dv))) & (~mm) #narrow component
-    n_fit[ii+jj+cc+ww] = -1
-    n_hot = np.sum(ii+cc+ww)
-    
-    #***************
-    #PACK AND RETURN
-    #***************    
+
+    def clean_nfit():
+        mm = n_fit == -10 #noise
+        ii = ((peak_up < 0.0) | (peak_low < 0.0)) & (~mm) #negative intensities
+        peak_thres = 2*np.nanmax(cube_max)
+        jj = ((peak_up > peak_thres) | (peak_low > peak_thres)) & (~mm) #too large intensities
+        cc = (centroid_up == centroid_low) & (n_fit != 1) & (~mm) #up==low
+        ww = ((np.abs(linewidth_up) <= 0.5*np.abs(dv)) | (np.abs(linewidth_low) <= 0.5*np.abs(dv))) & (~mm) #narrow component
+        dd = ((np.abs(linewidth_up) > 5.0) | (np.abs(linewidth_low) > 5.0)) & (~mm) #Unrealistically broad component
+        n_fit[ii+jj+cc+ww+dd] = -1
+        n_hot = np.sum(ii+jj+cc+ww+dd)
+        
+        return n_hot
+        
+    #**********
+    #PACK PROPS
+    #**********
     upper = [peak_up, centroid_up, linewidth_up]
     dupper = [dpeak_up, dcentroid_up, dlinewidth_up]
     lower = [peak_low, centroid_low, linewidth_low]
@@ -305,11 +315,94 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
         dupper += [dlineslope_up]
         lower += [lineslope_low]
         dlower += [dlineslope_low]
-        
+
+    n_hot = clean_nfit()
+    
     print ('\nTwo-component fit did not converge for %.2f%s of the pixels'%(100.0*(n_bad)/(nx*ny),'%'))
     print ('A single component was fit for %.2f%s of the pixels'%(100.0*(n_one)/(nx*ny),'%'))
     print ('Masked pixels below intensity threshold: %.2f%s'%(100.0*(n_mask)/(nx*ny),'%'))
     print ('Hot pixels: %.2f%s'%(100.0*(n_hot)/(nx*ny),'%'))        
+
+    if niter>0:
+        print ('\nRe-doing fit for  %d hot pixels and %d single-component pixels'%(n_hot, n_one))
+
+        def neighbour_guess(i, j, n_fit, neighs=3, av_func=np.nanmean):
+
+            if i<neighs or j<neighs:
+                return None
+            
+            neigh_arr = np.arange(-neighs, neighs+1)
+
+            ileft, iright = i-neighs, i+neighs+1
+            jleft, jright = j-neighs, j+neighs+1
+            window = n_fit[ileft:iright, jleft:jright]
+
+            masked = window==-10
+            n_mask = np.sum(masked) #n masked pixels
+
+            hot = window==-1
+            n_hot = np.sum(hot) #n hot pixels
+            
+            one = window==1
+            n_one = np.sum(one) #single-component pixels
+
+            n_bad = n_mask+n_hot+n_one
+            tot = (2*neighs+1)**2
+
+            if tot-n_bad < n_bad:
+                return None
+
+            ic, jc = (~masked & ~hot & ~one).nonzero() #get clean pixels where double fit worked
+
+            up_guess = [av_func(up_prop[ileft:iright, jleft:jright][ic, jc]) for up_prop in upper]
+            low_guess = [av_func(low_prop[ileft:iright, jleft:jright][ic, jc]) for low_prop in lower]
+            return up_guess+low_guess
+                         
+        for n in range(niter):
+            print ('Iteration #%d...'%(n+1))
+
+            #Select hot pixels (-1 flag) and single-component pixels (+1 flag)
+            m, n = np.where((n_fit==-1) | (n_fit==1))
+                
+            for k in range(len(m)):
+                i, j = m[k], n[k]                                
+                uplow = neighbour_guess(i, j, n_fit, neighs=neighs, av_func=av_func)
+                
+                if uplow is None:
+                    continue
+
+                tmp_data = data[:,i,j]
+
+                try:                    
+                    coeff, var_matrix = curve_fit(fit_func,
+                                                  vchannels, tmp_data,
+                                                  p0 = uplow,
+                                                  ftol=1e-10, xtol=1e-10, gtol=1e-10, method='lm')
+                    deltas = np.sqrt(np.abs(np.diag(var_matrix)))
+                    n_two += 1
+                    n_fit[i,j] = 2
+
+                except RuntimeError:
+                    try: 
+                        coeff, var_matrix = curve_fit(fit_func1d,
+                                                      vchannels, tmp_data,
+                                                      p0=pfunc_one(i,j)
+                        )
+                        coeff = np.append(coeff, coeff)
+                        deltas = np.sqrt(np.abs(np.diag(var_matrix)))
+                        deltas = np.append(deltas, deltas)
+                        n_one += 1
+                        n_fit[i,j] = 1
+                    
+                    except RuntimeError:
+                        n_bad += 1
+                        n_fit[i,j] = 0                    
+                        continue
+
+                fill_props(i,j,coeff)
+                
+            n_hot = clean_nfit()
+            print ('Resulting hot pixels:', n_hot)
     
     return upper, dupper, lower, dlower, n_fit
 
