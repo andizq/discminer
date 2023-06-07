@@ -822,6 +822,7 @@ class Mcmc:
         col_count = np.zeros(ncols).astype('int')
 
         fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(3*ncols, 3*nrows))
+        ax = np.atleast_1d(ax)
         x0_hline = 0
         for k, key in enumerate(kind):
             j = kind_col[key]
@@ -1218,7 +1219,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         self.best_params_errpos = np.asarray(errpos).squeeze()
         self.best_params_errneg = np.asarray(errneg).squeeze()
         
-        best_fit_dict = np.array([p0_mean, best_params, self.best_params_errneg, self.best_params_errpos]).T
+        best_fit_dict = np.array([np.atleast_1d(arr) for arr in [p0_mean, best_params, self.best_params_errneg, self.best_params_errpos]]).T
         best_fit_dict = {key+'_'+self.mc_kind[i]: str(best_fit_dict[i].tolist())[1:-1] for i,key in enumerate(self.mc_header)}
         self.best_fit_dict = best_fit_dict
         
@@ -1226,7 +1227,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         print ('Median from parameter walkers for the last %d steps:\n'%nstats)        
         if found_termtables:
             tt_header = ['Parameter', 'Best-fit value', 'error [-]', 'error [+]']
-            tt_data = np.array([self.mc_header, self.best_params, self.best_params_errneg, self.best_params_errpos]).T
+            tt_data = np.array([np.atleast_1d(arr) for arr in [self.mc_header, self.best_params, self.best_params_errneg, self.best_params_errpos]]).T
             termtables.print(
                 tt_data,
                 header=tt_header,
