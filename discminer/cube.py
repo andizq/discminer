@@ -13,15 +13,17 @@ from astropy import units as u
 from astropy import constants as apc
 from astropy.io import fits
 from astropy.wcs import utils as aputils, WCS
+from radio_beam import Beam
 
 import matplotlib
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, Cursor, Slider, RectangleSelector
+
+from collections.abc import Iterable
 import numpy as np
 import copy
 import os
-from radio_beam import Beam
 import warnings
 
         
@@ -1785,10 +1787,16 @@ class Cube(object):
         os.chdir(cwd)
 
         
-    def make_channel_maps(self, channels={'interval': None, 'indices': None}, ncols=5,
-                          unit_intensity=None, unit_coordinates=None, fmt_cbar='%3d',
-                          observable='intensity', kind='attribute', xlims=None, ylims=None,
-                          contours_from=None, projection='wcs', mask_under=None, **kwargs_contourf):
+    def make_channel_maps(self,
+                          fig=None, ax=None,
+                          channels={'interval': None, 'indices': None}, ncols=5,
+                          unit_intensity=None, unit_coordinates=None, annotate_channels=True,
+                          observable='intensity', kind='attribute', cmap=None,
+                          xlims=None, ylims=None, max_frac=0.8,
+                          fmt_cbar='%3d', mask_under=None,
+                          contours_from=None, projection='wcs',
+                          show_beam='all',
+                          **kwargs_contourf):
         
         try:
             vmin = kwargs_contourf['levels'][0]
@@ -1798,10 +1806,10 @@ class Cube(object):
             vmin = np.nanmin(self.data)
             vmax = np.nanmax(self.data)
             if kind=='attribute':
-                vmin, vmax = 0.0, 0.8*vmax
+                vmin, vmax = 0.0, max_frac*vmax
             elif kind=='residuals':
                 max_val = np.max(np.abs([vmin, vmax]))
-                vmin, vmax = -0.8*max_val, 0.8*max_val
+                vmin, vmax = -max_frac*max_val, max_frac*max_val
 
         if unit_intensity is None:
             try:
@@ -1815,8 +1823,12 @@ class Cube(object):
             unit_coordinates = ''
         else:
             unit_coordinates = ' [%s]'%unit_coordinates
-            
-        cmap_chan = get_discminer_cmap(observable, kind=kind) #See default cmap for each observable in plottools.py
+
+        if cmap is None:
+            cmap_chan = get_discminer_cmap(observable, kind=kind)
+        else:
+            cmap_chan = cmap
+
         if mask_under is not None:
             if kind=='attribute':
                 mask_up = mask_under
@@ -1862,14 +1874,24 @@ class Cube(object):
             lastrow_ncols = ncols = plot_nchan
             nrows += 1
 
-        figx = 2*ncols
-        figy = 2*nrows
-        fig = plt.figure(figsize=(figx, figy))
+        if fig is None:
+            figx = 2*ncols
+            figy = 2*nrows
+            fig = plt.figure(figsize=(figx, figy))
+        else:
+            figx, figy = fig.get_size_inches()
+
         dw = 0.9/ncols
         dh = dw*figx/figy
-        ax = [[fig.add_axes([0.05+i*dw, 0.97-(j+1)*dh-0.02*j, dw, dh], projection=plot_projection)
-               for i in range(ncols)] for j in range(nrows)]        
-        for axi in ax[-1][lastrow_ncols:]: axi.set_visible(False)
+        
+        if ax is None:
+            ax = [[fig.add_axes([0.05+i*dw, 0.97-(j+1)*dh-0.02*j, dw, dh], projection=plot_projection)
+                   for i in range(ncols)] for j in range(nrows)]
+        else:
+            ax = np.atleast_2d(ax)
+            
+        for axi in ax[-1][lastrow_ncols:]:
+            axi.set_visible(False)
 
         #*****************
         #BEAM
@@ -1897,20 +1919,20 @@ class Cube(object):
                         for cci in cca:
                             axji.contour(cci, levels=[plot_channels[ichan]], linestyles='-', **kwargs_cc)
             
-                axji.text(0.05,0.95, r'%.2f$^{\rm km/s}$'%plot_channels[ichan], va='top', fontsize=SMALL_SIZE+2, transform=axji.transAxes)
+                if annotate_channels:
+                    axji.text(0.05,0.95, r'%.2f$^{\rm km/s}$'%plot_channels[ichan], va='top', fontsize=SMALL_SIZE+2, transform=axji.transAxes)
                                                     
                 if j==nrows-1 and i==0:
                     labelbottom, labelleft = True, True
                     if projection=='wcs': xlabel, ylabel = 'Right Ascension', 'Declination'
                     else: xlabel, ylabel = 'Offset%s'%unit_coordinates, 'Offset%s'%unit_coordinates
-                    axji.set_xlabel(xlabel, labelpad=1, fontsize=MEDIUM_SIZE-2, color=fakecolor)                       
-                    axji.set_ylabel(ylabel, labelpad=1, fontsize=MEDIUM_SIZE-2, color=fakecolor)
+                    axji.set_xlabel(xlabel, labelpad=4, fontsize=MEDIUM_SIZE-3, color=fakecolor)                       
+                    axji.set_ylabel(ylabel, labelpad=4, fontsize=MEDIUM_SIZE-3, color=fakecolor)
 
                 else:
                     labelbottom, labelleft = False, False
 
-                    
-                    
+                                        
                 for axi in ['x', 'y']:
                     #WCS projection does not allow some props to be modified simultaneously in both axes
                     make_up_ax(axji, axis=axi, 
@@ -1932,7 +1954,12 @@ class Cube(object):
                 axji.set_ylim(ylims)
                 
                 if self.beam is not None:
-                    self.plot_beam(axji, projection=projection, **kwargs_beam)
+                    if show_beam=='all':
+                        self.plot_beam(axji, projection=projection, **kwargs_beam)
+                    elif isinstance(show_beam, Iterable):
+                        bj, bi = show_beam
+                        if j==bj and i==bi:
+                            self.plot_beam(axji, projection=projection, **kwargs_beam)                                                    
                 
                 if ichan==plot_nchan-1:
                     break

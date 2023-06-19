@@ -438,7 +438,7 @@ class Rail(object):
         fil_neg.preprocess_image(skip_flatten=True) 
         fil_neg.create_mask(**kw_fil_mask)
         fil_neg.medskel(verbose=False)
-        
+
         fil_pos.analyze_skeletons(prune_criteria='length')
         fil_neg.analyze_skeletons(prune_criteria='length')
         return fil_pos, fil_neg

@@ -110,7 +110,7 @@ def mask_cmap_interval(cmap, cmap_lims, mask_lims, mask_color=np.ones(4), append
        #Next line redoes the continuous linearsegmented colormap, thus the masked color block is reduced to a single color  
        #new_cmap = new_cmap._resample(new_cmap.N) 
     """
-    new_cmap._lut[id0:id1,:] = mask_color 
+    new_cmap._lut[id0:id1,:] = mask_color
     return new_cmap
 
 def get_continuous_cmap(hex_list, float_list=None):                                                                               
