@@ -175,21 +175,26 @@ def get_discminer_cmap(observable, kind='attribute'):
 #**************
 #COLORBAR STUFF
 #**************
-def add_cbar_ax(fig, ax, perc=4, orientation='horizontal', subplots=True):
+def add_cbar_ax(fig, ax, perc=8, pad=0.5, orientation='horizontal', subplots=True):
     figx, figy = fig.get_size_inches()
     figr = figy/figx
     axp = ax.get_position()
     x0, x1, y0, y1 = axp.x0, axp.x1, axp.y0, axp.y1
     w = x1 - x0
     h = y1 - y0
-    dx = dy = 0.01*perc
-    
+
+    if orientation=='horizontal':
+        dy = 0.01*perc*h
+
+    elif orientation=='vertical':
+        dx = 0.01*perc*w
+
     if subplots:
-        if orientation=='horizontal': return fig.add_axes([x0, y0, w, dy])
-        if orientation=='vertical': return fig.add_axes([x1+0.5*dx, y0+0.1*h, dx, h-0.2*h])        
+        if orientation=='horizontal': return fig.add_axes([x0, y0-pad*dy, w, dy])
+        if orientation=='vertical': return fig.add_axes([x1+pad*dx, y0+0.1*h, dx, h-0.2*h])        
     else:
-        if orientation=='horizontal': return fig.add_axes([x0, y0-0.5*dy, w, dy])
-        if orientation=='vertical': return fig.add_axes([x1+0.5*dx, y0, dx, h])        
+        if orientation=='horizontal': return fig.add_axes([x0, y0-pad*dy, w, dy])
+        if orientation=='vertical': return fig.add_axes([x1+pad*dx, y0, dx, h])        
         
 def make_round_cbar(ax, Rout, levels,
                     rwidth=0.06, cmap=get_discminer_cmap('velocity'),
@@ -585,7 +590,7 @@ def make_polar_map(
 ):
     from scipy.interpolate import griddata
 
-    kwargs_cb = dict(orientation='vertical', subplots=False, perc=2)
+    kwargs_cb = dict(orientation='vertical', subplots=False, perc=2.5)
     kwargs_cb.update(kwargs_cbar)
     
     #SOME DEFINITIONS

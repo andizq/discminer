@@ -41,12 +41,15 @@ def _not_available(method):
 
 def get_channels_from_parcube(parcube_up, parcube_low, vchannels, method='doublebell', kind='mask', n_fit=None):
     
-    nx, ny = parcube_up.shape[1:]
-    intensity = np.zeros((len(vchannels), ny, nx))
+    if parcube_up is None and 'double' in method:
+        parcube_up = np.zeros_like(parcube_low)
     
     if parcube_low is None and 'double' in method:
         parcube_low = np.zeros_like(parcube_up)
 
+    nx, ny = parcube_up.shape[1:]
+    intensity = np.zeros((len(vchannels), ny, nx))
+        
     par_double = lambda i,j: np.append(parcube_up[:,i,j], parcube_low[:,i,j])
     par_single = lambda i,j: parcube_up[:,i,j]
     
