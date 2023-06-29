@@ -1453,7 +1453,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                         v3d = props[0][side]
                         r_fac = sin_incl * np.sin(self.phi_true)
                         z_fac = cos_incl
-                        props[0][side] = v3d[0]*phi_fac+v3d[1]*r_fac+v3d[2]*z_fac
+                        props[0][side] = v3d[0]*phi_fac - v3d[1]*r_fac - v3d[2]*z_fac
                     else: #1D vel, assuming vphi only
                         props[0][side] *= phi_fac 
                     props[0][side] += vel_kwargs['vsys']
