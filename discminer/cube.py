@@ -419,13 +419,13 @@ class Cube(object):
             self.data = self.data[
                 :, jcenter - npix : jcenter + npix, icenter - npix : icenter + npix
             ]
-            # The following line is wrong because the projection is not Cartesian:
+            # The following line is wrong because the RA axis is distorted by the DEC:
             #  self.header["CRVAL1"] = CRVAL1 + (icenter - CRPIX1) * CDELT1.
             #   A proper conversion must use wcs:
             newcr = aputils.pixel_to_skycoord(icenter-1, jcenter-1, self.wcs) #-1 to go back to 0-based convention
             self.header["CRVAL1"] = newcr.ra.value
             self.header["CRVAL2"] = newcr.dec.value
-            self.header["CRPIX1"] = npix
+            self.header["CRPIX1"] = npix #one-based
             self.header["CRPIX2"] = npix
 
         self.nchan, self.nx, _ = self.data.shape
@@ -634,6 +634,8 @@ class Cube(object):
         surface_from.make_emission_surface(ax, **kwargs)
 
     def plot_beam(self, ax, projection=None, **kwargs_ellipse):
+        if self.beam is None:
+            return 0
         kwargs=dict(lw=1,fill=True,fc="gray",ec="k")
         kwargs.update(kwargs_ellipse)
             
