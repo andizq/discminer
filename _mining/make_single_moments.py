@@ -26,9 +26,13 @@ tag = meta['tag']
 file_data = 'cube_data_%s_convtb.fits'%tag
 file_model = 'cube_model_%s_convtb.fits'%tag
 
-datacube = Data(file_data, dpc) # Read datacube and convert to Cube object
-modelcube = Data(file_model, dpc) # Read modelcube and convert to Cube object
-
+try:
+    datacube = Data(file_data, dpc) # Read datacube and convert to Cube object
+    modelcube = Data(file_model, dpc) # Read modelcube and convert to Cube object
+except FileNotFoundError:
+    datacube = Data(file_data.replace('_convtb', ''), dpc)
+    modelcube = Data(file_model.replace('_convtb', ''), dpc)    
+    
 #**********************
 #MAKE MOMENT MAPS
 #**********************

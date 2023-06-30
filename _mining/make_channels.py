@@ -85,11 +85,16 @@ model.params['intensity']['I0'] /= meta['downsamp_factor']
 #**************************
 if meta['mol']=='12co': modelcube = model.make_model(make_convolve=False) #Returns model cube and computes disc coordinates projected on the sky
 else: modelcube = model.make_model(make_convolve=True) 
-modelcube.filename = 'cube_model_%s.fits'%tag
-modelcube.convert_to_tb(writefits=True)
 
+modelcube.filename = 'cube_model_%s.fits'%tag
 datacube.filename = 'cube_data_%s.fits'%tag
-datacube.convert_to_tb(writefits=True)
+
+if datacube.beam is None:
+    modelcube.writefits()
+    datacube.writefits()    
+else:
+    modelcube.convert_to_tb(writefits=True)    
+    datacube.convert_to_tb(writefits=True)
 
 #**********************
 #VISUALISE CHANNEL MAPS

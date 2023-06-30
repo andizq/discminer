@@ -97,7 +97,7 @@ def get_tags_dict(log_file):
         if 'file_data' in line and line[0] !='#' and not file_read:
             file_read = 1
             exec(line, globals()) #file_data = 'cube.fits'; needs global vars info
-        if 'datacube.clip' in line and not file_clip:
+        if 'datacube.clip' in line and not file_clip and line[0]!='#':
             file_clip = 1
             file_data += '_clipped'
             
@@ -156,9 +156,11 @@ def get_base_pars(log_file, kind=[]):
         if 'fixincl' in kind:
             log_pars = np.append(log_pars, np.radians(incl_dict[tag_disc]))
             header += ['incl']
-            
-        log_pars = np.append(log_pars, vel_sign_dict[tag_disc])
-        header += ['vel_sign']
+
+
+        if 'vel_sign' not in header:
+            log_pars = np.append(log_pars, vel_sign_dict[tag_disc])
+            header += ['vel_sign']
         
         for i in range(len(header)):
             hdr = header[i]
@@ -282,5 +284,9 @@ if __name__ == '__main__':
             pars_dict['linewidth'].update({'q': 0.0})
             units_dict['linewidth'].update({'q': "none"})
 
-    custom_dict.update(gaps=gaps_dict[tags_dict['disc']], rings=rings_dict[tags_dict['disc']]) 
+    try:
+        custom_dict.update(gaps=gaps_dict[tags_dict['disc']], rings=rings_dict[tags_dict['disc']])
+    except KeyError:
+        custom_dict.update(gaps=[], rings=[])
+    
     make_json(dicts_list = [custom_dict, tags_dict, pars_dict, units_dict], keys_list = ['custom', 'metadata', 'best_fit', 'units'])

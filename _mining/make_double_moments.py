@@ -81,8 +81,11 @@ model.make_model()
 #**********
 datacube.convert_to_tb(writefits=False)
 file_model = 'cube_model_%s_convtb.fits'%tag
-modelcube = Data(file_model, dpc) # Read model and convert to Cube object
-
+try:
+    modelcube = Data(file_model, dpc) # Read model and convert to Cube object
+except FileNotFoundError:
+    modelcube = Data(file_model.replace('_convtb', ''), dpc)    
+    
 #**********************
 #MAKE MOMENT MAPS
 #**********************
