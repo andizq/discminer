@@ -7,8 +7,9 @@ from argparse import ArgumentParser
 
 parser = ArgumentParser(prog='make json parfile', description='Make master json file with model information to use as input for analysis scripts')
 parser.add_argument('-f', '--log_file', default='', type=str, help="if none tries to guess input log file")
-parser.add_argument('-o', '--overwrite', default=0, type=int, help="overwrite if parfile.json exists?")
-parser.add_argument('-r', '--reset', default=0, type=int, help="If (1) and overwrite, reset 'custom' dictionary in new parfile. If not (0) and overwrite, forward 'custom' dictionary and rewrite metadata and model parameters only")
+parser.add_argument('-p', '--prepare_file', default='prepare_data.py', type=str, help="script employed to clip and downsample the cube of interest. DEFAULTS to prepare_data.py")
+parser.add_argument('-o', '--overwrite', default=0, type=int, help="overwrite if parfile.json exists. DEFAULTS to 0")
+parser.add_argument('-r', '--reset', default=0, type=int, help="If (1) and overwrite, reset 'custom' dictionary in new parfile. If not (0) and overwrite, forward 'custom' dictionary and rewrite metadata and model parameters only. DEFAULTS to 0")
 args = parser.parse_args()
 
 #'kind' tags available: '', fixincl, I2pwl, I2pwlnosurf
@@ -64,6 +65,10 @@ file_data = ''
 
 if args.log_file == '':
     log_file = files_dir[np.argmax(['log_pars' in f for f in files_dir])]
+    for f in files_dir:
+        if 'log_pars' in f and 'default' in f:
+            log_file = f
+            break        
 else:
     log_file = args.log_file
     
@@ -83,7 +88,7 @@ def get_tags_dict(log_file):
     tag_steps = log_file_split[8+di].split('s')[0]
 
     #Try to get filename, distance and downsampling factors from prepare_data.py
-    pfile = np.asarray(os.listdir())[np.argmax(['prepare_data' in tmp for tmp in os.listdir()])] 
+    pfile = args.prepare_file
     prep = open(pfile, "r")
     downsamp = []
     file_read, file_clip = 0, 0
@@ -118,7 +123,7 @@ def get_tags_dict(log_file):
         file_data += '_downsamp_%dpix'%pro
     file_data += '.fits'
 
-    return dict(file_data=file_data, log_file=log_file, tag=tag_full, disc=tag_disc, mol=tag_mol, dpc=dpc, dv=tag_dv, program=tag_program, kind=tag_kind.tolist(), nwalkers=int(tag_walkers), nsteps=int(tag_steps), downsamp_pro=int(pro), downsamp_fit=int(fit), downsamp_factor=(fit/pro)**2)
+    return dict(file_data=file_data, prepare_script=pfile, log_pars=log_file, tag=tag_full, disc=tag_disc, mol=tag_mol, dpc=dpc, dv=tag_dv, program=tag_program, kind=tag_kind.tolist(), nwalkers=int(tag_walkers), nsteps=int(tag_steps), downsamp_pro=int(pro), downsamp_fit=int(fit), downsamp_factor=(fit/pro)**2)
 
 
 def get_base_pars(log_file, kind=[]):
