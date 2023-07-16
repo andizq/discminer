@@ -579,12 +579,29 @@ def make_round_map(
     return fig, ax
 
 
+from scipy.ndimage import maximum_filter
+
+def find_gradient_peaks(image, neighborhood_size=3, threshold=0):
+    # Apply maximum filter to find local maxima
+    neighborhood = np.ones((neighborhood_size, neighborhood_size))
+    local_max = maximum_filter(image, footprint=neighborhood) == image
+    
+    # Apply threshold to filter out peaks below the threshold value
+    local_max[image < threshold] = False
+    
+    # Get coordinates of the peaks
+    coordinates = np.transpose(np.nonzero(local_max))
+
+    return coordinates #local_max 
+
+
 def make_polar_map(
         map2d, levels, R, PHI, Rout,
         Rin = 0.0,
         fig=None, ax=None, 
         cmap=get_discminer_cmap('velocity'),
-        fmt='%5.2f', clabel=None, gradient=0,
+        fmt='%5.2f', clabel=None,
+        gradient=0, findpeaks='pos', filepeaks=None, kwargs_gradient_peaks = {},
         **kwargs_cbar
         #,filaments=[],                            
 ):
@@ -592,6 +609,9 @@ def make_polar_map(
 
     kwargs_cb = dict(orientation='vertical', subplots=False, perc=2.5)
     kwargs_cb.update(kwargs_cbar)
+
+    kw_peaks = dict(neighborhood_size=int(len(phi1d)/5), threshold=4) # 4 m/s/au
+    kw_peaks.update(kwargs_gradient_peaks)
     
     #SOME DEFINITIONS
     if fig is None:
@@ -608,7 +628,7 @@ def make_polar_map(
 
     dR = int((Rout-Rin)/50)
     R1d = np.arange(Rin, Rout+dR, dR)
-    phi1d = np.linspace(-180, 180, 1000)
+    phi1d = np.linspace(-180, 180, 100) #1000 
     dP = phi1d[1] - phi1d[0]
 
     PP, RR = np.meshgrid(phi1d, R1d, indexing='xy')
@@ -643,8 +663,24 @@ def make_polar_map(
             raise InputError(
                 kind, "kind must be 'attribute' or 'residuals'"
             )
-   
-        
+
+        if gradient=='phi':
+            peaks = []
+            if findpeaks=='pos':
+                peaks = find_gradient_peaks(map2d, **kw_peaks)
+            elif findpeaks=='neg':
+                peaks = find_gradient_peaks(-map2d, **kw_peaks)
+
+            phip, rrp, valp = [], [], []            
+            for peak in peaks:
+                phip.append(PP[tuple(peak)])
+                rrp.append(RR[tuple(peak)])
+                valp.append(map2d[tuple(peak)])                 
+            ax.scatter(phip, rrp, marker='o', ec='w', fc='none', lw=2.5, s=100 + np.abs(valp))
+
+            if filepeaks is not None:
+                np.savetxt(filepeaks, np.asarray([phip, rrp, valp]).T, fmt='%.6f', header='PHI, R, Gradient[unit/au]')
+            
     """
     kw_fil = dict(s=20, lw=1, marker='+')
     for i,filament in enumerate(filaments):
@@ -841,7 +877,7 @@ def make_clusters_1d(pick, which='phi', fig=None, ax=None, color='#FFB000', perc
 
     kde_cmap = get_cmap_from_color(color, lev=len(percentiles))        
     variance_x, variance_y = [], []
-
+    
     if which=='phi':
         peak_both = np.array([pick.peak_angle, pick.peak_resid]).T        
         klabels = pick.klabels_phi
@@ -849,9 +885,9 @@ def make_clusters_1d(pick, which='phi', fig=None, ax=None, color='#FFB000', perc
         xmin = -xmax
         kcent_x = pick.kcent_sort_phi
         kcent_y = pick.kcent_sort_vel_phi
-        kcent_var = pick.var_y_sort_phi        
-        peak_variance = pick.peak_variance_phi
-        var_nopeaks = pick.var_nopeaks_phi        
+        kcent_var = pick.var_y_sort_phi * var_scale       
+        loc_peak_variance = pick.peak_variance_phi
+        var_nopeaks = pick.var_nopeaks_phi * var_scale        
         color_var = pick.var_colors_phi
         for axi in ax:
             axi.set_xlim(-95,95)
@@ -866,9 +902,9 @@ def make_clusters_1d(pick, which='phi', fig=None, ax=None, color='#FFB000', perc
         xmin = np.nanmin(pick.lev_list)        
         kcent_x = pick.kcent_sort_R
         kcent_y = pick.kcent_sort_vel_R
-        kcent_var = pick.var_y_sort_R
-        peak_variance = pick.peak_variance_R
-        var_nopeaks = pick.var_nopeaks_R
+        kcent_var = pick.var_y_sort_R * var_scale
+        loc_peak_variance = pick.peak_variance_R
+        var_nopeaks = pick.var_nopeaks_R * var_scale
         color_var = pick.var_colors_R
         ax[0].set_xlabel(r'Radius [au]')    
         ax[1].set_xlabel(r'Radius [au]')
@@ -919,7 +955,7 @@ def make_clusters_1d(pick, which='phi', fig=None, ax=None, color='#FFB000', perc
         mod_minor_ticks(axi)
 
     ax[0].set_ylim(ymin, 1.05*ymax)
-    ax[1].axvline(peak_variance, lw=3, c=color, label='variance peak')
+    ax[1].axvline(loc_peak_variance, lw=3, c=color, label='variance peak')
     ax[1].legend(frameon=False, fontsize=MEDIUM_SIZE-2, handlelength=1.0) #, loc='lower left', bbox_to_anchor=(-0.04, 0.98))    
     ax[1].tick_params(labelleft=False, labelright=True)
 

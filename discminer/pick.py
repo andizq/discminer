@@ -81,7 +81,7 @@ class Pick(Rail):
         self.resid_list = copy.copy(resid)
         self.color_list = copy.copy(color)
 
-    def find_peaks(self, phi_min=-85, phi_max=85, detect_thres=3, clean_thres=np.inf):
+    def find_peaks(self, phi_min=-85, phi_max=85, detect_thres=3, clean_thres=np.inf, av_global=np.median):
         len_res = len(self.resid_list)
         peak_angle = np.zeros(len_res)
         peak_resid = np.zeros(len_res)
@@ -127,13 +127,29 @@ class Pick(Rail):
         peak_std = weighted_std(peak_resid, peak_weight, weighted_mean=peak_mean)
         for stdi in np.arange(detect_thres+1)[::-1]: #If it fails to find peaks above the threshold continue and try the next, lower, sigma threshold
             ind_global_peak = peak_resid > peak_mean+stdi*peak_std
-            if np.sum(ind_global_peak)>0: break
+            if np.sum(ind_global_peak) > 0:
+                print ('Global peak residual, dv=%.2f, found above %d sigma from mean value...'%(np.max(peak_resid), stdi))                
+                break
 
+        """
         self.peak_global_val = np.max(peak_resid[ind_global_peak])
         self.peak_global_angle = np.median(peak_angle[ind_global_peak])
         self.peak_global_radius = np.median(self.lev_list[ind_global_peak])
+        """
 
-        #********************
+        #Mean and std from all points
+        self.peak_mean = peak_mean
+        self.peak_std = peak_std
+        
+        #Global peak into
+        ind_max = np.argmax(peak_resid[ind_global_peak])
+        self.peak_global_val = peak_resid[ind_global_peak][ind_max]
+        self.peak_global_sign = peak_sign[ind_global_peak][ind_max]
+        self.peak_global_angle = peak_angle[ind_global_peak][ind_max]
+        self.peak_global_radius = self.lev_list[ind_global_peak][ind_max]
+        self.peak_global_sigma = (self.peak_global_val-peak_mean)/peak_std
+        
+        #Location, amplitude and other properties, for all points
         self.peak_resid = peak_resid
         self.peak_angle = peak_angle
         self.peak_sign = peak_sign
@@ -141,7 +157,7 @@ class Pick(Rail):
         self.peak_weight = peak_weight
 
 
-    def _make_clusters(self, n_clusters, axis='phi'): #, kw_find_peaks={}):
+    def _make_clusters(self, n_clusters, axis='phi'): 
 
         #************************
         #APPLY K-MEANS CLUSTERING
@@ -201,10 +217,10 @@ class Pick(Rail):
         if axis=='R': self.klabels_R = klabels
         return kcenters, variance_x, variance_y
 
-    def find_clusters(self, n_phi=8, n_R=8, detect_thres=3, var_scale=1e3, kw_find_peaks={}):
+    def find_clusters(self, n_phi=8, n_R=8, detect_thres=3):
 
-        kcenters_phi, variance_phi_x, variance_phi_y = self._make_clusters(n_phi, axis='phi', **kw_find_peaks)
-        kcenters_R, variance_R_x, variance_R_y = self._make_clusters(n_R, axis='R', **kw_find_peaks)
+        kcenters_phi, variance_phi_x, variance_phi_y = self._make_clusters(n_phi, axis='phi')
+        kcenters_R, variance_R_x, variance_R_y = self._make_clusters(n_R, axis='R')
 
         #***************************
         #FIND PEAK AZIMUTHAL CLUSTER VARIANCES
@@ -222,13 +238,13 @@ class Pick(Rail):
         kc_indsort_phi = np.argsort(kcenters_phi[:,0])
         kcent_sort_phi = kcenters_phi[:,0][kc_indsort_phi]
         kcent_sort_vel_phi = kcenters_phi[:,1][kc_indsort_phi]
-        var_y_sort_phi = variance_phi_y[kc_indsort_phi]*var_scale
+        var_y_sort_phi = variance_phi_y[kc_indsort_phi]
         self.var_nopeaks_phi = np.delete(var_y_sort_phi, acc_peaks_phi)
-        peak_variance_mean_phi = np.mean(self.var_nopeaks_phi)/var_scale #mean of variances excluding those from accepted peaks
+        peak_variance_mean_phi = np.mean(self.var_nopeaks_phi) #mean of variances excluding those from accepted peaks
 
         #peak_variance_sigmas = (self.variance_y[ind_variance_peak]-peak_variance_mean)/peak_variance_std #Considering only peak accepted variance
-        self.peak_variance_sigmas_phi = (np.mean(var_y_sort_phi[acc_peaks_phi])/var_scale-peak_variance_mean_phi)/peak_variance_std_phi #Considering mean std of all accepted peaks
-
+        self.peak_variance_sigmas_phi_mean = (np.mean(var_y_sort_phi[acc_peaks_phi])-peak_variance_mean_phi)/peak_variance_std_phi #Considering mean std of all accepted peaks
+        self.peak_variance_sigmas_phi = (var_y_sort_phi[acc_peaks_phi]-peak_variance_mean_phi)/peak_variance_std_phi #std of each accepted peak        
         #***************************
         #FIND PEAK RADIAL CLUSTER VARIANCES
         #***************************
@@ -245,14 +261,18 @@ class Pick(Rail):
         kc_indsort_R = np.argsort(kcenters_R[:,0])
         kcent_sort_R = kcenters_R[:,0][kc_indsort_R]
         kcent_sort_vel_R = kcenters_R[:,1][kc_indsort_R]
-        var_y_sort_R = variance_R_y[kc_indsort_R]*var_scale
+        var_y_sort_R = variance_R_y[kc_indsort_R]
         self.var_nopeaks_R = np.delete(var_y_sort_R, acc_peaks_R)
-        peak_variance_mean_R = np.mean(self.var_nopeaks_R)/var_scale #mean of variances excluding those from accepted peaks
+        peak_variance_mean_R = np.mean(self.var_nopeaks_R) #mean of variances excluding those from accepted peaks
 
         #peak_variance_sigmas = (self.variance_y[ind_variance_peak]-peak_variance_mean)/peak_variance_std #Considering only peak accepted variance
-        self.peak_variance_sigmas_R = (np.mean(var_y_sort_R[acc_peaks_R])/var_scale-peak_variance_mean_R)/peak_variance_std_R #Considering mean std of all accepted peaks
+        self.peak_variance_sigmas_R_mean = (np.mean(var_y_sort_R[acc_peaks_R])-peak_variance_mean_R)/peak_variance_std_R #Considering mean std of all accepted peaks
+        self.peak_variance_sigmas_R = (var_y_sort_R[acc_peaks_R]-peak_variance_mean_R)/peak_variance_std_R #std of each accepted peak        
 
         #**************************
+        self.acc_peaks_phi = acc_peaks_phi
+        self.acc_peaks_R = acc_peaks_R
+        
         self.kcent_sort_phi = kcent_sort_phi
         self.var_y_sort_phi = var_y_sort_phi
 
@@ -267,3 +287,78 @@ class Pick(Rail):
 
         self.kcent_sort_vel_R = kcent_sort_vel_R
         self.kcent_sort_vel_phi = kcent_sort_vel_phi
+
+        #Background properties
+        self.peak_variance_std_R = peak_variance_std_R
+        self.peak_variance_mean_R = peak_variance_mean_R
+        self.peak_variance_std_phi = peak_variance_std_phi
+        self.peak_variance_mean_phi = peak_variance_mean_phi
+        
+        #Weighted mean location of accepted clusters
+        self.acc_phi = np.sum(kcent_sort_phi[acc_peaks_phi] * self.peak_variance_sigmas_phi) / np.sum(self.peak_variance_sigmas_phi)                
+        self.acc_R = np.sum(kcent_sort_R[acc_peaks_R] * self.peak_variance_sigmas_R) / np.sum(self.peak_variance_sigmas_R)
+
+    def writetxt(self, filename='pick_summary.txt'):
+
+        arr_global_peak = [
+            [
+                self.peak_global_angle,
+                self.peak_global_radius,
+                self.peak_global_val*self.peak_global_sign,
+                self.peak_global_sigma,
+                self.peak_mean,
+                self.peak_std,
+                'global_peak'
+            ]
+        ]
+        
+        arr_clusters_phi = []        
+        for n, ind in enumerate(self.acc_peaks_phi):
+            arr_clusters_phi.append(
+                [
+                    self.kcent_sort_phi[ind],
+                    np.nan,
+                    self.var_y_sort_phi[ind],
+                    self.peak_variance_sigmas_phi[n],
+                    self.peak_variance_mean_phi,
+                    self.peak_variance_std_phi,
+                    'cluster_phi_%d'%n
+                ]
+            )
+
+        arr_clusters_R = []            
+        for n, ind in enumerate(self.acc_peaks_R):
+            arr_clusters_R.append(
+                [                    
+                    np.nan,
+                    self.kcent_sort_R[ind],
+                    self.var_y_sort_R[ind],
+                    self.peak_variance_sigmas_R[n],
+                    self.peak_variance_mean_R,
+                    self.peak_variance_std_R,
+                    'cluster_R_%d'%n
+                ]
+            )
+            
+        arr_clusters_acc = [
+            [
+                self.acc_phi,
+                self.acc_R,
+                np.nan,
+                np.nan,
+                np.nan,
+                np.nan,                
+                'weighted_mean_centre_from_accepted_clusters'
+            ]
+        ]
+            
+        arr_tot = np.asarray(arr_global_peak + arr_clusters_phi + arr_clusters_R + arr_clusters_acc, dtype=object).squeeze()
+
+        np.savetxt(
+            filename,
+            arr_tot,
+            fmt=('%.2f %.2f %.2e %.2f %.2e %.2e %s').split(),
+            header='phi[deg]\tR[au]\tvalue\tsigma\tmean_bckg\tstd_bckg\tcomments',
+            delimiter='\t'
+        )
+        
