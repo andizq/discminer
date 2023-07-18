@@ -609,9 +609,6 @@ def make_polar_map(
 
     kwargs_cb = dict(orientation='vertical', subplots=False, perc=2.5)
     kwargs_cb.update(kwargs_cbar)
-
-    kw_peaks = dict(neighborhood_size=int(len(phi1d)/5), threshold=4) # 4 m/s/au
-    kw_peaks.update(kwargs_gradient_peaks)
     
     #SOME DEFINITIONS
     if fig is None:
@@ -639,6 +636,9 @@ def make_polar_map(
                                           extent=[PP.min(), PP.max(), RR.min(), RR.max()],
                                           levels=levels,
                                           extend='both', origin='lower')
+
+    kw_peaks = dict(neighborhood_size=int(len(phi1d)/5), threshold=4) # 4 m/s/au
+    kw_peaks.update(kwargs_gradient_peaks)
     
     if not gradient:
         im = make_plot(pmap2d)
