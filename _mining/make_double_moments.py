@@ -1,5 +1,5 @@
 from discminer.core import Data
-from discminer.disc2d import General2d
+from discminer.disc2d import Model
 import discminer.cart as cart
 
 import numpy as np
@@ -9,15 +9,14 @@ import json
 import copy
 
 from argparse import ArgumentParser
+from utils import add_parser_args
 
 parser = ArgumentParser(prog='make moments', description='Make double gauss or double bell moments and save outputs into .fits files')
-parser.add_argument('-m', '--method', default='doublebell', type=str, choices=['dgauss', 'dbell', 'doublegaussian', 'doublebell'], help="Type of two-component kernel to fit")
-parser.add_argument('-k', '--kind', default='mask', type=str, choices=['mask', 'sum'], help="How the two kernels must be merged")
-parser.add_argument('-s', '--sigma', default=5, type=float, help='Mask out pixels with peak intensities below sigma threshold')
-args = parser.parse_args()
-
-if args.method == 'dbell': args.method='doublebell'
-if args.method == 'dgauss': args.method='doublegaussian'
+parser.add_argument('-ni', '--niter', default=10, type=int,
+                    help="Number of iterations to re-do fit on hot pixels. DEFAULS to 10")
+parser.add_argument('-ne', '--neighs', default=5, type=int,
+                    help="Number of neighbour pixels on each side of hot pixel considered for the iterative fit. DEFAULS to 5")
+args = add_parser_args(parser, kernel='doublebell', kind=True, sigma=True)
 
 with open('parfile.json') as json_file:
     pars = json.load(json_file)
@@ -45,7 +44,7 @@ vchannels = datacube.vchannels
 #****************************
 #INIT MODEL AND PRESCRIPTIONS
 #****************************
-model = General2d(datacube, Rmax, Rmin=0, prototype=True)
+model = Model(datacube, Rmax, Rmin=0, prototype=True)
 
 model.velocity_func = model.keplerian_vertical # vrot = sqrt(GM/r**3)*R
 model.line_profile = model.line_profile_bell
@@ -81,17 +80,14 @@ model.make_model()
 #**********
 datacube.convert_to_tb(writefits=False)
 file_model = 'cube_model_%s_convtb.fits'%tag
-try:
-    modelcube = Data(file_model, dpc) # Read model and convert to Cube object
-except FileNotFoundError:
-    modelcube = Data(file_model.replace('_convtb', ''), dpc)    
-    
+modelcube = Data(file_model, dpc) # Read model and convert to Cube object
+
 #**********************
 #MAKE MOMENT MAPS
 #**********************
 #Use model priors + kernel
-moments_data = datacube.make_moments(model=model, method=args.method, kind=args.kind, sigma_thres=args.sigma,
+moments_data = datacube.make_moments(model=model, method=args.kernel, kind=args.kind, sigma_thres=args.sigma, niter=args.niter, neighs=args.neighs,
                                      writecomp=True, parcube=True, tag='_data') 
-moments_model = modelcube.make_moments(model=model, method=args.method, kind=args.kind, sigma_thres=args.sigma,
+moments_model = modelcube.make_moments(model=model, method=args.kernel, kind=args.kind, sigma_thres=0, niter=5, #set sigma 0 to prevent masking of model
                                        writecomp=True, parcube=True, tag='_model') 
 

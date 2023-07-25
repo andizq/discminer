@@ -27,8 +27,8 @@ from argparse import ArgumentParser
 
 use_discminer_style()
 
-parser = ArgumentParser(prog='plot radial profiles', description='Plot radial profiles from moments and residuals [velocity, linewidth, [peakintensity, peakint]?')
-args = add_parser_args(parser, moment=True, kind=True, surface=True, writetxt=True, mask_minor=True, mask_major=True, Rinner=True, Router=True, sigma=True)
+parser = ArgumentParser(prog='plot radial profiles', description='Compute radial profiles from moment maps and residuals.')
+args = add_parser_args(parser, moment=True, kernel=True, kind=True, surface=True, writetxt=True, mask_minor=True, mask_major=True, Rinner=True, Router=True, sigma=True, smooth=True)
 
 #**********************
 #JSON AND PARSER STUFF
@@ -82,7 +82,7 @@ if args.moment=='velocity':
 #**************************
 #MAKE PLOTS
 beam_au = datacube.beam_size.to('au').value
-R_prof = np.arange(args.Rinner*beam_au, args.Router*Rout, beam_au/5)
+R_prof = np.arange(args.Rinner*beam_au, args.Router*Rout, beam_au/4.0) #changed to beam/4 from beam/5 before
 xlim0, xlim1 = 0.5*R_prof[0], 1.05*R_prof[-1]
 
 def writetxt(arr, tag=''):
@@ -114,7 +114,7 @@ def make_savgol(prof):
 
 def make_basic_layout(ax):
     ax.set_xlim(xlim0, xlim1)
-    ax.set_xlabel('Radius [au]', fontsize=MEDIUM_SIZE)
+    ax.set_xlabel('Radius [au]', fontsize=MEDIUM_SIZE-1)
     mod_major_ticks(ax, axis='x', nbins=10)
     mod_minor_ticks(ax)
     ax.axhline(0, lw=2, ls='--', color='0.7')
@@ -168,11 +168,11 @@ def make_profile(ax, R_prof, ysav, y, yerr, kind='data', perr='bar', **kwargs):
         
     if args.writetxt: writetxt([R_prof, y, yerr], tag=kind)
 
-
     
 #*************
 #MAIN BODY
 #*************
+kw_ylabel = dict(fontsize=MEDIUM_SIZE-2, labelpad=0)
 
 if args.moment=='velocity':
 
@@ -190,12 +190,11 @@ if args.moment=='velocity':
             pass
             moment_data = np.where(np.abs(moment_data-vsys)>5, np.nan, moment_data)    
     """
-    if args.kind in ['doublebell', 'doublegaussian']:
+    if args.kernel in ['doublebell', 'doublegaussian']:
         mask_map_ref = np.abs((moment_data-vsys)/(np.cos(model.projected_coords['phi'][args.surface])*np.sin(incl)))
     else:
         mask_map_ref = None
         
-    kw_avg2 = dict(surface=ref_surf, av_func=np.nanmean, mask_ang=mask_ang, sigma_thres=args.sigma)
     kw_avg = dict(surface=ref_surf, av_func=np.nanmean, mask_ang=mask_ang, sigma_thres=args.sigma, mask_from_map=mask_map_ref)
     
     #VZ
@@ -233,21 +232,32 @@ if args.moment=='velocity':
     rail_vr = Rail(model, vr, R_prof)
     vel_r, vel_r_error = rail_vr.get_average(mask_ang=0.0, surface=ref_surf, av_func=np.nanmedian)
     
+    #SAVE 3D VELOCITIES IN ONE FILE
+    header = 'radius[au] v_rot[m/s] v_phi[m/s] dv_phi_rot[m/s] v_r[m/s] dv_r[m/s] v_z[m/s] dv_z[m/s]'
+    vel_arr = [R_prof, vel_rot, vel_phi, vel_phi_error, vel_r, vel_r_error, vel_z, vel_z_error]
+    vel_arr_t = np.asarray(vel_arr).T
+
+    np.savetxt('%s_%s_%s_radial_profile_3D_velocities.txt'%(meta['disc'], meta['mol'], args.kernel), vel_arr_t, fmt='%.6f', 
+               header=header, footer=str(meta['log_file']) + ' --mask_minor ' + str(args.mask_minor) + ' --mask_major ' + str(args.mask_major) + ' --Rinner ' + str(args.Rinner) + ' --Router ' + str(args.Router))
+
     #PLOT 3D VELOCITIES
     fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(11,4))
         
     ysav_phi, ysav_phi_deriv = make_savgol(vel_phi)
     make_profile(ax, R_prof, ysav_phi, vel_phi, vel_phi_error, kind='vphi', perr='fill')
-
+    ax.scatter(R_prof, vel_phi, ec='dodgerblue', fc='none', s=25, zorder=12)
+    
     ysav_z, ysav_z_deriv = make_savgol(vel_z)    
     make_profile(ax, R_prof, ysav_z, vel_z, vel_z_error, kind='vz', perr='fill')
+    ax.scatter(R_prof, vel_z, ec='k', fc='none', s=25, zorder=11)
     
     ysav_r, ysav_r_deriv = make_savgol(vel_r)
     make_profile(ax, R_prof, ysav_r, vel_r, vel_r_error, kind='vr', perr='fill')    
-
+    ax.scatter(R_prof, vel_r, ec='#FFB000', fc='none', s=25, zorder=10)
+    
     #DECORATIONS
     make_basic_layout(ax)
-    ax.set_ylabel(r'$\delta\upsilon$ [km/s]', fontsize=MEDIUM_SIZE)
+    ax.set_ylabel(r'$\delta\upsilon$ [km/s]', fontsize=MEDIUM_SIZE, labelpad=10)
     ax.set_ylim(clim0_res, clim1_res)
     make_1d_legend(ax, fontsize=MEDIUM_SIZE+1)    
     make_substructures(ax, gaps=gaps, rings=rings, label_gaps=True, label_rings=True)
@@ -281,7 +291,7 @@ if args.moment=='velocity':
 
     #DECORATIONS
     make_basic_layout(ax)
-    ax.set_ylabel(r'Rotation velocity [km/s]', fontsize=MEDIUM_SIZE)
+    ax.set_ylabel(r'Rotation velocity [km/s]', fontsize=MEDIUM_SIZE, labelpad=10)
     ax.set_ylim(clim0, 1.2*np.nanmax(vel_phi))
     make_1d_legend(ax, fontsize=MEDIUM_SIZE-3)
     make_substructures(ax, gaps=gaps, rings=rings, label_gaps=True, label_rings=True)  
@@ -304,7 +314,7 @@ else:
         mask_r = mask | (np.abs(phi_s) < np.radians(args.mask_major)) | (np.abs(phi_s) > np.radians(180-args.mask_major)) | (moment_data>40)
         moment_data = np.where(mask_r, np.nan, moment_data)
 
-    if args.kind in ['doublebell', 'doublegaussian']:
+    if args.kernel in ['doublebell', 'doublegaussian']:
         mask_map_ref = moment_data
     else:
         mask_map_ref = None
@@ -314,7 +324,7 @@ else:
     #*****************
     kw_avg = dict(surface=ref_surf, av_func=np.nanmedian, mask_ang=mask_ang, sigma_thres=args.sigma, mask_from_map=mask_map_ref, plot_diagnostics=True)
         
-    fig, ax = plt.subplots(ncols=1, nrows=2, figsize=(11,7))
+    fig, ax = plt.subplots(ncols=1, nrows=2, figsize=(11,6))
 
     #DATA CURVE
     rail_phi = Rail(model, moment_data, R_prof)
@@ -343,7 +353,7 @@ else:
     ax[0].set_ylim(clim0, clim1)
     ax[1].set_ylim(clim0_res, clim1_res)
 
-    #fmt
+    #fmt (Homogenise fmt for both panels)
     #******    
     ticks = ax[1].get_yticks()
 
@@ -354,23 +364,26 @@ else:
         else:
             makeint = True
 
-    ftick = round(ticks[0], 2)
+    #ftick = round(ticks[0], 2)
+    ftick = round(clim0_res, 2)
     ftick = int(ftick) if makeint else ftick
+    ftick_res = str(ftick)
     
     isfloat = isinstance(ftick, float)
-    lfmt = len(str(ftick))
+    #lfmt = len(str(ftick))
+    lfmt = 5
     
     if isfloat:
-        if ftick<0.2:
-            ftick_res = str(ftick)+'0'
+        if abs(ftick)<0.2 and lfmt<5: #e.g. -0.1
+            ftick_res += '0'
             lfmt+=1
-
+        
         ndec = len(str(ftick).split('.')[-1])
         ndec_res = len(str(ftick_res).split('.')[-1])
         
-        cfmt = '%'+'%d.%df'%(lfmt, ndec)
-        cfmt_res = '%'+'%d.%df'%(lfmt, ndec_res)
-        
+        cfmt = '%'+'%d.%df'%(lfmt+ndec, ndec)
+        cfmt_res = '%'+'%d.%df'%(lfmt+ndec_res, ndec_res)
+        print (ndec_res, ftick_res)
     else:
         cfmt = cfmt_res = '%'+'%dd'%lfmt
     
@@ -379,14 +392,14 @@ else:
     #****
     for axi in ax:
         make_basic_layout(axi)
-        axi.tick_params(which='both', labelsize=MEDIUM_SIZE-2)
+        axi.tick_params(which='both', labelsize=MEDIUM_SIZE-3)
 
     ax[0].yaxis.set_major_formatter(FormatStrFormatter(cfmt))
     ax[1].yaxis.set_major_formatter(FormatStrFormatter(cfmt_res))            
     ax[0].set_xlabel(None)
-    ax[1].set_xlabel('Radius [au]', fontsize=MEDIUM_SIZE)
-    ax[0].set_ylabel(clabel, fontsize=MEDIUM_SIZE)
-    ax[1].set_ylabel('Residuals'+clabel_res.split('residuals')[-1], fontsize=MEDIUM_SIZE)
+    ax[1].set_xlabel('Radius [au]', fontsize=MEDIUM_SIZE-2)
+    ax[0].set_ylabel(clabel, **kw_ylabel)
+    ax[1].set_ylabel('Residuals', **kw_ylabel) #+clabel_res.split('residuals')[-1] #--> unit
 
     make_1d_legend(ax[0], ncol=2)
 

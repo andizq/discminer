@@ -1,10 +1,10 @@
 from discminer.core import Data
 from discminer.cube import Cube
-from discminer.disc2d import General2d
+from discminer.disc2d import Model
 from discminer.plottools import use_discminer_style
 import discminer.cart as cart
 
-from utils import get_noise_mask
+from utils import get_noise_mask, init_data_and_model
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -34,67 +34,33 @@ tag = meta['tag']
 au_to_m = u.au.to('m')
 
 dpc = meta['dpc']*u.pc
-Rmax = 1.3*best['intensity']['Rout']*u.au #Max model radius, 30% larger than disc Rout
 
-#*********
-#LOAD DATA
-#*********
-datacube = Data(file_data, dpc) # Read data and convert to Cube object
+#*******************
+#LOAD DATA AND MODEL
+#*******************
+datacube, model = init_data_and_model(Rmin=0, Rmax=1.2)
 vchannels = datacube.vchannels
-
-#****************************
-#INIT MODEL AND PRESCRIPTIONS
-#****************************
-model = General2d(datacube, Rmax, Rmin=0, prototype=True)
-
-model.velocity_func = model.keplerian_vertical # vrot = sqrt(GM/r**3)*R
-model.line_profile = model.line_profile_bell
-
-if 'sum' in meta['kind']:
-    model.line_uplow = model.line_uplow_sum
-else:
-    model.line_uplow = model.line_uplow_mask
-
-if 'I2pwl' in meta['kind']:
-    model.intensity_func = cart.intensity_powerlaw_rbreak
-elif 'I2pwlnosurf' in meta['kind']:
-    model.intensity_func = cart.intensity_powerlaw_rbreak_nosurf    
-else:
-    model.intensity_func = cart.intensity_powerlaw_rout
-
-if 'surf2pwl' in meta['kind']:
-    model.z_upper_func = cart.z_upper_powerlaw
-    model.z_lower_func = cart.z_lower_powerlaw
-else:
-    model.z_upper_func = cart.z_upper_exp_tapered
-    model.z_lower_func = cart.z_lower_exp_tapered
+pix_downsamp = model.grid['step']*meta['downsamp_fit']/au_to_m
 
 #Useful definitions for plots
 xmax = model.skygrid['xmax'] 
-xlim = 1.15*xmax/au_to_m
+xlim = 1.0*xmax/au_to_m
 extent= np.array([-xmax, xmax, -xmax, xmax])/au_to_m
   
-#**************
-#PROTOTYPE PARS
-#**************
-model.params = copy.copy(best)
-model.params['intensity']['I0'] /= meta['downsamp_factor']
-
 #**************************
 #MAKE MODEL (2D ATTRIBUTES)
 #**************************
-if meta['mol']=='12co': modelcube = model.make_model(make_convolve=False) #Returns model cube and computes disc coordinates projected on the sky
-else: modelcube = model.make_model(make_convolve=True) 
+#Return model cube and computes disc coordinates projected on the sky
+if meta['mol'] in ['12co', '13co'] and pix_downsamp>1.01*model.beam_size.value:
+    modelcube = model.make_model(make_convolve=False) 
+else:
+    modelcube = model.make_model(make_convolve=True) 
 
 modelcube.filename = 'cube_model_%s.fits'%tag
-datacube.filename = 'cube_data_%s.fits'%tag
+modelcube.convert_to_tb(writefits=True)
 
-if datacube.beam is None:
-    modelcube.writefits()
-    datacube.writefits()    
-else:
-    modelcube.convert_to_tb(writefits=True)    
-    datacube.convert_to_tb(writefits=True)
+datacube.filename = 'cube_data_%s.fits'%tag
+datacube.convert_to_tb(writefits=True)
 
 #**********************
 #VISUALISE CHANNEL MAPS
@@ -106,7 +72,7 @@ modelcube.show_side_by_side(datacube, extent=extent, int_unit='Intensity [K]', s
 #PLOT CHANNEL MAPS
 #*****************    
 idlim = int(0.5*chan_step*(nchans-1))
-plot_channels = np.linspace(-idlim,idlim,nchans) + np.argmin(np.abs(vchannels-best['velocity']['vsys']))  #Channel ids to be plotted, in steps of 6 chans, selected around ~vsys channel
+plot_channels = np.linspace(-idlim,idlim,nchans) + np.argmin(np.abs(vchannels-best['velocity']['vsys']))  #Channel ids to be plotted, selected around ~vsys channel
 
 #DATA CHANNELS
 fig, ax, im, cbar = datacube.make_channel_maps(channels={'indices': plot_channels}, ncols=5, contours_from=model)
@@ -134,7 +100,7 @@ fig, ax, im, cbar = residualscube.make_channel_maps(channels={'indices': plot_ch
                                                     xlims = (-xlim, xlim),
                                                     ylims = (-xlim, xlim),
                                                     mask_under=3*noise_mean,
-                                                    levels=np.linspace(-29, 29, 32))
+                                                    levels=np.linspace(-custom['Ilim'], custom['Ilim'], 32))
 
 
 #SHOW DISC EMISSION SURFACE AND MAIN AXES

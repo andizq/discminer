@@ -23,9 +23,7 @@ from argparse import ArgumentParser
 use_discminer_style()
 
 parser = ArgumentParser(prog='plot gradient residual maps', description='Plot gradient residual maps')
-parser.add_argument('-g', '--gradient', default='r', type=str, choices=['peak', 'r', 'phi'], help="Coordinate along which the gradient will be computed. If 'peak', the maximum gradient is computed.")
-
-args = add_parser_args(parser, moment=True, kind=True, surface=True, Rinner=True, Router=True)
+args = add_parser_args(parser, moment=True, kernel=True, kind=True, surface=True, Rinner=True, Router=True, gradient=True, smooth=True)
 
 #**********************
 #JSON AND PARSER STUFF
@@ -51,11 +49,11 @@ ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get
 
 levels_resid = np.linspace(-clim, clim, 48)
 
-clim_grad = 0.05*clim #For gradient: dv/dR [unit/au]
+clim_grad = 0.04*clim #For gradient: dv/dR [unit/au]
 cmap_grad = plt.get_cmap('nipy_spectral')
 cmap_grad_r = plt.get_cmap('nipy_spectral_r')
 
-levels_grad = np.linspace(0, clim_grad, 48)
+levels_grad = np.linspace(0.05*clim_grad, clim_grad, 48)
 
 #****************
 #SOME DEFINITIONS
@@ -139,6 +137,7 @@ _, _, cbar = make_polar_map(ufac*residuals, ufac*levels_grad,
                             R[args.surface]*u.m, phi[args.surface]*u.rad, Rout_plt,
                             fig=fig, ax=ax[0],
                             Rin=Rin_plt, gradient=args.gradient,
+                            findpeaks='pos', filepeaks='phi_gradient_peaks_%s_positive.txt'%mtags['base'],
                             cmap=cmap_grad, fmt=dfmt, clabel=clabels_grad[args.gradient])
 if args.gradient!='peak':
     #Negative gradient
@@ -146,6 +145,7 @@ if args.gradient!='peak':
                                 R[args.surface]*u.m, phi[args.surface]*u.rad, Rout_plt,
                                 fig=fig, ax=ax[1],
                                 Rin=Rin_plt, gradient=args.gradient,
+                                findpeaks='neg', filepeaks='phi_gradient_peaks_%s_negative.txt'%mtags['base'],
                                 cmap=cmap_grad_r, fmt=dfmt, clabel=clabels_grad[args.gradient])
 
 
@@ -156,14 +156,30 @@ _, _, cbar = make_polar_map(ufac*residuals, ufac*levels_resid,
                             Rin=Rin_plt, gradient=0,
                             cmap=cmap_res, fmt='%4d', clabel=clabels[args.moment])
 
+
+if args.moment=='velocity':
+    try:
+        peaks_pos = np.loadtxt('phi_gradient_peaks_%s_positive.txt'%mtags['base']).T    
+        peaks_neg = np.loadtxt('phi_gradient_peaks_%s_negative.txt'%mtags['base']).T
+        ax[-1].scatter(peaks_pos[0], peaks_pos[1], marker='+', color='indigo', lw=4, s=250)
+        ax[-1].scatter(peaks_neg[0], peaks_neg[1], marker='_', color='indigo', lw=4, s=250)
+        
+    except FileNotFoundError:
+        pass
+
 for axi in ax:
     if axi!=ax[-1]:
         axi.set_xlabel(None)
         kc = {'color': '1.0'}
     else:
         kc = {}
-        
-    make_substructures(axi, gaps=gaps, rings=rings, twodim=True, polar=True, label_rings=True,
+
+    if axi==ax[-1]:
+        label_rings = True
+    else:
+        axi.set_ylabel(None)
+        label_rings = False
+    make_substructures(axi, gaps=gaps, rings=rings, twodim=True, polar=True, label_rings=label_rings,
                        kwargs_gaps=kc, kwargs_rings=kc)
 
 ax[0].set_title(ctitle, fontsize=16, color='k')

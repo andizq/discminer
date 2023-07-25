@@ -15,19 +15,12 @@ import json
 import sys
 
 from argparse import ArgumentParser
+from utils import add_parser_args
 
 use_discminer_style()
 
 parser = ArgumentParser(prog='Plot reconstructed cubes', description='Plot upper+lower reconstructed cubes')
-parser.add_argument('-m', '--method', default='dbell', type=str, choices=['dbell', 'doublebell', 'dgauss', 'doublegaussian'], help="Type of kernel used to combine upper+lower surface profiles")
-parser.add_argument('-k', '--kind', default='mask', type=str, choices=['mask', 'sum'], help="Method used to combine upper and lower surface kernels")
-args = parser.parse_args()
-
-if args.method=='dbell':
-    args.method='doublebell'
-    
-if args.method=='dgauss':
-    args.method='doublegaussian'
+args = add_parser_args(parser, kernel='doublebell', kind=True)
 
 #**********
 #READ JSON
@@ -61,10 +54,10 @@ extent= np.array([-xmax, xmax, -xmax, xmax])
 #****************
 #READ PARCUBE AND MAKE CUBE FROM IT
 #****************
-parcube_up = fits.getdata('parcube_up_%s_%s_data.fits'%(args.method, args.kind))
-parcube_low = fits.getdata('parcube_low_%s_%s_data.fits'%(args.method, args.kind))
+parcube_up = fits.getdata('parcube_up_%s_%s_data.fits'%(args.kernel, args.kind))
+parcube_low = fits.getdata('parcube_low_%s_%s_data.fits'%(args.kernel, args.kind))
 
-fitdata = fit_kernel.get_channels_from_parcube(parcube_up, parcube_low, vchannels, method=args.method, kind=args.kind, n_fit=None)
+fitdata = fit_kernel.get_channels_from_parcube(parcube_up, parcube_low, vchannels, method=args.kernel, kind=args.kind, n_fit=None)
 fitcube = Cube(fitdata, datacube.header, vchannels, dpc, beam=datacube.beam)
 
 #SHOW 

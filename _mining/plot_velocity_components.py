@@ -23,7 +23,7 @@ from argparse import ArgumentParser
 use_discminer_style()
 
 parser = ArgumentParser(prog='plot residual maps', description='Plot residual maps')
-args = add_parser_args(parser, moment=True, kind=True, surface=True, projection=True)
+args = add_parser_args(parser, moment=True, kernel=True, kind=True, surface=True, projection=True, smooth=True)
      
 #**********************
 #JSON AND PARSER STUFF

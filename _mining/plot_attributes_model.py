@@ -44,7 +44,7 @@ ax2 = fig.add_axes([0.52,0.5,0.4,0.4])
 ax3 = fig.add_axes([0.52,0.1,0.4,0.4])
 
 #UPPER SURFACE
-R_profile = np.linspace(datacube.beam_size, Rmax, 100)
+R_profile = np.linspace(0*u.au, Rmax, 100)
 coords = {'R': R_profile}
 
 linewidth_upper = model.get_attribute_map(coords, 'linewidth', surface='upper') #Computes coords{'z'} if not found.

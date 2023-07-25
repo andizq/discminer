@@ -26,7 +26,7 @@ use_discminer_style()
 
 parser = ArgumentParser(prog='plot moment maps', description='Plot moment map [velocity, linewidth, [peakintensity, peakint]?')
 parser.add_argument('-c', '--coords', default='sky', type=str, choices=['disc', 'sky'], help="reference frame")
-args = add_parser_args(parser, kind=True, surface=True, Rinner=True, Router=True)
+args = add_parser_args(parser, kernel=True, kind=True, surface=True, Rinner=True, Router=True, smooth=True)
      
 #**********************
 #JSON AND PARSER STUFF
@@ -123,7 +123,7 @@ def decorate_ax_res_2D(ax, cbar, lim=xlim):
 #PLOT RESIDUALS
 #****************    
 fig, ax = plt.subplots(ncols=3, nrows=1, figsize=(17,6))
-cbar_axes = [add_cbar_ax(fig, axi) for axi in ax]
+cbar_axes = [add_cbar_ax(fig, axi, perc=5, pad=0) for axi in ax]
 
 clabels = {
     'linewidth': r'$\Delta$ Linewidth [km s$^{-1}$]',
@@ -137,6 +137,13 @@ for i, (axi, moment) in enumerate(zip(ax, mtypes)):
     levels_resid = np.linspace(-clim, clim, 32)
     levels_cbar = np.linspace(-clim, clim, 5)
 
+    chot = '0.5'
+    cmap_mom.set_under(chot)
+    cmap_mom.set_over(chot)
+    
+    cmap_res.set_under(chot)
+    cmap_res.set_over(chot)
+    
     kwargs_im = dict(cmap=cmap_res, levels=levels_resid, extend='both', origin='lower')
     kwargs_cbar = dict(orientation='horizontal', format=cfmt, ticks=levels_cbar, pad=0.03, shrink=0.95, aspect=15)    
     
@@ -150,6 +157,13 @@ for i, (axi, moment) in enumerate(zip(ax, mtypes)):
                            R[args.surface][nh]/au_to_m,
                            z[args.surface][nh]/au_to_m,
                            incl, PA, xc=xc, yc=yc)
+
+        Contours.emission_surface(
+            axi, R, phi, extent=extent,
+            R_lev=np.array(rings)*u.au.to('m'), which='upper',
+            kwargs_R={'linestyles': '-', 'linewidths': 1.2, 'colors': 'k'},
+            kwargs_phi={'colors': 'none'}
+        )
         
     elif args.coords=='disc':
         im = axi.contourf(Xproj, Yproj, residuals[moment], **kwargs_im)

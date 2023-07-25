@@ -26,8 +26,15 @@ from argparse import ArgumentParser
 use_discminer_style()
 
 parser = ArgumentParser(prog='plot residual maps', description='Plot residual maps')
+
+parser.add_argument('-sppos', '--spirals_pos', nargs='*', default=[], type=int, help="Positive spiral ids to overlay fitted curve and save fit parameters into txt file. FORMAT: -sp 0 2 3")
+parser.add_argument('-spneg', '--spirals_neg', nargs='*', default=[], type=int, help="Negative spiral ids to overlay fitted curve and save fit parameters into txt file. FORMAT: -sn 0 2 3")
+parser.add_argument('-sptype', '--spiral_type', default='linear', choices=['linear', 'log'], help="Type of spiral fit to be shown and saved into file.")
+parser.add_argument('-spmom', '--spiral_moment', default='velocity', choices=['velocity', 'linewidth', 'peakintensity'], help="Moment map utilised to extract and fit the spirals")
+
 parser.add_argument('-f', '--filaments', default=0, type=int, choices=[0, 1], help="Make filaments")
-args = add_parser_args(parser, moment=True, kind=True, surface=True, projection=True, Rinner=True, Router=True)
+
+args = add_parser_args(parser, moment=True, kernel=True, kind=True, surface=True, projection=True, Rinner=True, Router=0.95, smooth=True)
 
 #**********************
 #JSON AND PARSER STUFF
@@ -61,6 +68,8 @@ au_to_m = u.au.to('m')
 dpc = meta['dpc']*u.pc
 Rmax = 1.1*Rout*u.au #Max model radius, 10% larger than disc Rout
 
+tag_figure = args.projection
+
 #********************
 #LOAD DATA AND GRID
 #********************
@@ -91,8 +100,6 @@ moment_data, moment_model, residuals, mtags = load_moments(
     clip_Rmax=args.Router*Rout*u.au,
     clip_Rgrid=R[args.surface]*u.m
 )
-#residuals = moment_data
-#cmap_res = cmap_mom
 
 #***********
 #MAKE PLOTS
@@ -103,7 +110,10 @@ clabels = {
     'peakintensity': r'$\Delta$ Peak Int. [K]'
 }
 
-   
+#SPIRAL PRESCRIPTIONS
+sp_lin = lambda x, a, b: a + b*x
+sp_log = lambda x, a, b: a*np.exp(b*x)
+
 if args.projection=='cartesian':
     levels_resid = np.linspace(-clim, clim, 32)
     
@@ -122,14 +132,49 @@ if args.projection=='cartesian':
                              mask_inner=args.Rinner*datacube.beam_size)
     
     make_substructures(ax, gaps=gaps, rings=rings, twodim=True, label_rings=True)
+    
+    if len(args.spirals_pos)+len(args.spirals_neg)>0:
+        arr_read = np.loadtxt(
+            'spirals_fit_parameters_%s_%s.txt'%(mtags['base'].replace(args.moment, args.spiral_moment), args.spiral_type),
+            dtype = {
+                'names': ('a', 'b', 'color', 'sign', 'id'),
+                'formats': (float, float, 'U10', 'U10', int)
+            },
+            skiprows = 1,
+            comments = None,
+        )
 
+        arr_read = np.atleast_1d(arr_read)
+        phi_ext = 2*np.linspace(-360, 360, 500)
+        phi_ext_rad = np.radians(phi_ext)
+
+        if args.spiral_type == 'linear':
+            sp_func = sp_lin
+        else:
+            sp_func = sp_log
+
+        for arr in arr_read:
+            if (
+                    (arr[3]=='pos' and arr[4] in args.spirals_pos)
+                    or
+                    (arr[3]=='neg' and arr[4] in args.spirals_neg)
+            ):                
+                R_ext = sp_func(phi_ext_rad, *tuple(arr)[:2])
+                ind = (R_ext > 0) & (R_ext < args.Router*Rout)
+                xplot = R_ext[ind]*np.cos(phi_ext_rad[ind])
+                yplot = R_ext[ind]*np.sin(phi_ext_rad[ind])            
+                ax.plot(xplot, yplot, lw=4,  color=arr[2], zorder=20)
+                ax.plot(xplot, yplot, lw=7, color='k', zorder=19)
+
+        tag_figure += '_' + args.spiral_type + '_spirals_' + args.spiral_moment
+            
     if args.filaments:
         _, model = init_data_and_model()
         model.make_model()
-        fil_pos, fil_neg = make_and_save_filaments(model, residuals, tag=mtags['base']+'_'+args.projection, return_all=False)        
+        fil_pos_obj, fil_neg_obj, _, _, _ = make_and_save_filaments(model, residuals, tag=mtags['base']+'_'+args.projection, return_all=True)        
 
-        ax.contour(Xproj/au_to_m, Yproj/au_to_m, fil_pos.skeleton, linewidths=0.2, colors='darkred', alpha=1, zorder=11)
-        ax.contour(Xproj/au_to_m, Yproj/au_to_m, fil_neg.skeleton, linewidths=0.2, colors='navy', alpha=1, zorder=11)
+        ax.contour(Xproj/au_to_m, Yproj/au_to_m, fil_pos_obj.skeleton, linewidths=0.2, colors='darkred', alpha=1, zorder=11)
+        ax.contour(Xproj/au_to_m, Yproj/au_to_m, fil_neg_obj.skeleton, linewidths=0.2, colors='navy', alpha=1, zorder=11)
     
 elif args.projection=='polar':
     levels_resid = np.linspace(-clim, clim, 48)    #levels_im #
@@ -139,9 +184,9 @@ elif args.projection=='polar':
                                    cmap=cmap_res, fmt=cfmt, clabel=clabels[args.moment])
                                    
     make_substructures(ax, gaps=gaps, rings=rings, twodim=True, polar=True, label_rings=True)
-    
+
 ax.set_title(ctitle, fontsize=16, color='k')
 
-plt.savefig('residuals_deproj_%s_%s_.png'%(mtags['base'], args.projection), bbox_inches='tight', dpi=200)
+plt.savefig('residuals_deproj_%s_%s.png'%(mtags['base'], tag_figure), bbox_inches='tight', dpi=200)
 plt.show()
 plt.close()

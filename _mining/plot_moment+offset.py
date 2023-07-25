@@ -21,8 +21,8 @@ from argparse import ArgumentParser
 
 use_discminer_style()
 
-parser = ArgumentParser(prog='plot moment maps', description='Plot moment map [velocity, linewidth, [peakintensity, peakint]?')
-args = add_parser_args(parser, moment=True, kind=True, surface=True)
+parser = ArgumentParser(prog='plot moment maps', description='Plot moment map from data and zoom-in around central region')
+args = add_parser_args(parser, moment=True, kernel=True, kind=True, surface=True, smooth=True)
      
 #**********************
 #JSON AND PARSER STUFF

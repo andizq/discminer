@@ -2,6 +2,7 @@ from discminer.core import Data
 from discminer.rail import Contours
 from discminer.plottools import (make_up_ax,
                                  mod_major_ticks,
+                                 mod_minor_ticks,
                                  mod_nticks_cbars,
                                  use_discminer_style)
 
@@ -21,7 +22,7 @@ from argparse import ArgumentParser
 use_discminer_style()
 
 parser = ArgumentParser(prog='plot moment maps', description='Plot moment map [velocity, linewidth, [peakintensity, peakint]?')
-args = add_parser_args(parser, moment=True, kind=True, surface=True)
+args = add_parser_args(parser, moment=True, kernel=True, kind=True, surface=True, smooth=True)
      
 #**********************
 #JSON AND PARSER STUFF
@@ -69,15 +70,6 @@ R, phi, z = load_disc_grid()
 moment_data, moment_model, residuals, mtags = load_moments(args, mask=mask)
         
 #**************************
-#MASK AND COMPUTE RESIDUALS
-"""
-from scipy.ndimage import gaussian_filter
-moment_data = gaussian_filter(moment_data, sigma=1.5)
-moment_model = gaussian_filter(moment_model, sigma=1.5)
-residuals = moment_data - moment_model
-"""
-
-#**************************
 #MAKE PLOT
 
 fig, ax = plt.subplots(ncols=3, nrows=1, figsize=(15,6))
@@ -90,7 +82,7 @@ kwargs_cbar = dict(orientation='horizontal', pad=0.03, shrink=0.95, aspect=15)
 
 im0 = ax[0].contourf(moment_data, extend='both', **kwargs_im)
 im1 = ax[1].contourf(moment_model, extend='both', **kwargs_im)
-im2 = ax[2].contourf(residuals, cmap=cmap_res, origin='lower', extend='both', extent=extent, levels=np.linspace(-clim, clim, 32))
+im2 = ax[2].contourf(residuals, cmap=cmap_res, origin='lower', extend='both', extent=extent, levels=np.linspace(-1.01*clim, 1.01*clim, 32))
 
 cc0 = ax[0].contour(moment_data, **kwargs_cc)
 cc1 = ax[1].contour(moment_model, **kwargs_cc)
@@ -115,7 +107,6 @@ for axi in ax:
     #axi.scatter(best['orientation']['xc'], best['orientation']['yc'], c='k', marker='X', lw=0.5, s=30) #use +offset.py script
     make_up_ax(axi, xlims=(-xlim, xlim), ylims=(-xlim, xlim), labelsize=11)
     mod_major_ticks(axi, axis='both', nbins=8)
-    datacube.plot_beam(axi, fc='lime')
     axi.set_aspect(1)
     
 for axi in ax[1:]: axi.tick_params(labelleft=False)
@@ -123,7 +114,19 @@ for axi in ax[1:]: axi.tick_params(labelleft=False)
 for i,axi in enumerate(ax):
     Contours.emission_surface(axi, R, phi, extent=extent, R_lev=np.linspace(0.1, 1.0, 10)*Rout*u.au.to('m'), which=mtags['surf'])
                               
-    
+datacube.plot_beam(ax[0], fc='0.8')
+
+#####
+#Planet candidate (Wagner+2023)
+if meta['disc']=='mwc758':
+    Rp = 0.617*dpc.value
+    PAp = np.radians(225)
+    phi = PAp + np.pi/2
+
+    for axi in ax:
+        axi.scatter(Rp*np.cos(phi), Rp*np.sin(phi), marker='X', s=80, fc='lime', ec='k', lw=1.5, alpha=0.6)
+#####
+
 plt.savefig('moment+residuals_%s.png'%mtags['base'], bbox_inches='tight', dpi=200)
 plt.show()
 plt.close()
