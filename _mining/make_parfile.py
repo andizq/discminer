@@ -162,11 +162,18 @@ def get_base_pars(log_file, kind=[]):
             log_pars = np.append(log_pars, np.radians(incl_dict[tag_disc]))
             header += ['incl']
 
-
         if 'vel_sign' not in header:
             log_pars = np.append(log_pars, vel_sign_dict[tag_disc])
             header += ['vel_sign']
-        
+
+        if 'xc' not in header:
+            log_pars = np.append(log_pars, 0)
+            header += ['xc']
+
+        if 'yc' not in header:
+            log_pars = np.append(log_pars, 0)
+            header += ['yc']
+            
         for i in range(len(header)):
             hdr = header[i]
             if hdr in ['p', 'q', 'Rb', 'p0', 'p1']:
