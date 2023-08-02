@@ -890,7 +890,7 @@ class Mcmc:
 
 class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
     
-    def __init__(self, datacube, Rmax, Rmin=1.0, prototype=False, subpixels=False):        
+    def __init__(self, datacube, Rmax, Rmin=1.0, prototype=False, subpixels=False, write_extent=True):        
         """
         Initialise discminer model object.
 
@@ -929,7 +929,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         self.prototype = prototype
         self.datacube = datacube
         
-        mgrid = ModelGrid(datacube, Rmax, Rmin=Rmin) #Make disc and sky grids
+        mgrid = ModelGrid(datacube, Rmax, Rmin=Rmin, write_extent=write_extent) #Make disc and sky grids
         grid = mgrid.discgrid        
         skygrid = mgrid.skygrid
 

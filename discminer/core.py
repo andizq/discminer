@@ -2,17 +2,20 @@ from .cube import Cube
 from .grid import grid as dgrid 
 from .tools.utils import InputError
 
-from astropy import units as u
 import numpy as np
+
+from astropy.io import fits
+from astropy import units as u
 from radio_beam import Beam, Beams
 from radio_beam.beam import NoBeamException
 from spectral_cube import SpectralCube, VaryingResolutionSpectralCube
+
 import numbers
 import warnings
 import json
 
 class Data(Cube):
-    def __init__(self, filename, dpc):
+    def __init__(self, filename, dpc, twodim=False):
         """
         Initialise Data object. Inherits `~discminer.disc2d.Cube` properties and methods.
         
@@ -24,45 +27,73 @@ class Data(Cube):
         dpc : `~astropy.units.Quantity`
             Distance to the disc.
         """
-        cube_spe = SpectralCube.read(filename)
-        try:
-            cube_vel = cube_spe.with_spectral_unit(
-                u.km / u.s,
-                velocity_convention="radio",
-                rest_value=cube_spe.header["RESTFRQ"] * u.Hz,
-            )
-        except KeyError:
-            #Assume velocity axis is already in km/s
-            cube_vel = cube_spe
-            
-        #In km/s, remove .value to keep astropy units
-        vchannels = cube_vel.spectral_axis.value
-        header = cube_vel.header
-        
-        #Get data and beam info
-        if isinstance(cube_vel, SpectralCube):
-            data = cube_vel.hdu.data.squeeze()
+
+        if twodim: #continuum image
+
+            hdu = fits.open(filename)[0]
+            header = hdu.header            
+            data = hdu.data
+
+            if len(data.shape)>3:
+                data = data.squeeze()
+            if len(data.shape)==2:
+                data = np.expand_dims(data, 0)
+                
             try:
-                beam = Beam.from_fits_header(header)  # radio_beam object
+                beam = Beam.from_fits_header(header)
             except NoBeamException:
                 beam = None
-                warnings.warn('No beam was found in the header of the input FITS file.')
+                warnings.warn('No beam was found in the input FITS file.')
+            try:
+                ncomp = header['NAXIS3'] #e.g. Stokes components
+            except KeyError:
+                ncomp = 2
+
+            if ncomp<2:
+                ncomp = 2
+                
+            vchannels = np.arange(ncomp)
+
+        else: #line cube
+            cube_spe = SpectralCube.read(filename)
+            try:
+                cube_vel = cube_spe.with_spectral_unit(
+                    u.km / u.s,
+                    velocity_convention="radio",
+                    rest_value=cube_spe.header["RESTFRQ"] * u.Hz,
+                )
+            except KeyError:
+                #Assume velocity axis is already in km/s
+                cube_vel = cube_spe
             
-        elif isinstance(cube_vel, VaryingResolutionSpectralCube):
-            data = cube_vel.hdulist[0].data.squeeze()
-            """
-            beams = cube_vel.hdulist[1].data #One beam per channel
-            bmaj = np.median(beams['BMAJ'])
-            bmin = np.median(beams['BMIN'])
-            bpa = np.median(beams['BPA'])            
-            beam = Beam(major=bmaj*u.arcsec, minor=bmin*u.arcsec, pa=bpa*u.deg)
-            """
-            beams = Beams.from_fits_bintable(cube_vel.hdulist[1])
-            beam = beams.common_beam() #Smallest common beam
-            header.update(beam.to_header_keywords()) #Add single beam to header
-        else:
-            raise InputError(cube_vel,
-                             'The input datacube is not valid. Only the following spectral_cube instances are supported: SpectralCube, VaryingResolutionSpectralCube.')
+            #In km/s, remove .value to keep astropy units
+            vchannels = cube_vel.spectral_axis.value
+            header = cube_vel.header
+        
+            #Get data and beam info
+            if isinstance(cube_vel, SpectralCube):
+                data = cube_vel.hdu.data.squeeze()
+                try:
+                    beam = Beam.from_fits_header(header)  # radio_beam object
+                except NoBeamException:
+                    beam = None
+                    warnings.warn('No beam was found in the input FITS file.')
+            
+            elif isinstance(cube_vel, VaryingResolutionSpectralCube):
+                data = cube_vel.hdulist[0].data.squeeze()
+                """
+                beams = cube_vel.hdulist[1].data #One beam per channel
+                bmaj = np.median(beams['BMAJ'])
+                bmin = np.median(beams['BMIN'])
+                bpa = np.median(beams['BPA'])            
+                beam = Beam(major=bmaj*u.arcsec, minor=bmin*u.arcsec, pa=bpa*u.deg)
+                """
+                beams = Beams.from_fits_bintable(cube_vel.hdulist[1])
+                beam = beams.common_beam() #Smallest common beam
+                header.update(beam.to_header_keywords()) #Add single beam to header
+            else:
+                raise InputError(cube_vel,
+                                 'The input datacube is not valid. Only the following spectral_cube instances are supported: SpectralCube, VaryingResolutionSpectralCube.')
             
         #self._init_cube()
         super().__init__(data, header, vchannels, dpc, beam=beam, filename=filename)
@@ -83,7 +114,7 @@ beam : None or `~radio_beam.Beam`, optional
 """
         
 class ModelGrid():
-    def __init__(self, datacube, Rmax, Rmin=1.0):
+    def __init__(self, datacube, Rmax, Rmin=1.0, write_extent=True):
         """
         Initialise ModelGrid object.
 
@@ -101,6 +132,9 @@ class ModelGrid():
             - If float, computes inner radius in number of beams. Default is 1.0.
 
             - If `~astropy.units.Quantity`, takes the value provided, assumed in physical units.
+        
+        write_extent : bool
+            If True, writes information about grid physical extent into JSON file.
 
         Attributes
         ----------
@@ -114,12 +148,14 @@ class ModelGrid():
         
         self.dpc = datacube.dpc
         self.Rmax = Rmax
+        self.write_extent = write_extent
+        
         if isinstance(datacube, Cube):
             self.datacube = datacube
             self.header = datacube.header
             self.vchannels = datacube.vchannels
             self.beam = datacube.beam            
-            self.make_grid()
+            self._make_grid()
         else:
             raise InputError(datacube,
                              'The input cube must be a ~discminer.disc2d.cube.Cube instance.')
@@ -146,7 +182,7 @@ class ModelGrid():
         #       cube = model.get_cube(vchan_data, vel2d, int2d, linew2d, lineb2d, make_convolve=False)
         #Cube.__init__(data, self.header, self.vchannels, beam=self.beam, filename=filename)    
 
-    def make_grid(self, write_extent=True):
+    def _make_grid(self):
         dpix_rad = np.abs(self.header['CDELT1'])*u.Unit(self.header['CUNIT1']).to(u.radian)
         dpix_au = (self.dpc*np.tan(dpix_rad)).to(u.au)
         nx = self.header['NAXIS1']
@@ -177,7 +213,7 @@ class ModelGrid():
         xdisc = (nx_disc-1)*dpix_au/2.0
         self.discgrid = dgrid(xdisc, nx_disc) #Transforms xdisc from au to metres and computes Cartesian grid
         
-        if write_extent:
+        if self.write_extent:
             log_grid = dict(nx=nx, ny=ny, xsky=xsky.value, xdisc=xdisc.value, cellsize=dpix_au.value, unit='au')
             with open("grid_extent.json", "w") as outfile:
                 json.dump(log_grid, outfile, indent=4, sort_keys=False)
