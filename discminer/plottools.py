@@ -85,10 +85,10 @@ def truncate_colormap(cmap, minval=0.0, maxval=1.0, n=256):
         cmap(np.linspace(minval, maxval, n)))
     return new_cmap
 
-def get_cmap_from_color(color, lev=3):
+def get_cmap_from_color(color, lev=3, vmin=0.25, vmax=0.95):
     cmap = matplotlib.colors.to_rgba(color)
     newcolors = np.tile(cmap, lev).reshape(lev,4) #Repeats the colour lev times
-    newcolors[:,-1] = np.linspace(0.25, 0.95, lev) #Modifies alpha only
+    newcolors[:,-1] = np.linspace(vmin, vmax, lev) #Modifies alpha only
     new_cmap = ListedColormap(newcolors)
     return new_cmap
 
@@ -316,7 +316,7 @@ def _make_radial_grid_2D(ax, Rout, gaps=[], rings=[], kinks=[], make_labels=True
         
     R_after_ref = 10**(Rref_digits-1)*ceil(Rref/(10**(Rref_digits-1)))
     Rgrid_polar = np.arange(R_after_ref, Rout, 50)
-    
+
     for j,Ri in enumerate(Rgrid_polar[0:-1:2]):
         if Ri == Rref: continue
         ax.plot(Ri*cos_angs, Ri*sin_angs, color='k', lw=1.2, alpha=0.5,
@@ -420,7 +420,7 @@ def make_substructures(ax, gaps=[], rings=[], kinks=[],
                 
                 for subst, fmt, label, color in subst_fmt:
                     if label:
-                        _make_text_2D(ax, subst, sposy=-1, fmt=fmt, color=color)
+                        _make_text_2D(ax, subst, sposy=-1, fmt=fmt, color=color, va='center')
                         
         elif coords=='sky':
             if model is None:
