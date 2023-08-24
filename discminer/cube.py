@@ -25,8 +25,10 @@ import numpy as np
 import copy
 import os
 import warnings
+from packaging.version import Version
 
-        
+MPL_VERSION = Version(matplotlib.__version__)
+
 SMALL_SIZE = 10
 MEDIUM_SIZE = 15
 BIGGER_SIZE = 22
@@ -786,16 +788,20 @@ class Cube(object):
                 print("RectangleSelector activated.")
                 toggle_selector.RS.set_active(True)
 
-        rectprops = dict(facecolor="0.7", edgecolor="k", alpha=0.3, fill=True)
-        lineprops = dict(color="white", linestyle="-", linewidth=3, alpha=0.8)
+        if MPL_VERSION >= Version("3.5"):
+            props_kwarg = "props"
+        else:
+            props_kwarg = "rectprops"
+
+        selector_kwargs = {
+            props_kwarg: dict(facecolor="0.7", edgecolor="k", alpha=0.3, fill=True)
+        }
 
         toggle_selector.RS = RectangleSelector(
             ax[0],
             onselect,
-            drawtype="box",
-            rectprops=rectprops,
-            lineprops=lineprops,
             button=[1],
+            **selector_kwargs,
         )
         cid = fig.canvas.mpl_connect("key_press_event", toggle_selector)
         return toggle_selector.RS
