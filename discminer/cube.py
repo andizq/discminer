@@ -13,7 +13,10 @@ from astropy import units as u
 from astropy import constants as apc
 from astropy.io import fits
 from astropy.wcs import utils as aputils, WCS
+
 from radio_beam import Beam
+
+from scipy import ndimage
 
 import matplotlib
 import matplotlib.patches as patches
@@ -1795,9 +1798,11 @@ class Cube(object):
                           unit_intensity=None, unit_coordinates=None, annotate_channels=True,
                           observable='intensity', kind='attribute', cmap=None,
                           xlims=None, ylims=None, max_frac=0.8,
+                          moving_center=False, center_from=None, zoom_factor=0.7,
                           fmt_cbar='%3d', mask_under=None,
-                          contours_from=None, projection='wcs',
-                          show_beam='all',
+                          contours_from=None, kwargs_contour={},
+                          projection='wcs',
+                          show_beam='all', kwargs_beam={},
                           **kwargs_contourf):
         
         try:
@@ -1843,16 +1848,23 @@ class Cube(object):
         kwargs_cf = dict(cmap=cmap_chan, levels=np.linspace(vmin, vmax, 32))
         kwargs_cf.update(kwargs_contourf)
 
-        kwargs_cc = dict(colors='k', linewidths=1.0, origin='lower')
+        kwargs_cc = dict(colors='k', linewidths=1.0)
+        kwargs_cc.update(kwargs_contour)
 
+        #*******************************
+        #PREPARE PROJECTION AND CHANNELS
+        #*******************************
+        pix_rad = self.pix_size.to(u.radian)
+        pix_au = (self.dpc*np.tan(pix_rad)).to(u.au)
+        nx = self.header['NAXIS1']
+        xsky = ysky = ((nx-1) * pix_au/2.0).value
+        xlist = np.linspace(-xsky, xsky, nx)
+        
         if projection=='wcs':
             plot_projection=self.wcs.celestial
+
         else: #Assume plot in au
             plot_projection=None
-            pix_rad = self.pix_size.to(u.radian)
-            pix_au = (self.dpc*np.tan(pix_rad)).to(u.au)
-            nx = self.header['NAXIS1']
-            xsky = ysky = ((nx-1) * pix_au/2.0).value
             extent= np.array([-xsky, xsky, -ysky, ysky])
             kwargs_cf.update(dict(extent=extent))
             kwargs_cc.update(dict(extent=extent))            
@@ -1862,6 +1874,9 @@ class Cube(object):
         plot_channels = self.vchannels[idchan]
         plot_nchan = len(plot_channels)
 
+        if center_from is not None:
+            plot_movcr = center_from[idchan]
+            
         #*****************
         #FIGURE PROPERTIES
         #*****************        
@@ -1898,7 +1913,8 @@ class Cube(object):
         #*****************
         #BEAM
         #*****************        
-        kwargs_beam = dict(lw=0.5, fill=True, fc='cyan', ec='k')
+        kwargs_bb = dict(lw=0.5, fill=True, fc='cyan', ec='k')
+        kwargs_bb.update(kwargs_beam)
         
         #*****************
         #PLOT
@@ -1906,14 +1922,32 @@ class Cube(object):
         ichan = 0
         im = []
         fakecolor = '0.6'
+
         for j in range(nrows):
             for i in range(ncols):
+
                 axji = ax[j][i]
-                im.append(axji.contourf(plot_data[ichan], **kwargs_cf))
+                data_i = plot_data[ichan]
+                
+                if moving_center:
+                    if center_from is None:
+                        data_nonoise = np.where(data_i>0.01*data_i.max(), data_i, 0)
+                    else:
+                        movcr_i = plot_movcr[ichan]
+                        data_nonoise = np.where(movcr_i>0.01*movcr_i.max(), movcr_i, 0)
+                    crow, ccol = tuple(np.int32(ndimage.center_of_mass(data_nonoise)))
+                    border_row = np.min([np.abs(crow-nx), crow])
+                    border_col = np.min([np.abs(ccol-nx), ccol])
+                    border = int(zoom_factor*np.min([border_row, border_col]))
+                    
+                    x_i = xlist[ccol-border:ccol+border]
+                    y_i = xlist[crow-border:crow+border]
+
+                im.append(axji.contourf(data_i, **kwargs_cf))
 
                 if contours_from is not None:
                     try:
-                        vel2d, int2d, linew2d, lineb2d = contours_from.props #i.e. if model provided
+                        vel2d, int2d, linew2d, lineb2d = contours_from.props #i.e. if Model instance provided
                         axji.contour(vel2d['upper'], levels=[plot_channels[ichan]], linestyles='-', **kwargs_cc)                        
                         axji.contour(vel2d['lower'], levels=[plot_channels[ichan]], linestyles='--', **kwargs_cc)
                     except AttributeError:
@@ -1951,18 +1985,22 @@ class Cube(object):
                 #axji.tick_params(which='minor', width=3.0, size=5.3)
                 mod_major_ticks(axji, axis='x', nbins=3)
                 mod_major_ticks(axji, axis='y', nbins=3)
-
-                axji.set_xlim(xlims)
-                axji.set_ylim(ylims)
                 
                 if self.beam is not None:
                     if show_beam=='all':
-                        self.plot_beam(axji, projection=projection, **kwargs_beam)
+                        self.plot_beam(axji, projection=projection, **kwargs_bb)
                     elif isinstance(show_beam, Iterable):
                         bj, bi = show_beam
                         if j==bj and i==bi:
-                            self.plot_beam(axji, projection=projection, **kwargs_beam)                                                    
-                
+                            self.plot_beam(axji, projection=projection, **kwargs_bb)                                                    
+
+                if moving_center:
+                    axji.set_xlim(np.min(x_i), np.max(x_i))
+                    axji.set_ylim(np.min(y_i), np.max(y_i))                    
+                else:
+                    axji.set_xlim(xlims)
+                    axji.set_ylim(ylims)
+                            
                 if ichan==plot_nchan-1:
                     break
                 ichan+=1                
@@ -1978,7 +2016,7 @@ class Cube(object):
                             ticks=np.linspace(im_cbar.levels[0], im_cbar.levels[-1], 5))
 
         if kind=='attribute':
-            clabel = observable.capitalize()+'%s'%unit_intensity
+            clabel = observable.split('_')[0].capitalize()+'%s'%unit_intensity
         elif kind=='residuals':
             clabel = kind.capitalize()+'%s'%unit_intensity
         cbar.set_label(clabel, fontsize=SMALL_SIZE+0, rotation=-90, labelpad=20)
