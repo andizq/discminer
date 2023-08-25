@@ -59,13 +59,14 @@ setup(
     [
         'numpy>=1.18',
         'scipy>=1.5',
-        'matplotlib<3.5',
+        'matplotlib>=3.0',
         'astropy>=3',
         'emcee>=3',
         'radio-beam',
         'scikit-image',
         'scikit-learn',
-        'spectral-cube>=0.6'
+        'spectral-cube>=0.6',
+        'packaging>=20.9',
     ], 
     # If there are data files included in your packages that need to be
     # installed, specify them here.

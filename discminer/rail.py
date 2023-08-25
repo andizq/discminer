@@ -124,6 +124,7 @@ class Rail(object):
         fold_func : function, optional
            If fold, this function is used to operate between folded quadrants. Defaults to np.subtract.
         """
+        from matplotlib.axes import Axes
 
         prop, coord_levels = self.prop, self.coord_levels
         _rail_phi = self.phi[surface] #np.where(self.phi['upper'] < 0.98*np.pi, self.phi['upper'], np.nan)
@@ -263,11 +264,11 @@ class Rail(object):
             if ax2 is not None:
                 x_cont = np.array([X[i] for i in inds_cont])
                 y_cont = np.array([Y[i] for i in inds_cont])
-            if isinstance(ax2, matplotlib.axes._axes.Axes): 
+            if isinstance(ax2, Axes):
                 ax2.plot(x_cont[corr_inds], y_cont[corr_inds], color=color, lw=lw*lw_ax2_factor)
             elif isinstance(ax2, list):
                 for axi in ax2: 
-                    if isinstance(axi, matplotlib.axes._axes.Axes):
+                    if isinstance(axi, Axes):
                         axi.plot(x_cont[corr_inds], y_cont[corr_inds], color=color, lw=lw*lw_ax2_factor)
 
         self._lev_list = lev_list
