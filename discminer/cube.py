@@ -1410,9 +1410,6 @@ class Cube(object):
         def toggle_selector(event):
             toggle_selector.RS.set_active(True)
 
-        rectprops = dict(facecolor="0.7", edgecolor="k", alpha=0.3, fill=True)
-        lineprops = dict(color="white", linestyle="-", linewidth=3, alpha=0.8)
-
         def onselect(eclick, erelease):
             if eclick.inaxes is ax[0]:
                 # Must correct if click and realease are not right by comparing with current pos of mouse.
@@ -1442,16 +1439,23 @@ class Cube(object):
                 )
                 color_cycle = next(ax[0]._get_lines.prop_cycler)['color']
                 ax[0].scatter(x0, y0, s=30, lw=1.5, edgecolor=color_cycle, facecolor='none')
+                
+        if MPL_VERSION >= Version("3.5"):
+            props_kwarg = "props"
+        else:
+            props_kwarg = "rectprops"
+
+        selector_kwargs = {
+            props_kwarg: dict(facecolor="0.7", edgecolor="k", alpha=0.3, fill=True)
+        }
 
         if click:
             toggle_selector.RS = RectangleSelector(
                 ax[0],
-                onselect,
-                drawtype="box",
-                rectprops=rectprops,
-                lineprops=lineprops,
+                onselect,                
+                **selector_kwargs,
             )
-
+                
         cid = fig.canvas.mpl_connect("key_press_event", toggle_selector)
         fig.canvas.mpl_connect("motion_notify_event", mouse_move)
         return cid
