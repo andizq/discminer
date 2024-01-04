@@ -1805,7 +1805,8 @@ class Cube(object):
     def make_channel_maps(self,
                           fig=None, ax=None,
                           channels={'interval': None, 'indices': None}, ncols=5,
-                          unit_intensity=None, unit_coordinates=None, annotate_channels=True,
+                          unit_intensity=None, unit_coordinates=None,
+                          fmt_channels='%.2f', annotate_channels=True,
                           observable='intensity', kind='attribute', cmap=None,
                           xlims=None, ylims=None, max_frac=0.8,
                           moving_center=False, center_from=None, zoom_factor=0.7,
@@ -1966,7 +1967,7 @@ class Cube(object):
                             axji.contour(cci, levels=[plot_channels[ichan]], linestyles='-', **kwargs_cc)
             
                 if annotate_channels:
-                    axji.text(0.05,0.95, r'%.2f$^{\rm km/s}$'%plot_channels[ichan], va='top', fontsize=SMALL_SIZE+2, transform=axji.transAxes)
+                    axji.text(0.05,0.95, fmt_channels%plot_channels[ichan]+r'$^{\rm km/s}$', va='top', fontsize=SMALL_SIZE+2, transform=axji.transAxes)
                                                     
                 if j==nrows-1 and i==0:
                     labelbottom, labelleft = True, True

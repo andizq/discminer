@@ -177,11 +177,11 @@ def _get_beam_from(beam, dpix=None, distance=None, frac_pixels=1.0):
 
 
 def weighted_std(prop, weights, weighted_mean=None):
-    sum_weights = np.sum(weights)
+    sum_weights = np.nansum(weights)
     if weighted_mean is None:
-        weighted_mean = np.sum(weights*prop)/sum_weights
-    n = np.sum(weights>0)
-    w_std = np.sqrt(np.sum(weights*(prop-weighted_mean)**2)/((n-1)/n * sum_weights))
+        weighted_mean = np.nansum(weights*prop)/sum_weights
+    n = np.nansum(weights>0)
+    w_std = np.sqrt(np.nansum(weights*(prop-weighted_mean)**2)/((n-1)/n * sum_weights))
     return w_std
 
 

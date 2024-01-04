@@ -90,7 +90,7 @@ class Pick(Rail):
         
         for i in np.arange(0, len_res): #1 radius per quadrant (0,90), (-90,0)
             arg90 = (self.coord_list[i] >= phi_min) & (self.coord_list[i] <= phi_max)  #-90, 90
-            if np.sum(arg90) == 0: abs_resid = [np.inf] #if arg90 is empty
+            if np.sum(arg90) == 0: abs_resid = [np.nan] #if arg90 is empty
             else: abs_resid = np.abs(self.resid_list[i][arg90])
 
             argpeak = np.argmax(abs_resid)
@@ -104,7 +104,7 @@ class Pick(Rail):
                 peak_sign[i] = np.sign(self.resid_list[i][arg90][argpeak])
 
         if clean_thres is not None and np.isfinite(clean_thres):
-            rej_thresh = np.median(peak_resid) + clean_thres*np.std(peak_resid)
+            rej_thresh = np.nanmedian(peak_resid) + clean_thres*np.nanstd(peak_resid)
             ii = peak_resid < rej_thresh
             print ('Rejecting %d peak velocity residuals above %.3f km/s (median+%dsigma)'%(np.sum(~ii), rej_thresh, clean_thres))
             self.lev_list = self.lev_list[ii]
@@ -123,11 +123,11 @@ class Pick(Rail):
         #********************
         #FIND GLOBAL PEAK
         #********************
-        peak_mean = np.sum(peak_weight*peak_resid)/np.sum(peak_weight)
+        peak_mean = np.nansum(peak_weight*peak_resid)/np.nansum(peak_weight)
         peak_std = weighted_std(peak_resid, peak_weight, weighted_mean=peak_mean)
         for stdi in np.arange(detect_thres+1)[::-1]: #If it fails to find peaks above the threshold continue and try the next, lower, sigma threshold
             ind_global_peak = peak_resid > peak_mean+stdi*peak_std
-            if np.sum(ind_global_peak) > 0:
+            if np.nansum(ind_global_peak) > 0:
                 print ('Global peak residual, dv=%.2f, found above %d sigma from mean value...'%(np.max(peak_resid), stdi))                
                 break
 
@@ -150,12 +150,19 @@ class Pick(Rail):
         self.peak_global_sigma = (self.peak_global_val-peak_mean)/peak_std
         
         #Location, amplitude and other properties, for all points
-        self.peak_resid = peak_resid
-        self.peak_angle = peak_angle
-        self.peak_sign = peak_sign
-        self.peak_error = peak_error
-        self.peak_weight = peak_weight
+        nonan = ~np.isnan(peak_resid)
+        
+        self.peak_resid = peak_resid[nonan]
+        self.peak_angle = peak_angle[nonan]
+        self.peak_sign = peak_sign[nonan]
+        self.peak_error = peak_error[nonan]
+        self.peak_weight = peak_weight[nonan]
 
+        self.lev_list = self.lev_list[nonan]        
+        self.color_list = self.color_list[nonan]
+        self.coord_list = self.coord_list[nonan]
+        self.resid_list = self.resid_list[nonan]
+        
 
     def _make_clusters(self, n_clusters, axis='phi'): 
 
