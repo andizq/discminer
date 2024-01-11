@@ -1,5 +1,6 @@
 import numpy as np
 from astropy import units as u
+from scipy.interpolate import interp1d
 
 au_to_m = u.au.to('m')
 
@@ -21,6 +22,30 @@ def z_upper_powerlaw(coord, z0, p, Rb, q, R0=100):
 def z_lower_powerlaw(coord, z0, p, Rb, q, R0=100):
     R = coord['R']/au_to_m
     return -au_to_m*(z0*(R/R0)**p - Rb*(R/R0)**q)
+
+def z_upper_irregular(coord, z0='0.txt', kwargs_interp1d={}, **dummies):
+    R = coord['R']/au_to_m
+    Rmax = np.nanmax(R)
+    Rf, zf = np.loadtxt(z0)
+    Rf = np.append(0.0, Rf)
+    zf = np.append(0.0, zf)
+    if np.max(Rf) < Rmax:
+        Rf = np.append(Rf, Rmax)
+        zf = np.append(zf, 0.0)
+    z_interp = interp1d(Rf, zf, **kwargs_interp1d)
+    return au_to_m*z_interp(R)
+
+def z_lower_irregular(coord, z0='0.txt', kwargs_interp1d={}, **dummies):
+    R = coord['R']/au_to_m
+    Rmax = np.nanmax(R)
+    Rf, zf = np.loadtxt(z0)
+    Rf = np.append(0.0, Rf)
+    zf = np.append(0.0, zf)
+    if np.max(Rf) < Rmax:
+        Rf = np.append(Rf, Rmax)
+        zf = np.append(zf, 0.0)
+    z_interp = interp1d(Rf, zf, **kwargs_interp1d)
+    return -au_to_m*z_interp(R)
 
 #****************
 #CUSTOM INTENSITY
