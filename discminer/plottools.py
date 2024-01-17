@@ -261,10 +261,10 @@ def make_round_cbar(ax, Rout, levels,
 
     for i,cbi in enumerate(cbar_levels_phi):
         Rtext = r1 + 0.03*Rout
-        ax.text(Rtext*np.cos(cbi), Rtext*np.sin(cbi), fmt%cbar_levels_pol[i], fontsize=SMALL_SIZE+2, c='0.7',
+        ax.text(Rtext*np.cos(cbi), Rtext*np.sin(cbi), fmt%cbar_levels_pol[i], fontsize=SMALL_SIZE+2+5, c='0.7',
                 ha=cticks_ha, va='center', weight='bold', rotation_mode='anchor', rotation=rot_quad(cbi))
 
-    ax.text(sign_xy[0]*Rtext, -sign_xy[1]*0.1*Rout, clabel, fontsize=SMALL_SIZE+3, c='0.7', ha='center', va='center', weight='bold', rotation=0)
+    ax.text(sign_xy[0]*Rtext, -sign_xy[1]*0.1*Rout, clabel, fontsize=SMALL_SIZE+3+7, c='0.7', ha='center', va='center', weight='bold', rotation=0)
 
 #********************
 #DISC PLOT DECORATORS
@@ -283,7 +283,7 @@ def _make_text_2D(ax, Rlist, posx=0.0, sposy=1, fmt='%d', va=None, **kwargs_text
         else:
             return 0
 
-    kwargs = dict(fontsize=SMALL_SIZE+3, ha='center', va=_va, weight='bold', zorder=20, rotation=0)
+    kwargs = dict(fontsize=SMALL_SIZE+3*2, ha='center', va=_va, weight='bold', zorder=20, rotation=0)
     kwargs.update(kwargs_text)
     for Ri in Rlist:
         ax.text(posx, sposy*(Ri+dy), fmt%Ri, **kwargs)
@@ -331,9 +331,9 @@ def _make_radial_grid_2D(ax, Rout, gaps=[], rings=[], kinks=[], make_labels=True
 
     if make_labels:
         _make_text_2D(ax, Rgrid_polar[1::label_freq], sposy=-1, fmt='%d',
-                      fontsize=SMALL_SIZE+3, color='0.1', va='center') #label in the north
+                      fontsize=SMALL_SIZE+3+5, color='0.1', va='center') #label in the north
         _make_text_2D(ax, Rgrid_polar[1::label_freq], sposy=1, fmt='%d',
-                      fontsize=SMALL_SIZE+3, color='0.1', va='center') # and south
+                      fontsize=SMALL_SIZE+3+5, color='0.1', va='center') # and south
 
     ax.plot(0.98*Rout*cos_angs, 0.98*Rout*sin_angs, color='0.4', ls='-', lw=3.0, alpha=1.0)
     ax.plot(0.99*Rout*cos_angs, 0.99*Rout*sin_angs, color='0.2', ls='-', lw=3.0, alpha=1.0)
@@ -346,7 +346,7 @@ def _make_azimuthal_grid_2D(ax, Rout):
     for deg in np.linspace(0, 90, 4):
         deg_rad = np.radians(deg)
         txt = ax.text(1.04*Rout*np.cos(deg_rad), 1.04*Rout*np.sin(deg_rad), r'$%d$'%deg, c='0.0',
-                      fontsize=SMALL_SIZE, ha='center', va='center', weight='bold', rotation=-(90-deg))
+                      fontsize=SMALL_SIZE+5, ha='center', va='center', weight='bold', rotation=-(90-deg))
         txt.set_text(r'$%d^{\circ}$'%deg)
 
 def _make_nsky_2D(ax, Rout, xlim, z_func, z_pars, incl, PA, xc=0.0, yc=0.0):
@@ -362,7 +362,7 @@ def _make_nsky_2D(ax, Rout, xlim, z_func, z_pars, incl, PA, xc=0.0, yc=0.0):
     xn, yn = np.asarray(xn), np.asarray(yn)
     ax.plot(xn, yn, color='0.0', lw=1.7, dash_capstyle='round', dashes=(1.5, 2.5))
     
-    text_nsky = lambda x, y: ax.text(x, y, r'$\vec{\rm N}$$_{\rm sky}$', fontsize=MEDIUM_SIZE,
+    text_nsky = lambda x, y: ax.text(x, y, r'$\vec{\rm N}$$_{\rm sky}$', fontsize=MEDIUM_SIZE+5,
                                      ha='center', va='bottom', weight='bold', rotation=np.degrees(-PA))
 
     if yni>xni:
@@ -492,14 +492,31 @@ def make_substructures(ax, gaps=[], rings=[], kinks=[],
 def make_round_map(
         map2d, levels, X, Y, Rout,
         z_func=None, z_pars=None, incl=None, PA=None, xc=0, yc=0, #Optional, make N-sky axis
-        fig=None, ax=None, make_cbar=True,
+        fig=None, ax=None,
+        make_cbar=True,
         rwidth=0.06, cmap=get_discminer_cmap('velocity'), clabel='km/s', fmt='%5.2f', quadrant=None, #cbar kwargs
-        gaps=[], rings=[], kinks=[],
-        mask_wedge=None, mask_inner=None, kwargs_mask={}
+        make_radial_grid=True, make_azimuthal_grid=True,
+        make_contourf=True,        
+        make_contour=False,        
+        gaps=[], rings=[], kinks=[],        
+        mask_wedge=None, mask_inner=None,
+        kwargs_contourf={},
+        kwargs_contour={},
+        kwargs_mask={}
 ):
 
     kw_mask = dict(facecolor='0.5', edgecolor='k', lw=1.0, alpha=0.6)
     kw_mask.update(kwargs_mask)
+
+    cmap_c = copy.copy(cmap)
+    cmap_c.set_under('0.4')
+    cmap_c.set_over('0.4')
+
+    kwargs_cf = dict(cmap=cmap_c, levels=levels, extend='both')
+    kwargs_cf.update(kwargs_contourf)
+    
+    kwargs_cc = dict(colors='k', levels=levels, linewidths=0.7)
+    kwargs_cc.update(kwargs_contour)
     
     #SOME DEFINITIONS
     if fig is None:
@@ -510,19 +527,27 @@ def make_round_map(
     Rout = Rout.to('au').value
         
     xlim_rec = 1.15*Rout
-    
-    cmap_c = copy.copy(cmap)
-    cmap_c.set_under('0.4')
-    cmap_c.set_over('0.4')
-    
+        
     #MAIN PLOT
-    im = ax.contourf(X, Y, map2d, levels=levels, cmap=cmap_c, extend='both', origin='lower')
+    if make_contourf:
+        im = ax.contourf(X, Y, map2d, **kwargs_cf)
 
-    #RADIAL GRID
-    _make_radial_grid_2D(ax, Rout, gaps=gaps, rings=rings, kinks=kinks, label_freq=2)
-    
-    #AZIMUTHAL GRID
-    _make_azimuthal_grid_2D(ax, Rout)
+    if make_contour:
+        cc = ax.contour(X, Y, map2d, **kwargs_cc)
+
+    if make_radial_grid:
+        #RADIAL GRID
+        _make_radial_grid_2D(ax, Rout, gaps=gaps, rings=rings, kinks=kinks, label_freq=2)    
+    else:
+        angs = np.linspace(0, 2*np.pi, 100)
+        cos_angs = np.cos(angs)
+        sin_angs = np.sin(angs)
+        ax.plot(0.98*Rout*cos_angs, 0.98*Rout*sin_angs, color='0.4', ls='-', lw=3.0, alpha=1.0)
+        ax.plot(0.99*Rout*cos_angs, 0.99*Rout*sin_angs, color='0.2', ls='-', lw=3.0, alpha=1.0)
+        ax.plot(1.00*Rout*cos_angs, 1.00*Rout*sin_angs, color='0.0', ls='-', lw=3.0, alpha=1.0)
+
+    if make_azimuthal_grid:
+        _make_azimuthal_grid_2D(ax, Rout)
     
     #SKY AXIS
     if np.all(np.asarray([z_func, z_pars, incl, PA])!=None):
@@ -537,9 +562,9 @@ def make_round_map(
                xlims=(-xlim_rec, xlim_rec),
                ylims=(-xlim_rec, xlim_rec),
                labelleft=False, left=False, right=False, labeltop=False, top=False, labelbottom=True, bottom=True,
-               labelsize=SMALL_SIZE+3, rotation=45)
+               labelsize=SMALL_SIZE+3+4, rotation=45)
     mod_major_ticks(ax, axis='x', nbins=10)
-    ax.set_xlabel('Offset [au]', fontsize=MEDIUM_SIZE+2)
+    ax.set_xlabel('Offset [au]', fontsize=MEDIUM_SIZE+2+5)
     ax.set_aspect(1)
 
     #MAKE ROUND COLORBAR
@@ -605,7 +630,11 @@ def make_polar_map(
         fig=None, ax=None, 
         cmap=get_discminer_cmap('velocity'),
         fmt='%5.2f', clabel=None,
-        gradient=0, findpeaks='pos', filepeaks=None, kwargs_gradient_peaks = {},
+        make_contourf=True, make_contour=False, #Only one working right now
+        gradient=0, findpeaks='pos', filepeaks=None,
+        kwargs_gradient_peaks = {},
+        kwargs_contourf = {},
+        kwargs_contour = {},        
         **kwargs_cbar
         #,filaments=[],                            
 ):
@@ -613,7 +642,13 @@ def make_polar_map(
 
     kwargs_cb = dict(orientation='vertical', subplots=False, perc=2.5)
     kwargs_cb.update(kwargs_cbar)
+
+    kwargs_cf = dict(cmap=cmap, levels=levels, extend='both')
+    kwargs_cf.update(kwargs_contourf)
     
+    kwargs_cc = dict(colors='k', levels=levels, linewidths=0.7)
+    kwargs_cc.update(kwargs_contour)
+        
     #SOME DEFINITIONS
     if fig is None:
         fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(12, 3))
@@ -631,19 +666,19 @@ def make_polar_map(
     R1d = np.arange(Rin, Rout+dR, dR)
     phi1d = np.linspace(-180, 180, 100) #1000 
     dP = phi1d[1] - phi1d[0]
-
     PP, RR = np.meshgrid(phi1d, R1d, indexing='xy')
-    
-    pmap2d = griddata((phi_nonan_deg.flatten(), R_nonan_au.flatten()), map2d.flatten(), (PP, RR), method='linear')
-    
-    make_plot = lambda map2d: ax.contourf(map2d, cmap=cmap,
-                                          extent=[PP.min(), PP.max(), RR.min(), RR.max()],
-                                          levels=levels,
-                                          extend='both', origin='lower')
 
     kw_peaks = dict(neighborhood_size=int(len(phi1d)/5), threshold=4) # 4 m/s/au
     kw_peaks.update(kwargs_gradient_peaks)
     
+    pmap2d = griddata((phi_nonan_deg.flatten(), R_nonan_au.flatten()), map2d.flatten(), (PP, RR), method='linear')
+
+    if make_contourf:
+        make_plot = lambda map2d: ax.contourf(PP, RR, map2d, **kwargs_cf)
+
+    elif make_contour:
+        make_plot = lambda map2d: ax.contour(PP, RR, map2d, **kwargs_cc)
+
     if not gradient:
         im = make_plot(pmap2d)
         map2d = pmap2d
