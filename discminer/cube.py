@@ -69,19 +69,20 @@ class Cube(object):
         self.beam = beam
         self.wcs = WCS(self.header)
         # Assuming (nchan, nx, nx); nchan should be equal to cube_vel.spectral_axis.size
-        self.nchan, self.nx, self.ny = np.shape(data) #nx: nrows, ny: ncols
+        self.nchan, self.ny, self.nx = np.shape(data) #ny: nrows, nx: ncols
         self.filename = filename
-        self.dpc = dpc
-        self.pix_size = np.abs(self.header["CDELT1"]) * u.Unit(self.header["CUNIT1"])  # pixel size in CUNIT1 units (usually degrees)
-
-        # self.extent = 
+        self.dpc = dpc        
+        self._init_sky_extent()
+        
         if isinstance(beam, Beam):
             self._init_beam_kernel()  # Get 2D Gaussian kernel from beam
+
         elif beam is None:
             self.beam_size = None
             self.beam_area = None
             self.beam_kernel = None
             self.beam_area_arcsecs = None
+
         else:
             raise InputError(beam, "beam must be either None or radio_beam.Beam object")
 
@@ -95,6 +96,13 @@ class Cube(object):
     @filename.setter 
     def filename(self, name): 
         self.fileroot = os.path.expanduser(name).split(".fits")[0]        
+
+    def _init_sky_extent(self):
+        self.pix_size = np.abs(self.header["CDELT1"]) * u.Unit(self.header["CUNIT1"])
+        pix_rad = self.pix_size.to(u.radian)
+        pix_au = (self.dpc*np.tan(pix_rad)).to(u.au)
+        self.xsky = ((self.nx-1) * pix_au/2.0).value
+        self.ysky = ((self.ny-1) * pix_au/2.0).value        
         
     def _init_beam_kernel(self):
         """
@@ -300,6 +308,7 @@ class Cube(object):
             _progress_bar(100); print('\n')
 
             self.nx = nx
+            self.ny = nx
             self.data = av_data
 
             # nf: number of pix between centre of first pix in the original img and centre of first downsampled pix
@@ -334,7 +343,9 @@ class Cube(object):
                 self.header["CRPIX1"] = icenter+1
                 self.header["CRPIX2"] = icenter+1
                 self.wcs = WCS(self.header)
-                
+
+            self._init_sky_extent()
+            
             if isinstance(self.beam, Beam):
                 self._init_beam_kernel()  # Get 2D Gaussian kernel from beam
             elif self.beam is None:
@@ -433,9 +444,9 @@ class Cube(object):
             self.header["CRPIX1"] = npix #one-based
             self.header["CRPIX2"] = npix
 
-        self.nchan, self.nx, _ = self.data.shape
+        self.nchan, self.ny, self.nx = self.data.shape
         self.header["NAXIS1"] = self.nx
-        self.header["NAXIS2"] = self.nx
+        self.header["NAXIS2"] = self.ny
         self.header["NAXIS3"] = self.nchan
         self.header["CRPIX3"] = 1
         self.header["CRVAL3"] = self.vchannels[0]
@@ -940,8 +951,14 @@ class Cube(object):
         ax[1].set_ylabel(int_unit, labelpad=15)
         ax[1].yaxis.set_label_position("right")
         ax[1].set_xlim(v0 - 0.1, v1 + 0.1)
-        if vmin is None: vmin = -1 * max_data / 100
-        if vmax is None: vmax = 0.7 * max_data
+
+        if extent is None:
+            extent = [-self.xsky, self.xsky, -self.ysky, self.ysky]            
+        if vmin is None:
+            vmin = -1 * max_data / 100
+        if vmax is None:
+            vmax = 0.7 * max_data
+        
         ax[1].set_ylim(vmin, vmax)
         # ax[1].grid(lw=1.5, ls=':')
         cmapc = copy.copy(plt.get_cmap(cmap))
@@ -1174,8 +1191,14 @@ class Cube(object):
         ax[2].set_ylabel(int_unit, labelpad=15)
         ax[2].yaxis.set_label_position("right")
         ax[2].set_xlim(v0 - 0.1, v1 + 0.1)
-        if vmin is None: vmin = -1 * max_data / 100
-        if vmax is None: vmax = 0.7 * max_data
+
+        if extent is None:
+            extent = [-self.xsky, self.xsky, -self.ysky, self.ysky]            
+        if vmin is None:
+            vmin = -1 * max_data / 100
+        if vmax is None:
+            vmax = 0.7 * max_data
+
         ax[2].set_ylim(vmin, vmax)
         cmap = copy.copy(plt.get_cmap(cmap))
         cmap.set_bad(color=(0.9, 0.9, 0.9))
@@ -1500,8 +1523,14 @@ class Cube(object):
         ax[1].set_xlabel("Cell id along path")
         ax[1].set_ylabel(int_unit, labelpad=15)
         ax[1].yaxis.set_label_position("right")
-        if vmin is None: vmin = -1 * max_data / 100
-        if vmax is None: vmax = 0.7 * max_data
+
+        if extent is None:
+            extent = [-self.xsky, self.xsky, -self.ysky, self.ysky]            
+        if vmin is None:
+            vmin = -1 * max_data / 100
+        if vmax is None:
+            vmax = 0.7 * max_data
+
         ax[1].set_ylim(vmin, vmax)
         # ax[1].grid(lw=1.5, ls=':')
         cmapc = copy.copy(plt.get_cmap(cmap))
@@ -1864,19 +1893,13 @@ class Cube(object):
 
         #*******************************
         #PREPARE PROJECTION AND CHANNELS
-        #*******************************
-        pix_rad = self.pix_size.to(u.radian)
-        pix_au = (self.dpc*np.tan(pix_rad)).to(u.au)
-        nx = self.header['NAXIS1']
-        xsky = ysky = ((nx-1) * pix_au/2.0).value
-        xlist = np.linspace(-xsky, xsky, nx)
-        
+        #*******************************        
         if projection=='wcs':
             plot_projection=self.wcs.celestial
 
         else: #Assume plot in au
             plot_projection=None
-            extent= np.array([-xsky, xsky, -ysky, ysky])
+            extent = [-self.xsky, self.xsky, -self.ysky, self.ysky]
             kwargs_cf.update(dict(extent=extent))
             kwargs_cc.update(dict(extent=extent))            
             
@@ -2003,8 +2026,8 @@ class Cube(object):
                     elif isinstance(show_beam, Iterable):
                         bj, bi = show_beam
                         if j==bj and i==bi:
-                            self.plot_beam(axji, projection=projection, **kwargs_bb)                                                    
-
+                            self.plot_beam(axji, projection=projection, **kwargs_bb)
+                            
                 if moving_center:
                     axji.set_xlim(np.min(x_i), np.max(x_i))
                     axji.set_ylim(np.min(y_i), np.max(y_i))                    

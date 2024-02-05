@@ -26,6 +26,7 @@ _residuals_colors = {
     'velocity': ["#"+tmp for tmp in ["000b14","004f8f","1f9aff","fff7db","ff5a47","cc0033","140200"]],
     'linewidth': ["#"+tmp for tmp in ["000b14","036407","81ae71","fff7db","ff5a47","cc0033","140200"]],
     'intensity': ["#"+tmp for tmp in ["000b14","382406","6a593c","fff7db","ff5a47","cc0033","140200"]],
+    'peakintensity': ["#"+tmp for tmp in ["000b14","382406","6a593c","fff7db","ff5a47","cc0033","140200"]],    
     'intensity_2': ["#"+tmp for tmp in ["000b14","382406","6a593c","fff7db","ff5a47","cc0033","140200"]]    
 }
 
@@ -33,6 +34,7 @@ _residuals_cranges = {
     'velocity': None,
     'linewidth': None,
     'intensity': None,
+    'peakintensity': None,
     'intensity_2': None,    
 }
 
@@ -40,6 +42,7 @@ _attribute_colors = {
     'velocity': ["#"+tmp for tmp in ["000b14","004f8f","1f9aff","fff7db","ff5a47","cc0033","140200"]],
     'linewidth': ["#"+tmp for tmp in ["001219","005f73","0a9396","94d2bd","e9d8a6","ee9b00","ca6702","bb3e03","ae2012","9b2226"]],
     'intensity': "terrain_r",
+    'peakintensity': ['#'+tmp for tmp in ["ffffff","b89e97","000000", "7cf4ff", "c10ff7"]],
     'intensity_2': ['#'+tmp for tmp in ["ffffff","b89e97","000000", "7cf4ff", "c10ff7"]]
 }
 
@@ -47,6 +50,7 @@ _attribute_cranges = {
     'velocity': None,
     'linewidth': None,
     'intensity': "matplotlib",
+    'peakintensity': [0, 0.1, 0.25, 0.6, 1.0],
     'intensity_2': [0, 0.1, 0.25, 0.6, 1.0]
 }
 

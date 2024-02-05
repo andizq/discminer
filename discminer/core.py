@@ -95,9 +95,8 @@ class Data(Cube):
                 raise InputError(cube_vel,
                                  'The input datacube is not valid. Only the following spectral_cube instances are supported: SpectralCube, VaryingResolutionSpectralCube.')
             
-        #self._init_cube()
         super().__init__(data, header, vchannels, dpc, beam=beam, filename=filename)
-        
+
     def _init_cube(self):
         super().__init__(
             self.data,
