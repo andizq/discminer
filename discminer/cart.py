@@ -1,12 +1,57 @@
 import numpy as np
 from astropy import units as u
-from scipy.interpolate import interp1d
+from astropy import constants as ct
+from scipy.interpolate import interp1d, RectBivariateSpline
+from .tools.utils import hypot_func
 
 au_to_m = u.au.to('m')
 
-#****************
-#CUSTOM SURFACES
-#****************
+#*******************
+#VELOCITY FUNCTIONS
+#*******************
+def keplerian_vertical(coord, Mstar=1.0, vel_sign=1, vsys=0):
+    Mstar *= u.M_sun.to('kg')
+    if 'R' not in coord.keys():
+        R = hypot_func(coord['x'], coord['y'])
+    else:
+        R = coord['R'] 
+    if 'r' not in coord.keys():
+        r = hypot_func(R, coord['z'])
+    else:
+        r = coord['r']
+    return vel_sign*np.sqrt(ct.G.value*Mstar/r**3)*R * 1e-3 
+
+def velocity_hydro2d(coord, func_interp_R=None, func_interp_phi=None, Mstar=1.0, vel_sign=1, vsys=0, **dummies):
+    Mstar *= u.M_sun.to('kg')
+    y = coord['x'] #switch for 90 deg shift on planet azimuth
+    x = coord['y']
+    R = coord['R']
+
+    if 'r' not in coord.keys():
+        r = hypot_func(R, coord['z'])
+    else:
+        r = coord['r']
+
+    if func_interp_R is None and func_interp_phi is not None:
+        vphi = func_interp_phi(x,y, grid=False)                    
+        vR = np.zeros_like(vphi)
+    elif func_interp_R is not None and func_interp_phi is None:
+        vR = func_interp_R(x,y, grid=False)        
+        vphi = np.zeros_like(vR)
+    elif func_interp_R is None and func_interp_phi is None:
+        return [0, 0, 0]    
+    else:
+        vR = func_interp_R(x,y, grid=False)
+        vphi = func_interp_phi(x,y, grid=False)
+        
+    #vkep = np.sqrt(ct.G.value*Mstar/r**3)*R * 1e-3
+    vz = np.zeros_like(vR)
+    
+    return [vel_sign*(vphi), vR, 0]
+    
+#******************
+#EMISSION SURFACES
+#******************
 def z_upper_exp_tapered(coord, z0, p, Rb, q, R0=100):
     R = coord['R']/au_to_m
     return au_to_m*(z0*(R/R0)**p*np.exp(-(R/Rb)**q))
@@ -47,9 +92,9 @@ def z_lower_irregular(coord, z0='0.txt', kwargs_interp1d={}, **dummies):
     z_interp = interp1d(Rf, zf, **kwargs_interp1d)
     return -au_to_m*z_interp(R)
 
-#****************
-#CUSTOM INTENSITY
-#****************
+#***************
+#PEAK INTENSITY
+#***************
 def intensity_powerlaw_rout(coord, I0=30.0, R0=100, p=-0.4, z0=100, q=0.3, Rout=500):
     if 'R' not in coord.keys(): R = hypot_func(coord['x'], coord['y'])
     else: R = coord['R']
@@ -90,3 +135,53 @@ def intensity_powerlaw_rbreak_nosurf(coord, I0=1.0, p0=-2.5, p1=-1.5,
     Ieff = np.where(R<=Rbreak, pwl0, pwl1)
     Ieff_rout = np.where(R<=Rout, Ieff, 0.0)
     return Ieff_rout
+
+#***********
+#LINE WIDTH 
+#***********
+def linewidth_powerlaw(coord, L0=0.2, p=-0.4, q=0.3, R0=100, z0=100):
+    R0*=au_to_m
+    z0*=au_to_m
+    if 'R' not in coord.keys():
+        R = hypot_func(coord['x'], coord['y'])
+    else:
+        R = coord['R'] 
+    z = coord['z']        
+    A = L0*R0**-p*z0**-q
+    return A*R**p*np.abs(z)**q
+
+#***********
+#LINE SLOPE 
+#***********
+def lineslope_powerlaw(coord, Ls=5.0, p=0.0, q=0.0, R0=100, z0=100):
+    R0*=au_to_m
+    z0*=au_to_m
+    if p==0.0 and q==0.0:
+        return Ls
+    else:
+        if 'R' not in coord.keys():
+            R = hypot_func(coord['x'], coord['y'])
+        else:
+            R = coord['R'] 
+        z = coord['z']        
+        A = Ls*R0**-p*z0**-q
+        return A*R**p*np.abs(z)**q
+
+#**************
+#LINE PROFILES
+#**************
+def line_profile_bell(v_chan, v, v_sigma, b_slope):
+    return 1/(1+np.abs((v-v_chan)/v_sigma)**(2*b_slope))        
+    
+def line_profile_gaussian(v_chan, v, v_sigma, *dummies):
+    return np.exp(-0.5*((v-v_chan)/v_sigma)**2)
+
+#***********************
+#UPPER + LOWER PROFILES
+#***********************
+def line_uplow_mask(Iup, Ilow):
+    #velocity nans might differ from intensity nans when a z=0 and SG is active, nanmax must be used
+    return np.nanmax([Iup, Ilow], axis=0)
+
+def line_uplow_sum(Iup, Ilow):
+    return Iup + Ilow    
