@@ -21,13 +21,13 @@
   <a href="https://github.com/andizq/discminer/issues/new?assignees=&labels=question&title=question%3A+">Ask a Question</a>
 </div>
 
-- Model channel maps from molecular line emission of discs by fitting intensity and rotation velocity simultaneously.
-- Estimate disc vertical extent by tracing front and back side line emission when available.
-- Compute moment maps that accurately capture complex line profile morphologies.
-- Disc velocity can be modelled with multiple components: Keplerian motion + pressure support + self-gravity.
-- Extract rotation curves, radial and meridional velocities, intensity and line width profiles.
-- Identify velocity and intensity substructures; study their coherence and degree of localisation.
-- Non-axisymmetric models are possible; all attributes can be parameterised as a function of $R,\phi,z$ disc coords.
+- Model channel maps from molecular line emission of discs by fitting intensity **and** rotation velocity
+- Study the disc vertical structure by modelling front and back side emission surfaces
+- Compute moment maps that accurately capture complex line profile morphologies
+- Extract rotation curves, radial and meridional velocities, intensity and line width profiles
+- Analyse the disc dynamical structure by modelling Keplerian motion + pressure support + self-gravity at once
+- Identify velocity and intensity substructures; study their coherence and degree of localisation
+- Non-axisymmetric models are possible; all attributes can be described as a function of $R,\phi,z$ disc coords
 
 
 <img
