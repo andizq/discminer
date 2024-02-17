@@ -21,47 +21,48 @@
   <a href="https://github.com/andizq/discminer/issues/new?assignees=&labels=question&title=question%3A+">Ask a Question</a>
 </div>
 
+- Model channel maps from molecular line emission of discs by fitting intensity and rotation velocity simultaneously.
+- Estimate disc vertical extent by tracing front and back side line emission when available.
+- Compute moment maps that accurately capture complex line profile morphologies.
+- Disc velocity can be modelled with multiple components: Keplerian motion + pressure support + self-gravity.
+- Extract rotation curves, radial and meridional velocities, intensity and line width profiles.
+- Identify velocity and intensity substructures; study their coherence and degree of localisation.
+- Non-axisymmetric models are possible; all attributes can be parameterised as a function of $R,\phi,z$ disc coords.
 
-- Model channel maps from molecular line observations of discs by fitting intensity and rotation velocity.
-- Compute moment maps, rotation curves and meridional velocities, intensity and line width profiles.
-- Quantify deviations from Keplerian motion and investigate their relationship to intensity and line width fluctuations.
-- Customise model parameterisations as function of the 3D disc coordinates easily (azimuthal asymmetries are possible!).
-- Employ different prescriptions for the disc rotation velocity if needed: Keplerian + pressure support + self-gravity.
-- Model upper and lower emitting surfaces of the disc simultaneously.
-- Use irregular emitting surfaces obtained with external non-parametric methods if required.
-- Analyse the disc physical structure and dynamics using built-in tools.
 
 <img
   src="images/discminer_outline.png"
   alt="Discminer workflow and capabilities"
   style="display: inline-block; margin: 0 auto; max-width: 500px">
 
-### Mining, analysis and visualisation tools
+## Mining tools
 
-#### rail
+Discminer offers a wide range of analysis and visualisation tools to fully explore the physical and dynamical structure of your disc.
+
+
+### cube
+
+- Compute moment maps that accurately capture complex line profile morphologies.
+- Output moment maps include **peak intensity**, **line width**, **line slope**, and **centroid velocity**.
+- Easily clip, downsample, and convert to brightness temperature units.
+- Quickly visualise model versus data channels and interactively extract spectra.
+
+### rail
 
 - Extract azimuthal and radial profiles of intensity, line width and velocity from moment maps.
-- Compute rotation curves and decompose the three-dimensional velocity field of the disc.
-- Reveal large-scale substructures and investigate coherence of observable signatures.
+- Compute rotation curves and decompose disc velocity into its three-dimensional components.
+- Reveal large-scale signatures and quantify their pitch angle, width, extent, and coherence degree.
 
-#### pick
+### pick
 
-- Quantify small-scale fluctuations in the disc.
-- Reveal localised velocity perturbations and/or sites of enhanced velocity dispersion.
+- Identify small-scale velocity and intensity perturbations, and estimate their localisation degree.
 
-#### moment maps
+### plottools
 
-- Compute moment maps. Available kernels: Gaussian, bell, doubleGaussian, doubleBell.
-- Output moments include **peak intensity**, **line width** and **centroid velocity**.
-
-#### channel maps
-
-- Visualise model/data channels, and extract spectra interactively.
-
-#### disc geometry
-
-- Use sky or disc [Cartesian or polar] projections interchangeably.
-- Overlay the geometric structure of the disc on moment and channel maps easily. 
+- Customise intensity channels and residual maps, and highlight coherent and localised perturbations.
+- Use sky or disc projections interchangeably for easier visualisation of features.
+- Easily overlay the disc geometry (orientation and vertical structure) on any observable product.
+- Overlay 1D profiles or 2D maps from external data to e.g. highlight the presence of dust substructures.
 
 
 ## Installation
@@ -76,19 +77,20 @@ To upgrade the code,
 pip install -U discminer
 ```
 
-### Optional Dependencies
+#### Optional dependencies
 
 - [termtables](https://pypi.org/project/termtables)
-- termplotlib
-- FilFinder 
-- ipython
-- schwimmbad
+- [termplotlib](https://pypi.org/project/termplotlib)
+- [FilFinder](https://pypi.org/project/fil-finder)
+- [schwimmbad](https://pypi.org/project/schwimmbad)
+- [ipython](https://ipython.readthedocs.io/en/stable)
 
 ## How to use
 
-The package documentation is under construction but you can find practical examples showing the main
-functionality of `discminer` in the `./template` folder of this repository. To run the examples
-on your local machine you can clone this repository and follow the instructions in the readme file,
+The package documentation is still under construction, but you can find practical examples demonstrating the main
+functionality of the code in the `./template` folder of this repository.
+
+To run the examples on your local machine you can clone this repository and follow the instructions provided in the readme file,
 
 ```bash
 git clone https://github.com/andizq/discminer.git
@@ -96,20 +98,7 @@ cd discminer/template
 less README.rst
 ```
 
-### Discminer history
-
-`discminer` began life as the model.disc2d.py library of [sf3dmodels](https://github.com/andizq/sf3dmodels).
-
-#### v0.0.x
-
-- Transiting to astropy units.
-- Addition of mining tools.
-
-### License
-
-`discminer` is published under the [MIT license](https://github.com/andizq/discminer/blob/main/LICENSE).
-
-### Citation
+## Citation
 
 If you find `discminer` useful for your research please cite the work of [Izquierdo et al. 2021](https://ui.adsabs.harvard.edu/abs/2021A%26A...650A.179I/abstract),
 
