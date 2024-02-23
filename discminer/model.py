@@ -169,3 +169,4 @@ class ReferenceModel(Cube):
 
         #UPDATE DATA VALUES
         self.data = model.make_model(make_convolve=True, return_data_only=True)                        
+        self.model = model

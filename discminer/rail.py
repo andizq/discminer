@@ -72,6 +72,30 @@ class Rail(object):
         self._color_list = None
 
         self.model = model
+
+    @staticmethod
+    def make_contour_lev(prop, lev, X, Y, acc_threshold=20): 
+        contour = measure.find_contours(prop, lev)
+        ind_good = np.argmin([np.abs(lev-prop[tuple(np.round(contour[i][0]).astype(int))]) for i in range(len(contour))]) #get contour id closest to lev              
+        inds_cont = np.round(contour[ind_good]).astype(int)
+        inds_cont = [tuple(f) for f in inds_cont]
+        first_cont = np.array([prop[i] for i in inds_cont])
+        corr_inds = np.abs(first_cont-lev) < acc_threshold
+        x_cont = np.array([X[i] for i in inds_cont])
+        y_cont = np.array([Y[i] for i in inds_cont])
+        return x_cont[corr_inds], y_cont[corr_inds], inds_cont, corr_inds
+        
+    @staticmethod
+    def beams_along_annulus(lev, Rgrid, beam_size, X, Y):
+        xc, yc, _, _ = Rail.make_contour_lev(Rgrid, lev, X, Y)
+        try:
+            rc = hypot_func(xc, yc)
+            a = np.max(rc)
+            b = np.min(rc)
+            ellipse_perim = np.pi*(3*(a+b)-np.sqrt((3*a+b)*(a+3*b))) #Assumes elliptical path is not affected much by the disc vertical structure
+            return ellipse_perim/beam_size
+        except ValueError: #No contour found
+            return np.inf
         
     def prop_along_coords(self,
                           coord_ref=None,
@@ -284,10 +308,12 @@ class Rail(object):
 
     
     def get_average(self, surface='upper', 
-                    av_func=np.nanmean, mask_ang=0,
+                    av_func=np.nanmean,
+                    mask_ang=0,
                     sigma_thres=np.inf,
-                    mask_from_map=None, mask_perc_init=0.2, plot_diagnostics=False, tag='', forward_error=False,
-                    error_func=True, error_unit=1.0, error_thres=np.inf,
+                    mask_from_map=None, mask_perc_init=0.2,
+                    plot_diagnostics=False, tag='',
+                    forward_error=False, error_func=False, error_unit=1.0, error_thres=np.inf,                    
                     **kwargs_along_coords):
         #mask_ang: +- angles to reject around minor axis (i.e. phi=+-90) 
 
@@ -369,7 +395,7 @@ class Rail(object):
         
         if error_func is None: av_error = None
         else:
-            beams_ring_sqrt = np.sqrt([frac_annulus*Contours.beams_along_ring(lev, Rgrid, beam_size, X, Y) for lev in lev_list])
+            beams_ring_sqrt = np.sqrt([frac_annulus*Rail.beams_along_annulus(lev, Rgrid, beam_size, X, Y) for lev in lev_list])
             if callable(error_func): #if error map provided, compute average error per radius, divided by sqrt of number of beams (see Michiel Hogerheijde notes on errors)
                 av_error = np.zeros(nconts)
                 for i in range(nconts):
@@ -387,6 +413,117 @@ class Rail(object):
 
         return av_annulus, av_error
 
+
+    def get_average_zones(self, surface='upper',
+                          av_func=np.nanmean,
+                          az_zones=[[-30, 30], [150,  -150]],
+                          fast=True, #If not fast use np.trapz integral instead of av_func to get average values
+                          join_zones=False, #Get a single averaged profile from all values in the input zones
+                          sigma_thres=np.inf, error_func=False, error_unit=1.0, error_thres=np.inf,
+                          **kwargs_along_coords):
+                          
+        if self._lev_list is None:
+            kwargs_along_coords.update({'surface': surface})
+            self.prop_along_coords(**kwargs_along_coords)
+
+        lev_list, coord_list, resid_list = self._lev_list, self._coord_list, self._resid_list
+        Rgrid = self.R_nonan[surface]/sfu.au
+        X = self.X
+        Y = self.Y
+        beam_size = self.beam_size.to('au').value
+        
+        nconts = len(lev_list)
+        nzones = len(az_zones)
+
+        resid_thres = [sigma_thres*np.nanstd(resid_list[i]) for i in range(nconts)] 
+
+        make_or = lambda az0, az1: [((coord_list[i]>az0) | (coord_list[i]<az1))
+                                    & (np.abs(resid_list[i]-np.nanmean(resid_list[i])) < resid_thres[i])
+                                    for i in range(nconts)]
+        
+        make_and = lambda az0, az1: [((coord_list[i]>az0) & (coord_list[i]<az1))
+                                     & (np.abs(resid_list[i]-np.nanmean(resid_list[i])) < resid_thres[i])
+                                     for i in range(nconts)]
+
+        def get_portion_inds(az):
+            az0, az1 = az
+            if (az0 > az1):
+                inds = make_or(az0, az1)
+            else:
+                inds = make_and(az0, az1)
+            return inds
+
+        def get_portion_percent(az):
+            az0, az1 = az
+            if (az0 > az1):
+                if az0 < 0: perc = 1 - (az0-az1)/360.
+                else: perc = (180-az0 + 180-np.abs(az1))/360.
+            else:
+                perc = (az1-az0)/360.
+            return perc
+
+        #inds containts lists of indices, one list per zone. Each is a list of lists, with as many lists as nconts (number of radii). Each sublist has different number of indices, the larger the radius (i.e. larger path) the more indices.        
+        inds = [get_portion_inds(zone) for zone in az_zones] 
+        az_percent = np.array([get_portion_percent(zone) for zone in az_zones])
+
+        if join_zones and nzones>1:
+            if not fast:
+                warnings.warn('Using standard (fast) algorithm to compute average of values within zones altogether')
+
+            #concatenate indices from zones, per radius
+            inds = [[functools.reduce(lambda x,y: x+y, [ind[i] for ind in inds]) for i in range(nconts)]] 
+            az_percent = np.atleast_1d(np.sum(az_percent))
+            nzones = 1
+
+        if fast: #compute 'arithmetic' average using av_func
+            av_on_inds = [np.array([av_func(resid_list[i][ind[i]]) for i in range(nconts)]) for ind in inds]        
+
+        else: #Compute average using integral definition (trapezoid seems to do better than simpson)
+            av_integral = lambda y,x,dT: np.trapz(y, x=x)/dT # or trapezoid from scipy.integrate
+            av_on_inds = []
+
+            for ind in inds:
+
+                av_annulus = []
+
+                for i in range(nconts):
+                    ii = ind[i]
+                    coords_ii = coord_list[i][ii]
+                    resid_ii = resid_list[i][ii]
+
+                    if not len(coords_ii):
+                        trap = None
+                    else:
+                        trap = av_integral(resid_ii, coords_ii, coords_ii[-1]-coords_ii[0]) #dT assumes coords_list is sorted (no matter if ascending or descending)
+                    av_annulus.append(trap) 
+                av_on_inds.append(np.array(av_annulus))
+            
+        beams_ring_full = [Rail.beams_along_annulus(lev, Rgrid, beam_size, X, Y) for lev in lev_list]
+        beams_zone_sqrt = [np.sqrt(az_percent*br) for br in beams_ring_full]
+
+        if error_func is None:
+            av_error = None
+
+        else:
+            if callable(error_func): #Not yet tested
+                #if error map provided, compute average error per radius, divided by sqrt of number of beams (see Michiel Hogerheijde notes on errors)  
+                av_error = []
+                for i in range(nconts):
+                    r_ind = [get_sky_from_disc_coords(lev_list[i], coord_list[i][ind[i]]) for ind in inds] #MISSING z, incl, PA for the function to work
+                    error_ind = [np.array(list(map(error_func, r_ind[j][0], r_ind[j][1]))).T[0] for j in range(nzones)]
+                    sigma2_ind = [np.where((np.isfinite(error_ind[j])) & (error_unit*error_ind[j]<error_thres) & (error_ind[j]>0),
+                                           (error_unit*error_ind[j])**2,
+                                           0)
+                                  for j in range(nzones)]
+                    np_ind = [len(coord_list[i][ind[i]]) for ind in inds]
+                    av_error.append([np.sqrt(np.nansum(sigma2_ind[j])/np_ind[j])/beams_zone_sqrt[i][j] for j in range(nzones) in np_ind])
+                    
+            else: #compute standard error of mean value 
+                av_error = [np.array([np.std(resid_list[i][inds[j][i]], ddof=1)/beams_zone_sqrt[i][j] for i in range(nconts)]) for j in range(nzones)]
+
+        return av_on_inds, av_error    
+
+    
     def make_2d_map(self, prop_thres=np.inf, return_coords=False): 
         #compute x,y coords from azimuthal contours and interpolate onto 2D grid
         n_conts = len(self._coord_list)
