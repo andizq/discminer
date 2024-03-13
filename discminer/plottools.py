@@ -183,13 +183,16 @@ def get_discminer_cmap(observable, kind='attribute'):
 #**************
 #COLORBAR STUFF
 #**************
-def add_cbar_ax(fig, ax, perc=8, pad=0.5, orientation='horizontal', subplots=True):
+def add_cbar_ax(fig, ax, perc=8, pad=0.5, w=None, h=None, orientation='horizontal', subplots=True):
     figx, figy = fig.get_size_inches()
     figr = figy/figx
     axp = ax.get_position()
     x0, x1, y0, y1 = axp.x0, axp.x1, axp.y0, axp.y1
-    w = x1 - x0
-    h = y1 - y0
+    
+    if w is None:
+        w = x1 - x0
+    if h is None:
+        h = y1 - y0
 
     if orientation=='horizontal':
         dy = 0.01*perc*h

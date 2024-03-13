@@ -11,9 +11,11 @@ from . import constants as sfc
 from . import units as sfu
 import matplotlib.pyplot as plt
 import matplotlib
+from matplotlib.axes import Axes
 import numpy as np
 from astropy import units as u
 from scipy.interpolate import griddata
+from collections.abc import Iterable
 from skimage import measure
 import numbers
 
@@ -148,7 +150,6 @@ class Rail(object):
         fold_func : function, optional
            If fold, this function is used to operate between folded quadrants. Defaults to np.subtract.
         """
-        from matplotlib.axes import Axes
 
         prop, coord_levels = self.prop, self.coord_levels
         _rail_phi = self.phi[surface] #np.where(self.phi['upper'] < 0.98*np.pi, self.phi['upper'], np.nan)
@@ -158,13 +159,21 @@ class Rail(object):
         X, Y = self.X, self.Y
         coords = coords_azimuthal
 
-        color_bounds = np.insert([0, np.inf], 1, color_bounds)
-        nbounds = len(color_bounds)
-        
+        if isinstance(color_bounds, Iterable):
+            color_bounds = np.insert([0, np.inf], 1, color_bounds)
+            nbounds = len(color_bounds)
+        else:
+            nbounds = 0
+            
         coord_list, lev_list, resid_list, color_list = [], [], [], []
-        if np.sum(coord_levels==coord_ref)==0 and coord_ref is not None: coord_levels = np.append(coord_levels, coord_ref)
-        for lev in coord_levels:
+
+        if np.sum(coord_levels==coord_ref)==0 and coord_ref is not None:
+            coord_levels = np.append(coord_levels, coord_ref)
+
+        for levi, lev in enumerate(coord_levels):
+
             contour = measure.find_contours(coords[0], lev) #, fully_connected='high', positive_orientation='high')
+
             if len(contour)==0:
                 print ('no contours found for phi =', lev)
                 continue
@@ -185,21 +194,32 @@ class Rail(object):
             if lev == coord_ref: zorder=10
             else: zorder=np.random.randint(0,10)
 
-            for i,bound in enumerate(color_bounds):
-                if lev == coord_ref: 
-                    lw = 2.0
-                    color = 'k'
-                    zorder = 10
-                    break
-                elif i!=(nbounds-1):
-                    if color_bounds[i] <= lev <= color_bounds[i+1]:
-                        lw = lws[i]
-                        color = colors[i]                                            
-                        break
+            if color_bounds is None:
+                if isinstance(colors, Iterable) and not isinstance(colors, str):
+                    color = colors[levi]
                 else:
-                    lw = lws[i]
-                    color = colors[i]                    
-                    break
+                    color = colors
+                    
+                if isinstance(lws, Iterable):
+                    lw = lws[levi]
+                else:
+                    lw = lws
+            else:
+                for i,bound in enumerate(color_bounds):
+                    if lev == coord_ref: 
+                        lw = 2.0
+                        color = 'k'
+                        zorder = 10
+                        break
+                    elif i!=(nbounds-1):
+                        if color_bounds[i] <= lev <= color_bounds[i+1]:
+                            lw = lws[i]
+                            color = colors[i]                                            
+                            break
+                    else:
+                        lw = lws[i]
+                        color = colors[i]                    
+                        break
                             
             if fold:
                 #if lev < color_bounds[0]: continue

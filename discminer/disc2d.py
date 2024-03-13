@@ -1484,7 +1484,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                 for prop in props:
                     if not isinstance(prop[side], numbers.Number): prop[side] = griddata((x_pro, y_pro), prop[side], (self.mesh[0], self.mesh[1]), method='linear')
                     if self.Rmax_m is not None: prop[side] = np.where(np.logical_and(R_grid<self.Rmax_m, R_grid>self.Rmin_m), prop[side], np.nan)
-            
+
         #*************************************
         if self.prototype:
             self.get_projected_coords(z_mirror=z_mirror) #TODO: enable kwargs for this method
