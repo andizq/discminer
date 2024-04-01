@@ -102,6 +102,7 @@ class Data(Cube):
             self.data,
             self.header,
             self.vchannels,
+            self.dpc,
             beam = self.beam,
             filename = self.filename            
         )

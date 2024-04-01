@@ -1,13 +1,119 @@
-import os
-import sys
-import numpy as np
-from astropy import units as u
-from astropy import constants as apc
+from .._version import __version__
 from .. import constants as sfc
 from .. import units as sfu
+from astropy import units as u
+from astropy import constants as ct
+
+import os
+import sys
+import copy
+import numpy as np
 
 hypot_func = lambda x,y: np.sqrt(x**2 + y**2) #Slightly faster than np.hypot<np.linalg.norm<scipydistance. Checked precision up to au**2 orders.
 
+_molecule = {
+    'c+': {
+        'name': 'Carbon ion',
+        'tex': r'C$^+$',
+        'weight': 12.0 * u.u,
+    },
+    '12co': {
+        'name': 'Carbon monoxide',
+        'tex': r'$^{\rm 12}$CO',
+        'weight': 28.01 * u.u,
+    },
+    '13co': {
+        'name': 'Carbon monoxide',        
+        'tex': r'$^{\rm 13}$CO',
+        'weight': 29.0 * u.u,
+    },
+    'c18o': {
+        'name': 'Carbon monoxide',        
+        'tex': r'C$^{\rm 18}$O',
+        'weight': 30.0 * u.u
+    },
+    'cs': {
+        'name': 'Carbon monosulfide',        
+        'tex': r'CS',
+        'weight': 44.1 * u.u
+    },
+    'cn': {
+        'name': 'Cyano radical',        
+        'tex': r'CN',
+        'weight': 26.0 * u.u
+    },
+    'hcn': {
+        'name': 'Hydrogen cyanide',        
+        'tex': r'HCN',
+        'weight': 27.0 * u.u
+    },
+    'c2h': {
+        'name': 'Ethynyl',        
+        'tex': r'C$_{\rm 2}$H',
+        'weight': 25.0 * u.u
+    },
+    'hco+': {
+        'name': 'Formyl ion',        
+        'tex': r'HCO$^+$',
+        'weight': 29.0 * u.u
+    },    
+}
+
+
+def get_mol_metadata(mol):
+    return copy.copy(_molecule[mol])
+
+class _Metadata(object):
+
+    defunits = {
+        'Rmin': u.au,
+        'Rmax': u.au,
+        'dpc': u.pc,        
+        'bmaj': u.arcsec,
+        'bmin': u.arcsec,
+        'bpa': u.deg,
+        'bmaj_au': u.au
+    }
+
+    @staticmethod
+    def _convert_units(json_dict):
+        for key in json_dict:
+            if key in _Metadata.defunits:
+                try:
+                    json_dict[key] = json_dict[key].to(_Metadata.defunits[key]).value
+                except AttributeError: #bmaj_au can be None
+                    pass
+
+    @property
+    def json_metadata(self):
+        return self._json_metadata
+
+    @json_metadata.setter
+    def json_metadata(self, val):
+        _Metadata._convert_units(val)
+        #print('Updating json_metadata info:', val) 
+        self._json_metadata.update(val)
+        
+    def __init__(
+            self,
+            disc = None,            
+            mol = '12co',
+            **kwargs
+    ):
+        
+        self.moldata = get_mol_metadata(mol)        
+        
+        self._json_metadata = {
+            'v_discminer': __version__,
+            'disc': disc,
+            'mol': mol,
+            'mol_weight': self.moldata['weight'].value
+        }
+
+        self._json_metadata.update(**kwargs)
+        _Metadata._convert_units(self._json_metadata)
+
+        
 class InputError(Exception):
     """Exception raised for input errors.
 
@@ -99,9 +205,9 @@ class FITSUtils(object):
         #  dist**2 cancels out with beamarea's dist**2 from conversion of bmaj, bmin to mks units.
         beam_solid = beam_area / u.pc.to("m") ** 2
         Jy_to_SI = 1e-26
-        c_h = apc.h.value
-        c_c = apc.c.value
-        c_k_B = apc.k_B.value
+        c_h = ct.h.value
+        c_c = ct.c.value
+        c_k_B = ct.k_B.value
 
         if planck:
             Tb = (

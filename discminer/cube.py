@@ -5,7 +5,7 @@ from .plottools import (get_discminer_cmap,
                         mask_cmap_interval)
 
 from .tools.fit_kernel import fit_gaussian, fit_twocomponent, fit_onecomponent
-from .tools.utils import FrontendUtils, InputError
+from .tools.utils import FrontendUtils, InputError, _Metadata
 from .rail import Contours
 
 from astropy.convolution import Gaussian2DKernel
@@ -40,8 +40,8 @@ _progress_bar = FrontendUtils._progress_bar
 _break_line = FrontendUtils._break_line
 path_icons = FrontendUtils.path_icons
 
-class Cube(object):
-    def __init__(self, data, header, vchannels, dpc, beam=None, filename="./cube.fits"):
+class Cube(_Metadata):
+    def __init__(self, data, header, vchannels, dpc, beam=None, filename="./cube.fits", disc=None, mol='12co'):
         """
         Initialise Cube object.
         
@@ -76,19 +76,38 @@ class Cube(object):
         
         if isinstance(beam, Beam):
             self._init_beam_kernel()  # Get 2D Gaussian kernel from beam
+            bmaj = self.beam.major
+            bmin = self.beam.minor
+            bpa = self.beam.pa
 
         elif beam is None:
             self.beam_size = None
             self.beam_area = None
             self.beam_kernel = None
             self.beam_area_arcsecs = None
-
+            bmaj = 0.0*u.deg
+            bmin = 0.0*u.deg
+            bpa = 0.0*u.deg
+            
         else:
             raise InputError(beam, "beam must be either None or radio_beam.Beam object")
 
         self._interactive = self._cursor
         self._interactive_path = self._curve
 
+        #Init metadata
+        _Metadata.__init__(self, disc=disc, mol=mol)
+        
+        self.json_metadata = {
+            'dpc': dpc,
+            'bmaj': bmaj,
+            'bmin': bmin,
+            'bpa': bpa,
+            'bmaj_au': self.beam_size
+        }
+
+        self._update_json_metadata()
+        
     @property
     def filename(self): 
         return self._filename
@@ -97,6 +116,19 @@ class Cube(object):
     def filename(self, name): 
         self.fileroot = os.path.expanduser(name).split(".fits")[0]        
 
+    def _update_json_metadata(self):
+        v0 = self.vchannels[0]*u.km/u.s
+        v1 = self.vchannels[-1]*u.km/u.s
+        wchan = (v1-v0)/(self.nchan-1)
+
+        self.json_metadata = {
+            'npix': self.nx,
+            'nchan': self.nchan,
+            'wchan': wchan.value,
+            'v0': v0.value,
+            'v1': v1.value
+        }
+        
     def _init_sky_extent(self):
         self.pix_size = np.abs(self.header["CDELT1"]) * u.Unit(self.header["CUNIT1"])
         pix_rad = self.pix_size.to(u.radian)
@@ -360,7 +392,10 @@ class Cube(object):
 
         else:
             print("npix is <= 1, no average was performed...")
-
+            
+        self._update_json_metadata()
+        self.json_metadata = {'downsamp': npix}
+        
     def clip(
         self,
         npix=0,
@@ -457,7 +492,9 @@ class Cube(object):
         if writefits:
             self.writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)
 
-            
+        self._update_json_metadata()
+        self.json_metadata = {'clipped': True}
+
     def make_moments(self, method='gaussian', kind='mask', writefits=True, overwrite=True, parcube=True, writecomp=True, tag="", **kwargs_method):
         """
         Make moment maps from line profile observables.

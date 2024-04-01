@@ -346,11 +346,11 @@ def _make_radial_grid_2D(ax, Rout, gaps=[], rings=[], kinks=[], make_labels=True
     ax.plot(0.99*Rout*cos_angs, 0.99*Rout*sin_angs, color='0.2', ls='-', lw=3.0, alpha=1.0)
     ax.plot(1.00*Rout*cos_angs, 1.00*Rout*sin_angs, color='0.0', ls='-', lw=3.0, alpha=1.0)
     
-def _make_azimuthal_grid_2D(ax, Rout):
+def _make_azimuthal_grid_2D(ax, Rout, ticks=np.linspace(0, 90, 4)):
     for j, phii in enumerate(np.arange(0, 2*np.pi, np.pi/6)):
         ax.plot([0, Rout*np.cos(phii)], [0, Rout*np.sin(phii)], color='k', ls=':', lw=0.4, alpha=1.0)
 
-    for deg in np.linspace(0, 90, 4):
+    for deg in ticks:
         deg_rad = np.radians(deg)
         txt = ax.text(1.04*Rout*np.cos(deg_rad), 1.04*Rout*np.sin(deg_rad), r'$%d$'%deg, c='0.0',
                       fontsize=SMALL_SIZE+5, ha='center', va='center', weight='bold', rotation=-(90-deg))
@@ -502,7 +502,7 @@ def make_round_map(
         fig=None, ax=None,
         make_cbar=True,
         rwidth=0.06, cmap=get_discminer_cmap('velocity'), clabel='km/s', fmt='%5.2f', quadrant=None, #cbar kwargs
-        make_radial_grid=True, make_azimuthal_grid=True,
+        make_radial_grid=True, make_azimuthal_grid=True, ticks_phi=np.linspace(0, 90, 4),
         make_contourf=True,        
         make_contour=False,        
         gaps=[], rings=[], kinks=[],        
@@ -554,7 +554,7 @@ def make_round_map(
         ax.plot(1.00*Rout*cos_angs, 1.00*Rout*sin_angs, color='0.0', ls='-', lw=3.0, alpha=1.0)
 
     if make_azimuthal_grid:
-        _make_azimuthal_grid_2D(ax, Rout)
+        _make_azimuthal_grid_2D(ax, Rout, ticks=ticks_phi)
     
     #SKY AXIS
     if np.all(np.asarray([z_func, z_pars, incl, PA])!=None):
