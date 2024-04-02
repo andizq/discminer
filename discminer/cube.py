@@ -1585,7 +1585,7 @@ class Cube(_Metadata):
         text_chan = ax[1].text(
             0.15,
             1.04,  # Converting xdata coords to Axes coords
-            r"v$_{\rmchan}$=%4.1f %s" % (self.vchannels[chan_init], vel_unit),
+            r"v$_{\rm chan}$=%4.1f %s" % (self.vchannels[chan_init], vel_unit),
             ha="center",
             color="black",
             transform=ax[1].transAxes,
@@ -1642,7 +1642,7 @@ class Cube(_Metadata):
                 for mcoll in ax[1].collections:
                     mcoll.remove()
 
-            text_chan.set_text(r"v$_{\rmchan}$=%4.1f %s" % (vchan, vel_unit))
+            text_chan.set_text(r"v$_{\rm chan}$=%4.1f %s" % (vchan, vel_unit))
             for i in range(len(xa_list)):
                 if xa_list[i] is not None:
                     self._plot_spectrum_path(
