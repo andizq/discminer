@@ -15,7 +15,7 @@ import warnings
 import json
 
 class Data(Cube):
-    def __init__(self, filename, dpc, twodim=False):
+    def __init__(self, filename, dpc, twodim=False, disc=None, mol='12co'):
         """
         Initialise Data object. Inherits `~discminer.disc2d.Cube` properties and methods.
         
@@ -95,7 +95,7 @@ class Data(Cube):
                 raise InputError(cube_vel,
                                  'The input datacube is not valid. Only the following spectral_cube instances are supported: SpectralCube, VaryingResolutionSpectralCube.')
             
-        super().__init__(data, header, vchannels, dpc, beam=beam, filename=filename)
+        super().__init__(data, header, vchannels, dpc, beam=beam, filename=filename, disc=disc, mol=mol)
 
     def _init_cube(self):
         super().__init__(

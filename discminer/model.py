@@ -1,6 +1,5 @@
 from .cube import Cube
 from .tools.utils import InputError
-
 from .disc2d import Model
 from .cart import *
 
@@ -8,18 +7,32 @@ import numpy as np
 
 from astropy.io import fits
 from astropy import units as u
+
 from radio_beam import Beam
 
 import copy
 
+func_defaults = {
+    'velocity_func': keplerian_vertical,
+    'z_upper_func': z_upper_exp_tapered,
+    'z_lower_func': z_lower_exp_tapered,
+    'intensity_func': intensity_powerlaw_rout,
+    'linewidth_func': linewidth_powerlaw,
+    'lineslope_func': lineslope_powerlaw,
+    'line_profile': line_profile_bell,
+    'line_uplow': line_uplow_mask
+}
+                    
 class ReferenceModel(Cube):
     def __init__(
             self,
+            disc = None,
+            mol = '12co',
+            Rmin = 1.0,
             Rmax = 700*u.au,
             dpc = 100*u.pc,
-            nx = 128,
+            npix = 128,
             vchannels = np.linspace(-5.0, 5.0, 101),
-            Rmin = 1.0,
             write_extent = True,
             beam = Beam(
                 major=0.15*u.arcsec,
@@ -35,7 +48,7 @@ class ReferenceModel(Cube):
             line_profile = line_profile_bell,
             line_uplow = line_uplow_mask,
             init_params = {},
-            init_header = {}
+            init_header = {},
     ): 
         """
         Initialise ReferenceModel. Inherits `~discminer.disc2d.Cube` properties and methods.
@@ -96,45 +109,45 @@ class ReferenceModel(Cube):
             
         nchan = len(vchannels)
         dchan = abs(vchannels[1]-vchannels[0])
-        
+                
         #INIT BEAM FOR HEADER
         if isinstance(beam, Beam):
-            bmaj = beam.major.to(u.deg).value
-            bmin = beam.minor.to(u.deg).value
-            bpa = beam.pa.to(u.deg).value                    
+            bmaj = beam.major
+            bmin = beam.minor
+            bpa = beam.pa
         elif beam is None:
-            bmaj = 0.0
-            bmin = 0.0
-            bpa = 0.0
+            bmaj = 0.0*u.deg
+            bmin = 0.0*u.deg
+            bpa = 0.0*u.deg
         else:
             raise InputError(beam, "beam must be either None or radio_beam.Beam object")
         
         #HEADER
-        dpix = np.arctan((Rmax.to(u.au) / (0.5*(nx-1))) / dpc.to(u.au)).to(u.deg)
+        dpix = np.arctan((Rmax.to(u.au) / (0.5*(npix-1))) / dpc.to(u.au)).to(u.deg)
 
         header = dict(
             SIMPLE  = True, 
             BITPIX  = -32, 
             NAXIS   = 3,                                                  
-            NAXIS1  = nx,
-            NAXIS2  = nx,
+            NAXIS1  = npix,
+            NAXIS2  = npix,
             NAXIS3  = nchan,
             EXTEND  = True,                                                  
-            BMAJ    = bmaj,
-            BMIN    = bmin,
-            BPA     = bpa,
-            BTYPE   = 'Intensity',                                                           
-            OBJECT  = 'ReferenceDiscminer',                                                      
-            BUNIT   = 'Jy/beam',      
-            CTYPE1  = 'RA---SIN',                                                            
+            BMAJ    = bmaj.to(u.deg).value,
+            BMIN    = bmin.to(u.deg).value,
+            BPA     = bpa.to(u.deg).value,
+            BTYPE   = 'Intensity',
+            OBJECT  = 'ReferenceDiscminer',
+            BUNIT   = 'Jy/beam',
+            CTYPE1  = 'RA---SIN',        
             CRVAL1  = 245.0,
             CDELT1  = -dpix.value,
-            CRPIX1  = int(0.5*nx)+1,
+            CRPIX1  = int(0.5*npix)+1,
             CUNIT1  = 'deg',                                                            
             CTYPE2  = 'DEC--SIN',
             CRVAL2  = -30.0,
             CDELT2  = dpix.value,
-            CRPIX2  = int(0.5*nx)+1,
+            CRPIX2  = int(0.5*npix)+1,
             CUNIT2  = 'deg',
             CTYPE3  = 'VRAD', #/ Radio velocity (linear) 
             CRVAL3  = vchannels[0],
@@ -149,12 +162,12 @@ class ReferenceModel(Cube):
         header.update(init_header)
         hdu = fits.PrimaryHDU()
         hdu.header.update(header)        
-        data = np.zeros((nchan, nx, nx))
+        data = np.zeros((nchan, npix, npix))
         
-        super().__init__(data, hdu.header, vchannels, dpc, beam=beam, filename="./referencecube.fits")
+        Cube.__init__(self, data, hdu.header, vchannels, dpc, beam=beam, filename="./referencecube.fits", disc=disc, mol=mol)
         
         #INIT MODEL
-        model = Model(self, Rmax=Rmax, Rmin=Rmin, write_extent=write_extent, prototype=True)
+        model = Model(self, Rmax=Rmax, Rmin=Rmin, write_extent=write_extent, prototype=True) 
         
         model.velocity_func = velocity_func
         model.z_upper_func = z_upper_func
@@ -166,7 +179,13 @@ class ReferenceModel(Cube):
         model.line_uplow = line_uplow
 
         model.params = copy.copy(self.params)
-
-        #UPDATE DATA VALUES
-        self.data = model.make_model(make_convolve=True, return_data_only=True)                        
+        
+        #UPDATE DATACUBE VALUES
+        self.data = model.make_model(make_convolve=True, return_data_only=True)        
         self.model = model
+
+        #UPDATE METADATA
+        self.json_metadata = {
+            'Rmin': self.model.Rmin,
+            'Rmax': self.model.Rmax
+        }
