@@ -84,6 +84,21 @@ def make_up_ax(ax, xlims=(None, None), ylims=(None, None),
     ax.set_ylim(*ylims)
     ax.tick_params(**kwargs_t)
 
+def make_1d_legend(ax, **kwargs):
+    kwargs_def = dict(
+        frameon=False,
+        fontsize=MEDIUM_SIZE,
+        ncol=3,
+        handlelength=2.0,
+        handletextpad=0.5,
+        borderpad=0.0,
+        columnspacing=1.5,
+        loc='lower right',
+        bbox_to_anchor=(1.0, 1.0)
+    )
+    kwargs_def.update(kwargs)
+    return ax.legend(**kwargs_def)
+
 #**********************
 #COLORMAP CUSTOMISATION
 #**********************
