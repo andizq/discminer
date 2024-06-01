@@ -1497,8 +1497,8 @@ class Cube(_Metadata):
                     compare_cubes=compare_cubes,
                     **kwargs
                 )
-                color_cycle = next(ax[0]._get_lines.prop_cycler)['color']
-                ax[0].scatter(x0, y0, s=30, lw=1.5, edgecolor=color_cycle, facecolor='none')
+                #color_cycle = next(ax[0]._get_lines.prop_cycler)['color']
+                ax[0].scatter(x0, y0, s=30, lw=1.5, edgecolor=color_list[-1], facecolor='none')
                 
         if MPL_VERSION >= Version("3.5"):
             props_kwarg = "props"
