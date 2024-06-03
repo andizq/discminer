@@ -7,6 +7,7 @@ from astropy import constants as ct
 import os
 import sys
 import copy
+import json
 import numpy as np
 
 hypot_func = lambda x,y: np.sqrt(x**2 + y**2) #Slightly faster than np.hypot<np.linalg.norm<scipydistance. Checked precision up to au**2 orders.
@@ -63,7 +64,7 @@ _molecule = {
 def get_mol_metadata(mol):
     return copy.copy(_molecule[mol])
 
-class _Metadata(object):
+class _JSON(object):
 
     defunits = {
         'Rmin': u.au,
@@ -74,45 +75,137 @@ class _Metadata(object):
         'bpa': u.deg,
         'bmaj_au': u.au
     }
+    
+    def make_json(self, keys = ['custom', 'metadata', 'params', 'funcs']):
+        master_dict = {
+            'custom': self.json_custom,
+            'metadata': self.json_metadata,
+            'params': self.json_params,
+            'funcs': self.json_funcs
+        }
+        json_dict = {key: master_dict[key] for key in keys}
+        print (json_dict)
+        with open(self.json_filename, 'w', encoding='utf-8') as f:
+            json.dump(json_dict, f, ensure_ascii=False, indent=4)
 
+    @staticmethod
+    def _get_func_name(json_dict):
+        for key in json_dict:
+            json_dict[key] = json_dict[key].__name__
+            
     @staticmethod
     def _convert_units(json_dict):
         for key in json_dict:
-            if key in _Metadata.defunits:
+            if key in _JSON.defunits:
                 try:
-                    json_dict[key] = json_dict[key].to(_Metadata.defunits[key]).value
+                    json_dict[key] = json_dict[key].to(_JSON.defunits[key]).value
                 except AttributeError: #bmaj_au can be None
                     pass
-
+    
+    def _parse_mol_weight(self, metadata):
+        try:
+            self._moldata = get_mol_metadata(metadata['mol'])
+            metadata['mol_weight'] = self._moldata['weight'].value            
+        except KeyError:
+            self._moldata = None
+            message = 'Molecular data not found: %s'%metadata['mol']
+            metadata['mol_weight'] = -1
+            warnings.warn(message)
+                        
     @property
     def json_metadata(self):
         return self._json_metadata
 
     @json_metadata.setter
-    def json_metadata(self, val):
-        _Metadata._convert_units(val)
-        #print('Updating json_metadata info:', val) 
-        self._json_metadata.update(val)
+    def json_metadata(self, new):
+        _JSON._convert_units(new)
+        if 'mol' in new.keys():
+            if new['mol'] != self._json_metadata['mol']: 
+                self._parse_mol_weight(new)                
+        #print('Updating json_metadata:', new) 
+        self._json_metadata.update(new) 
+
+    @property
+    def json_custom(self):
+        return self._json_custom
+
+    @json_custom.setter
+    def json_custom(self, new):
+        self._json_custom.update(new)
+
+    @property
+    def json_params(self):
+        return self._json_params
+
+    @json_params.setter
+    def json_params(self, new):
+        self._json_params.update(new)
+
+    @property
+    def json_funcs(self):
+        return self._json_funcs
+
+    @json_funcs.setter
+    def json_funcs(self, new):
+        _JSON._get_func_name(new)
+        self._json_funcs.update(new)
+
+    @property
+    def moldata(self):
+        return self._moldata
+
+    @moldata.setter
+    def moldata(self, new):
+        self._moldata.update(new)
+
+    @property
+    def json_filename(self):
+        return self._json_filename
+
+    @json_filename.setter
+    def json_filename(self, new):
+        self._json_filename.update(new)
         
     def __init__(
             self,
-            disc = None,            
-            mol = '12co',
-            **kwargs
+            init_metadata = {},
+            init_custom = {},
+            init_params = {},
+            init_funcs = {},
+            filename = 'parfile_discminer.json'
     ):
-        
-        self.moldata = get_mol_metadata(mol)        
-        
+
+        #Init
         self._json_metadata = {
             'v_discminer': __version__,
-            'disc': disc,
-            'mol': mol,
-            'mol_weight': self.moldata['weight'].value
+            'disc': None,
+            'mol': "12co",
         }
+        self._parse_mol_weight(self._json_metadata)        
+        _JSON._convert_units(self._json_metadata)
+                                
+        self._json_custom = { #Custom variables for plots
+                "chan_step": 2,
+                "nchans": 15,
+                "vlim": 0.4,
+                "Llim": 0.4,
+                "Ilim": 14,
+                "Lslim": 1.0,
+                "gaps": [0],
+                "rings": [0],
+                "kinks": [0]                               
+            }
 
-        self._json_metadata.update(**kwargs)
-        _Metadata._convert_units(self._json_metadata)
-
+        self._json_params = {}
+        self._json_funcs = {}
+        self._json_filename = filename
+        
+        #Update and use setters with init dicts 
+        self.json_metadata = init_metadata
+        self.json_custom = init_custom
+        self.json_params = init_params
+        self.json_funcs = init_funcs
+        
         
 class InputError(Exception):
     """Exception raised for input errors.

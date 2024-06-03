@@ -5,7 +5,7 @@ from .plottools import (get_discminer_cmap,
                         mask_cmap_interval)
 
 from .tools.fit_kernel import fit_gaussian, fit_twocomponent, fit_onecomponent
-from .tools.utils import FrontendUtils, InputError, _Metadata
+from .tools.utils import FrontendUtils, InputError, _JSON
 from .rail import Contours
 
 from astropy.convolution import Gaussian2DKernel
@@ -40,7 +40,7 @@ _progress_bar = FrontendUtils._progress_bar
 _break_line = FrontendUtils._break_line
 path_icons = FrontendUtils.path_icons
 
-class Cube(_Metadata):
+class Cube(_JSON):
     def __init__(self, data, header, vchannels, dpc, beam=None, filename="./cube.fits", disc=None, mol='12co'):
         """
         Initialise Cube object.
@@ -95,8 +95,8 @@ class Cube(_Metadata):
         self._interactive = self._cursor
         self._interactive_path = self._curve
 
-        #Init metadata
-        _Metadata.__init__(self, disc=disc, mol=mol)
+        #Init JSON metadata
+        _JSON.__init__(self, init_metadata=dict(disc=disc, mol=mol))
         
         self.json_metadata = {
             'dpc': dpc,
@@ -1441,8 +1441,8 @@ class Cube(_Metadata):
                 pix_ids, path_val, color=plot_color, step="mid", alpha=0.1
             )
 
-        fig.canvas.draw()
-        fig.canvas.flush_events()
+        #fig.canvas.draw()
+        #fig.canvas.flush_events()
 
     def _curve(
         self,

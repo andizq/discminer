@@ -26,7 +26,7 @@ func_defaults = {
 class ReferenceModel(Cube):
     def __init__(
             self,
-            disc = None,
+            disc = 'disc1',
             mol = '12co',
             Rmin = 1.0,
             Rmax = 700*u.au,
@@ -39,15 +39,8 @@ class ReferenceModel(Cube):
                 minor=0.15*u.arcsec,
                 pa=0*u.deg
             ),
-            velocity_func = keplerian_vertical,
-            z_upper_func = z_upper_exp_tapered,
-            z_lower_func = z_lower_exp_tapered,
-            intensity_func = intensity_powerlaw_rout,
-            linewidth_func = linewidth_powerlaw,
-            lineslope_func = lineslope_powerlaw,
-            line_profile = line_profile_bell,
-            line_uplow = line_uplow_mask,
             init_params = {},
+            init_funcs = {},
             init_header = {},
     ): 
         """
@@ -61,6 +54,18 @@ class ReferenceModel(Cube):
         dpc : `~astropy.units.Quantity`
             Distance to the disc.
         """
+
+        #Init default functional forms and parameters
+        self.funcs = {
+            'velocity': keplerian_vertical,
+            'z_upper' : z_upper_exp_tapered,
+            'z_lower' : z_lower_exp_tapered,
+            'intensity' : intensity_powerlaw_rout,
+            'linewidth' : linewidth_powerlaw,
+            'lineslope' : lineslope_powerlaw,
+            'line_profile' : line_profile_bell,
+            'line_uplow' : line_uplow_mask,                        
+        }
         
         self.params = {
             'velocity': {
@@ -104,13 +109,17 @@ class ReferenceModel(Cube):
             }
         }
 
+        #Update dicts based on input kwargs
         for key in init_params:
             self.params[key].update(init_params[key])
+
+        self.funcs.update(init_funcs)
             
+        #Velocity channels
         nchan = len(vchannels)
         dchan = abs(vchannels[1]-vchannels[0])
-                
-        #INIT BEAM FOR HEADER
+
+        #Init beam for header
         if isinstance(beam, Beam):
             bmaj = beam.major
             bmin = beam.minor
@@ -122,7 +131,7 @@ class ReferenceModel(Cube):
         else:
             raise InputError(beam, "beam must be either None or radio_beam.Beam object")
         
-        #HEADER
+        #Header
         dpix = np.arctan((Rmax.to(u.au) / (0.5*(npix-1))) / dpc.to(u.au)).to(u.deg)
 
         header = dict(
@@ -166,17 +175,17 @@ class ReferenceModel(Cube):
         
         Cube.__init__(self, data, hdu.header, vchannels, dpc, beam=beam, filename="./referencecube.fits", disc=disc, mol=mol)
         
-        #INIT MODEL
+        #Init model
         model = Model(self, Rmax=Rmax, Rmin=Rmin, write_extent=write_extent, prototype=True) 
         
-        model.velocity_func = velocity_func
-        model.z_upper_func = z_upper_func
-        model.z_lower_func = z_lower_func
-        model.intensity_func = intensity_func
-        model.linewidth_func = linewidth_func
-        model.lineslope_func = lineslope_func
-        model.line_profile = line_profile
-        model.line_uplow = line_uplow
+        model.velocity_func = self.funcs['velocity']
+        model.z_upper_func = self.funcs['z_upper']
+        model.z_lower_func = self.funcs['z_lower']
+        model.intensity_func = self.funcs['intensity']
+        model.linewidth_func = self.funcs['linewidth']
+        model.lineslope_func = self.funcs['lineslope']
+        model.line_profile = self.funcs['line_profile']
+        model.line_uplow = self.funcs['line_uplow']
 
         model.params = copy.copy(self.params)
         
@@ -184,8 +193,12 @@ class ReferenceModel(Cube):
         self.data = model.make_model(make_convolve=True, return_data_only=True)        
         self.model = model
 
-        #UPDATE METADATA
-        self.json_metadata = {
+        #UPDATE JSON INFO
+        self.json_metadata = {            
             'Rmin': self.model.Rmin,
             'Rmax': self.model.Rmax
         }
+
+        self.json_params = self.params
+        self.json_funcs = self.funcs
+        self.make_json()
