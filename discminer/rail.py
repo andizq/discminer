@@ -227,8 +227,8 @@ class Rail(object):
                 ref_neg = -90
                 angles = second_cont[corr_inds]
                 prop_ = prop_cont[corr_inds]
-                angles_pos = angles[angles>=0]
-                angles_neg = angles[angles<0]
+                angles_pos = angles[angles>=0] #0, 180
+                angles_neg = angles[angles<0] #-180, 0
                 relative_diff_pos = ref_pos - angles_pos
                 relative_diff_neg = ref_neg - angles_neg
                 angle_diff_pos, prop_diff_pos = [], []

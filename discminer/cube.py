@@ -41,7 +41,7 @@ _break_line = FrontendUtils._break_line
 path_icons = FrontendUtils.path_icons
 
 class Cube(_JSON):
-    def __init__(self, data, header, vchannels, dpc, beam=None, filename="./cube.fits", disc=None, mol='12co'):
+    def __init__(self, data, header, vchannels, dpc, beam=None, filename="./cube.fits", disc=None, mol='12co', kind=['mask'], parfile=None):
         """
         Initialise Cube object.
         
@@ -70,8 +70,10 @@ class Cube(_JSON):
         self.wcs = WCS(self.header)
         # Assuming (nchan, nx, nx); nchan should be equal to cube_vel.spectral_axis.size
         self.nchan, self.ny, self.nx = np.shape(data) #ny: nrows, nx: ncols
-        self.filename = filename
-        self.dpc = dpc        
+        self.dpc = dpc
+        self.disc = disc
+        self.mol = mol
+        self.kind = kind
         self._init_sky_extent()
         
         if isinstance(beam, Beam):
@@ -96,16 +98,19 @@ class Cube(_JSON):
         self._interactive_path = self._curve
 
         #Init JSON metadata
-        _JSON.__init__(self, init_metadata=dict(disc=disc, mol=mol))
+        _JSON.__init__(self, init_metadata=dict(disc=disc, mol=mol, kind=kind), parfile=parfile)
+
+        self.filename = filename #init and run setter; potentially variable for the same obj
         
         self.json_metadata = {
             'dpc': dpc,
             'bmaj': bmaj,
             'bmin': bmin,
             'bpa': bpa,
-            'bmaj_au': self.beam_size
+            'bmaj_au': self.beam_size,
+            'downsamp_factor': 1,
+            'clipped': False
         }
-
         self._update_json_metadata()
         
     @property
@@ -115,7 +120,9 @@ class Cube(_JSON):
     @filename.setter 
     def filename(self, name): 
         self.fileroot = os.path.expanduser(name).split(".fits")[0]        
-
+        self.json_metadata = {'filename': name}
+        self._filename = name        
+        
     def _update_json_metadata(self):
         v0 = self.vchannels[0]*u.km/u.s
         v1 = self.vchannels[-1]*u.km/u.s

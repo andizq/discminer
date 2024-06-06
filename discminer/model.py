@@ -28,6 +28,7 @@ class ReferenceModel(Cube):
             self,
             disc = 'disc1',
             mol = '12co',
+            kind = ['mask'], #model decorators
             Rmin = 1.0,
             Rmax = 700*u.au,
             dpc = 100*u.pc,
@@ -42,6 +43,8 @@ class ReferenceModel(Cube):
             init_params = {},
             init_funcs = {},
             init_header = {},
+            filename = 'referencecube.fits',
+            parfile = None
     ): 
         """
         Initialise ReferenceModel. Inherits `~discminer.disc2d.Cube` properties and methods.
@@ -173,7 +176,7 @@ class ReferenceModel(Cube):
         hdu.header.update(header)        
         data = np.zeros((nchan, npix, npix))
         
-        Cube.__init__(self, data, hdu.header, vchannels, dpc, beam=beam, filename="./referencecube.fits", disc=disc, mol=mol)
+        Cube.__init__(self, data, hdu.header, vchannels, dpc, beam=beam, filename=filename, disc=disc, mol=mol, kind=kind, parfile=parfile)
         
         #Init model
         model = Model(self, Rmax=Rmax, Rmin=Rmin, write_extent=write_extent, prototype=True) 
@@ -201,4 +204,11 @@ class ReferenceModel(Cube):
 
         self.json_params = self.params
         self.json_funcs = self.funcs
-        self.make_json()
+
+        if filename is not None:
+            self.writefits()
+
+        if parfile is not None:
+            self.make_parfile()
+
+            

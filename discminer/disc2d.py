@@ -690,7 +690,7 @@ class Intensity:
         return int2d_full
 
     def get_cube(self, vchannels, velocity2d, intensity2d, linewidth2d, lineslope2d, make_convolve=True,
-                 rms=None, tb={'nu': False, 'beam': False, 'full': True}, return_data_only=False, header=None, dpc=None, **kwargs_line):
+                 rms=None, tb={'nu': False, 'beam': False, 'full': True}, return_data_only=False, header=None, dpc=None, disc=None, mol='12co', kind=['mask'], **kwargs_line):
         
         vel2d, int2d, linew2d, lineb2d = velocity2d, {}, {}, {}
         int2d_shape = np.shape(velocity2d['upper'])
@@ -745,7 +745,7 @@ class Intensity:
             cube.append(int2d_full)
             
         if return_data_only: return np.asarray(cube)
-        else: return Cube(np.asarray(cube), header, vchannels, dpc, beam=self.beam_info, filename="./cube_model.fits")
+        else: return Cube(np.asarray(cube), header, vchannels, dpc, beam=self.beam_info, filename="./cube_model.fits", disc=disc, mol=mol, kind=kind)
 
     @staticmethod
     def make_channels_movie(vchan0, vchan1, velocity2d, intensity2d, linewidth2d, lineslope2d, nchans=30, folder='./movie_channels/', **kwargs):
@@ -890,7 +890,7 @@ class Mcmc:
 
 class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
     
-    def __init__(self, datacube, Rmax, Rmin=1.0, prototype=False, subpixels=False, write_extent=True):        
+    def __init__(self, datacube, Rmax, Rmin=1.0, prototype=False, subpixels=False, write_extent=True, init_params={}, init_funcs={}):        
         """
         Initialise discminer model object.
 
@@ -1045,7 +1045,9 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         if prototype:
             self.params = {}
             for key in self.categories: self.params[key] = {}
-            print ('Available categories for prototyping:', self.params)            
+            print ('Available categories for prototyping:', self.params.keys())            
+
+
         else: 
             self.mc_header, self.mc_kind, self.mc_nparams, self.mc_boundaries_list, self.mc_params_indices = Model._get_params2fit(self.mc_params, self.mc_boundaries)
             #print ('Default parameter header for mcmc fitting:', self.mc_header)
@@ -1382,7 +1384,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         )
         
             
-    def make_model(self, z_mirror=False, **kwargs_get_cube):                   
+    def make_model(self, z_mirror=False, **kwargs_line_profile):                   
         if self.prototype: 
             _break_line()
             print ('Running prototype model with the following parameters:\n')
@@ -1490,7 +1492,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             self.get_projected_coords(z_mirror=z_mirror) #TODO: enable kwargs for this method
             self.props = props
             #Rail.__init__(self, self.projected_coords, self.skygrid)
-            return self.get_cube(self.vchannels, *props, header=self.header, dpc=self.dpc, **kwargs_get_cube)
+            return self.get_cube(self.vchannels, *props, header=self.header, dpc=self.dpc, disc=self.datacube.disc, mol=self.datacube.mol, kind=self.datacube.kind, **kwargs_line_profile)
         else:
             return props
 

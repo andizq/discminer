@@ -76,7 +76,8 @@ class _JSON(object):
         'bmaj_au': u.au
     }
     
-    def make_json(self, keys = ['custom', 'metadata', 'params', 'funcs']):
+    def make_parfile(self, keys = ['custom', 'metadata', 'params', 'funcs']):
+
         master_dict = {
             'custom': self.json_custom,
             'metadata': self.json_metadata,
@@ -84,8 +85,8 @@ class _JSON(object):
             'funcs': self.json_funcs
         }
         json_dict = {key: master_dict[key] for key in keys}
-        print (json_dict)
-        with open(self.json_filename, 'w', encoding='utf-8') as f:
+
+        with open(self.parfile, 'w', encoding='utf-8') as f:
             json.dump(json_dict, f, ensure_ascii=False, indent=4)
 
     @staticmethod
@@ -107,7 +108,7 @@ class _JSON(object):
             self._moldata = get_mol_metadata(metadata['mol'])
             metadata['mol_weight'] = self._moldata['weight'].value            
         except KeyError:
-            self._moldata = None
+            self._moldata = {}
             message = 'Molecular data not found: %s'%metadata['mol']
             metadata['mol_weight'] = -1
             warnings.warn(message)
@@ -159,12 +160,12 @@ class _JSON(object):
         self._moldata.update(new)
 
     @property
-    def json_filename(self):
-        return self._json_filename
+    def parfile(self):
+        return self._parfile
 
-    @json_filename.setter
-    def json_filename(self, new):
-        self._json_filename.update(new)
+    @parfile.setter
+    def parfile(self, new):
+        self._parfile = new
         
     def __init__(
             self,
@@ -172,7 +173,7 @@ class _JSON(object):
             init_custom = {},
             init_params = {},
             init_funcs = {},
-            filename = 'parfile_discminer.json'
+            parfile = 'parfile_discminer.json'
     ):
 
         #Init
@@ -180,6 +181,7 @@ class _JSON(object):
             'v_discminer': __version__,
             'disc': None,
             'mol': "12co",
+            'kind': ['mask']
         }
         self._parse_mol_weight(self._json_metadata)        
         _JSON._convert_units(self._json_metadata)
@@ -198,7 +200,7 @@ class _JSON(object):
 
         self._json_params = {}
         self._json_funcs = {}
-        self._json_filename = filename
+        self._parfile = parfile
         
         #Update and use setters with init dicts 
         self.json_metadata = init_metadata
