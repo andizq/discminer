@@ -253,7 +253,12 @@ class Cube(_JSON):
             Additional keyword arguments for `~astropy.io.fits.writeto` function.
            
         """
-        hdrkey = "CONVTB"
+
+        if planck:
+            hdrkey = "PLANCKTB"
+        else:
+            hdrkey = "CONVTB"
+            
         hdrcard = "Converted to Tb by DISCMINER"
         kwargs_io = dict(overwrite=True)  # Default kwargs
         kwargs_io.update(kwargs)

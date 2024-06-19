@@ -98,8 +98,8 @@ def get_channels_from_parcube(parcube_up, parcube_low, vchannels, method='double
 
 def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
                      method='doublegaussian', kind='mask', sigma_thres=5,
-                     sigma_fit=None,
-                     niter=4, neighs=5, av_func=np.nanmedian
+                     sigma_fit=None, mask=None, planck=False,
+                     niter=4, neighs=5, av_func=np.nanmedian,
 ):
 
     data = cube.data    
@@ -137,8 +137,8 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
     else:
         vel2d, int2d, linew2d, lineb2d = model.props
         R, phi, z = [model.projected_coords[key] for key in ['R', 'phi', 'z']]
-        I_upper = int2d['upper']
-        I_lower = int2d['lower']
+        I_upper = int2d['upper']*cube.beam_area
+        I_lower = int2d['lower']*cube.beam_area
         print ('Using upper and lower surface properties from discminer model as initial guesses...')
         
         if np.any(np.array(['K', 'Kelvin', 'K ', 'Kelvin ']) == cube.header['BUNIT']): #If input unit is K the raw model intensity must be converted    
@@ -148,8 +148,8 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
             I_upper = FITSUtils._convert_to_tb(I_upper*cube.beam_area, mheader, cube.beam, planck=False, writefits=False)
             #"""
             restfreq = cube.header['RESTFRQ']*1e-9
-            I_upper = get_tb(1e3*I_upper*cube.beam_area, restfreq, cube.beam, full=False) #I in mJy/beam
-            I_lower = get_tb(1e3*I_lower*cube.beam_area, restfreq, cube.beam, full=False) 
+            I_upper = get_tb(1e3*I_upper, restfreq, cube.beam, full=planck) #mJy/beam-->K
+            I_lower = get_tb(1e3*I_lower, restfreq, cube.beam, full=planck) 
 
         #Initial guesses
         ind_max = np.nanargmax(data, axis=0)
@@ -160,14 +160,18 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
         vel_peak_lower = np.where(np.isnan(vel2d['lower']), vchannels[ind_max], vel2d['lower'])
         lw_upper = lw_sign*np.where(np.isnan(linew2d['upper']), lw_sign*1.5*dv, linew2d['upper'])
         lw_lower = lw_sign*np.where(np.isnan(linew2d['lower']), lw_sign*1.5*dv, linew2d['lower'])
-        ls_upper = np.where(np.isnan(linew2d['upper']), 1.5, lineb2d['upper'])
-        ls_lower = np.where(np.isnan(linew2d['lower']), 1.5, lineb2d['lower'])
+        ls_upper = np.where(np.isnan(linew2d['upper']), 1.5, 1*lineb2d['upper']) #0.5*
+        ls_lower = np.where(np.isnan(linew2d['lower']), 1.5, 1*lineb2d['lower']) #0.5*
 
     if sigma_fit is None: sigma_func = lambda i,j: None
     else: sigma_func = lambda i,j: sigma_fit[:,i,j]
 
     noise = np.std( np.append(data[:5,:,:], data[-5:,:,:], axis=0), axis=0) #rms intensity from first and last 5 channels
-    mask = np.nanmax(data, axis=0) <= sigma_thres*noise
+
+    if mask is None:
+        mask = np.zeros((nx,ny)).astype(bool)
+
+    mask = mask | (np.nanmax(data, axis=0) <= sigma_thres*noise)
 
     #******************************
     #KERNELS AND RELEVANT FUNCTIONS
@@ -250,7 +254,23 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
                 deltas = np.sqrt(np.abs(np.diag(var_matrix)))
                 n_two += 1
                 n_fit[i,j] = 2
-
+                
+                r"""
+                if (deltas[:3]==np.inf).any():# or deltas[1] > 0.5*np.abs(dv):
+                    coeff, var_matrix = curve_fit(fit_func1d,
+                                                  vchannels, tmp_data,
+                                                  p0=pfunc_one(i,j)
+                    )
+                    coeff = np.append(coeff, coeff)
+                    deltas = np.sqrt(np.abs(np.diag(var_matrix)))
+                    deltas = np.append(deltas, deltas)
+                    n_one += 1
+                    n_fit[i,j] = 1
+                else:                
+                    n_two += 1
+                    n_fit[i,j] = 2
+                #"""
+                
             except RuntimeError:
                 try: 
                     coeff, var_matrix = curve_fit(fit_func1d,
@@ -269,7 +289,13 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
                     continue
 
             r"""
-            #
+            if coeff[0] < coeff[idlow[0]]:
+                coeff = np.append(coeff[idlow[0]:idlow[-1]+1], coeff[0:idlow[0]])
+                deltas = np.append(deltas[idlow[0]:idlow[-1]+1], deltas[0:idlow[0]])
+            #"""
+            
+            r"""
+            #Can induce biases when upper and lower velocities are too close
             if np.abs(coeff[idlow[1]]-vel_peak_upper[i,j]) < np.abs(coeff[1]-vel_peak_upper[i,j]):
                 coeff = np.append(coeff[idlow[0]:idlow[-1]+1], coeff[0:idlow[0]])
                 deltas = np.append(deltas[idlow[0]:idlow[-1]+1], deltas[0:idlow[0]])
@@ -300,8 +326,17 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
         cc = (centroid_up == centroid_low) & (n_fit != 1) & (~mm) #up==low
         ww = ((np.abs(linewidth_up) <= 0.5*np.abs(dv)) | (np.abs(linewidth_low) <= 0.5*np.abs(dv))) & (~mm) #narrow component
         dd = ((np.abs(linewidth_up) > 5.0) | (np.abs(linewidth_low) > 5.0)) & (~mm) #Unrealistically broad component
-        n_fit[ii+jj+cc+ww+dd] = -1
-        n_hot = np.sum(ii+jj+cc+ww+dd)
+
+        bb = False #dcentroid_up > 1*np.abs(dv)
+
+        w3 = False #((np.abs(linewidth_up) <= 1*np.abs(dv)) | (np.abs(linewidth_low) <= 1*np.abs(dv))) & (~mm) #narrow component
+        w4 = False #(np.abs(linewidth_low) >= 2*np.abs(linewidth_up)) & (~mm) #lower line width much larger than upper
+        
+        n_fit[ii+jj+cc+ww+dd] = -1 #bad pixel
+        n_hot = np.sum(ii+jj+cc+ww+dd + w3+w4)
+
+        n_fit[w3] = 3 #1chan narrow component
+        n_fit[w4] = 4 #1chan narrow component
         
         return n_hot
         
@@ -349,13 +384,21 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
             one = window==1
             n_one = np.sum(one) #single-component pixels
 
-            n_bad = n_mask+n_hot+n_one
+            
+            three = window==3
+            n_three = np.sum(three) #narrow components
+
+            four = window==4
+            n_four = np.sum(four) #broad lower linewidth
+            
+            
+            n_bad = n_mask+n_hot+n_one + n_three+n_four
             tot = (2*neighs+1)**2
 
             if tot-n_bad < n_bad:
                 return None
 
-            ic, jc = (~masked & ~hot & ~one).nonzero() #get clean pixels where double fit worked
+            ic, jc = (~masked & ~hot & ~one  &  ~three & ~four).nonzero() #get clean pixels where double fit worked
 
             up_guess = [av_func(up_prop[ileft:iright, jleft:jright][ic, jc]) for up_prop in upper]
             low_guess = [av_func(low_prop[ileft:iright, jleft:jright][ic, jc]) for low_prop in lower]
@@ -365,7 +408,8 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
             print ('Iteration #%d...'%(n+1))
 
             #Select hot pixels (-1 flag) and single-component pixels (+1 flag)
-            m, n = np.where((n_fit==-1) | (n_fit==1))
+            m, n = np.where((n_fit==-1) | (n_fit==1) | (n_fit>2))
+            #m, n = np.where(n_fit==-1)
                 
             for k in range(len(m)):
                 i, j = m[k], n[k]                                
@@ -384,7 +428,22 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
                     deltas = np.sqrt(np.abs(np.diag(var_matrix)))
                     n_two += 1
                     n_fit[i,j] = 2
-
+                    
+                    r"""
+                    if (deltas[:3]==np.inf).any(): # or deltas[1] > 0.5*np.abs(dv):
+                        coeff, var_matrix = curve_fit(fit_func1d,
+                                                      vchannels, tmp_data,
+                                                      p0=pfunc_one(i,j)
+                        )
+                        coeff = np.append(coeff, coeff)
+                        deltas = np.sqrt(np.abs(np.diag(var_matrix)))
+                        deltas = np.append(deltas, deltas)
+                        n_one += 1
+                        n_fit[i,j] = 1
+                    else:                
+                        n_two += 1
+                        n_fit[i,j] = 2
+                    #"""
                 except RuntimeError:
                     try: 
                         coeff, var_matrix = curve_fit(fit_func1d,

@@ -402,6 +402,24 @@ def _make_nsky_2D(ax, Rout, xlim, z_func, z_pars, incl, PA, xc=0.0, yc=0.0):
 
     return xni, yni
 
+
+def make_beam_1D(ax, beam_size, x0=0.7, y0=0.5, yfrac=0.3, **kwargs_plot):
+
+    kwargs = dict(lw=4, c='0.8')
+    kwargs.update(kwargs_plot)
+    
+    beam_std = beam_size/2.355 #gaussian fwhm to std
+    xlims = ax.get_xlim()
+    ylims = ax.get_ylim()
+    wplot = xlims[1]-xlims[0]    
+    hplot = ylims[1]-ylims[0]
+    
+    x = np.linspace(-3*beam_std, 3*beam_std, 50)
+    y = _gauss(x, yfrac*hplot, 0, beam_std)
+
+    ax.plot(x+xlims[0]+x0*wplot, y+ylims[0]+y0*hplot, **kwargs)
+
+
 def make_substructures(ax, gaps=[], rings=[], kinks=[],
                        twodim=False,
                        coords='disc', polar=False,

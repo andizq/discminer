@@ -2,6 +2,8 @@ import numpy as np
 from astropy import units as u
 from astropy import constants as ct
 from scipy.interpolate import interp1d, RectBivariateSpline
+
+from .grid import GridTools
 from .tools.utils import hypot_func
 
 au_to_m = u.au.to('m')
@@ -9,6 +11,12 @@ au_to_m = u.au.to('m')
 #*******************
 #VELOCITY FUNCTIONS
 #*******************
+def keplerian(coord, Mstar=1.0, vel_sign=1, vsys=0):
+    Mstar *= u.M_sun.to('kg')
+    if 'R' not in coord.keys(): R = hypot_func(coord['x'], coord['y'])
+    else: R = coord['R'] 
+    return vel_sign*np.sqrt(ct.G.value*Mstar/R) * 1e-3
+
 def keplerian_vertical(coord, Mstar=1.0, vel_sign=1, vsys=0):
     Mstar *= u.M_sun.to('kg')
     if 'R' not in coord.keys():
@@ -21,25 +29,33 @@ def keplerian_vertical(coord, Mstar=1.0, vel_sign=1, vsys=0):
         r = coord['r']
     return vel_sign*np.sqrt(ct.G.value*Mstar/r**3)*R * 1e-3 
 
-def velocity_hydro2d(coord, func_interp_R=None, func_interp_phi=None, Mstar=1.0, vel_sign=1, vsys=0, **dummies):
+def velocity_hydro2d(coord, func_interp_R=None, func_interp_phi=None, Mstar=1.0, vel_sign=1, vsys=0, phip=0.0, **dummies):
     Mstar *= u.M_sun.to('kg')
-    y = coord['x'] #switch for 90 deg shift on planet azimuth
+    y = coord['x'] #90 deg shift so that phip=0 aligns with disc major axis
     x = coord['y']
     R = coord['R']
 
+    if phip != 0.0:
+        phip = np.radians(phip)
+        x, y = GridTools._rotate_sky_plane(x, y, phip)
+        
     if 'r' not in coord.keys():
         r = hypot_func(R, coord['z'])
+        
     else:
         r = coord['r']
 
     if func_interp_R is None and func_interp_phi is not None:
         vphi = func_interp_phi(x,y, grid=False)                    
         vR = np.zeros_like(vphi)
+
     elif func_interp_R is not None and func_interp_phi is None:
         vR = func_interp_R(x,y, grid=False)        
         vphi = np.zeros_like(vR)
+
     elif func_interp_R is None and func_interp_phi is None:
         return [0, 0, 0]    
+
     else:
         vR = func_interp_R(x,y, grid=False)
         vphi = func_interp_phi(x,y, grid=False)
@@ -135,6 +151,34 @@ def intensity_powerlaw_rbreak_nosurf(coord, I0=1.0, p0=-2.5, p1=-1.5,
     Ieff = np.where(R<=Rbreak, pwl0, pwl1)
     Ieff_rout = np.where(R<=Rout, Ieff, 0.0)
     return Ieff_rout
+
+def intensity_powerlaw_rout_hydro(coord, I0=30.0, R0=100, p=-0.4, z0=100, q=0.3, Rout=500, func_interp_sigma=None, phip=0.0, weight=1.0):
+    
+    y = coord['x'] 
+    x = coord['y']
+
+    if phip != 0.0:
+        phip = np.radians(phip)
+        x, y = GridTools._rotate_sky_plane(x, y, phip)
+
+    if 'R' not in coord.keys():
+        R = hypot_func(coord['x'], coord['y'])
+    else:
+        R = coord['R']
+
+    if func_interp_sigma is None:
+        sigma = np.zeros_like(R)
+    else:
+        sigma = func_interp_sigma(x,y, grid=False)
+        
+    z = coord['z']
+    R0*=au_to_m
+    z0*=au_to_m
+    Rout*=au_to_m
+    A = I0*R0**-p*z0**-q
+    Ieff = np.where(R<=Rout, A*R**p*np.abs(z)**q, 0.0) * sigma**weight
+
+    return Ieff
 
 #***********
 #LINE WIDTH 
