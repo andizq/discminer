@@ -8,6 +8,7 @@ import os
 import sys
 import copy
 import json
+import warnings
 import numpy as np
 
 hypot_func = lambda x,y: np.sqrt(x**2 + y**2) #Slightly faster than np.hypot<np.linalg.norm<scipydistance. Checked precision up to au**2 orders.

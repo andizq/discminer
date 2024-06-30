@@ -660,16 +660,18 @@ class Contours(object):
     # by returning coords_list and inds_cont first, which will allow the user use the same set of contours to plot different props.
 
     @staticmethod
-    def disc_axes(ax, R_list, z_list, incl, PA, xc=0, yc=0):
-        kwargs_axes = dict(color='k', ls=':', lw=1.5,
-                           dash_capstyle='round', dashes=(0.5, 1.5), alpha=0.7)
+    def disc_axes(ax, R_list, z_list, incl, PA, xc=0, yc=0, **kwargs_axes):
+
+        kwargs_ax = dict(color='k', ls=':', lw=1.5, dash_capstyle='round', dashes=(0.5, 1.5), alpha=0.7)
+        kwargs_ax.update(kwargs_axes)
+        
         phi_daxes_0 = np.zeros_like(R_list)
         phi_daxes_90 = np.zeros_like(R_list)+np.pi/2
         phi_daxes_180 = np.zeros_like(R_list)+np.pi
         phi_daxes_270 = np.zeros_like(R_list)-np.pi/2
 
         isort = np.argsort(R_list)
-        make_ax = lambda x, y: ax.plot(x, y, **kwargs_axes)        
+        make_ax = lambda x, y: ax.plot(x, y, **kwargs_ax)        
         
         for phi_dax in [phi_daxes_0, phi_daxes_90, phi_daxes_180, phi_daxes_270]:            
             x_cont, y_cont,_ = GridTools.get_sky_from_disc_coords(R_list[isort], phi_dax, z_list[isort], incl, PA, xc, yc)
