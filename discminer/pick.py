@@ -81,7 +81,7 @@ class Pick(Rail):
         self.resid_list = copy.copy(resid)
         self.color_list = copy.copy(color)
 
-    def find_peaks(self, phi_min=-85, phi_max=85, detect_thres=3, clean_thres=np.inf, av_global=np.median):
+    def find_peaks(self, phi_min=-85, phi_max=85, detect_thres=3, clean_thres=np.inf, clean_histogram=True, fig_ax_histogram=None, av_global=np.median):
         len_res = len(self.resid_list)
         peak_angle = np.zeros(len_res)
         peak_resid = np.zeros(len_res)
@@ -104,9 +104,45 @@ class Pick(Rail):
                 peak_sign[i] = np.sign(self.resid_list[i][arg90][argpeak])
 
         if clean_thres is not None and np.isfinite(clean_thres):
-            rej_thresh = np.nanmedian(peak_resid) + clean_thres*np.nanstd(peak_resid)
-            ii = peak_resid < rej_thresh
-            print ('Rejecting %d peak velocity residuals above %.3f km/s (median+%dsigma)'%(np.sum(~ii), rej_thresh, clean_thres))
+
+            if clean_histogram:
+                from discminer.tools.fit_kernel import _gauss
+                from scipy.optimize import curve_fit
+
+                yfunc = lambda x, A, sigma: _gauss(x, A, 0, sigma)
+                
+                peak_hist = peak_resid[peak_resid < 5] #Initial threshold of 5 km/s, not suited for folded intensities 
+                counts, bins = np.histogram(peak_hist, bins=4*int(round(len(peak_resid)**(1/3.)))-1 )
+                                
+                mbins = 0.5*(bins[1:] + bins[:-1])
+                popt, pcov = curve_fit(yfunc, mbins, counts, p0=[np.max(counts), 0.2])
+                popt = np.abs(popt) #Make sure A and sigma are positive, as our residuals are
+
+                if fig_ax_histogram is not None:
+
+                    import matplotlib.pyplot as plt
+
+                    fig, ax = fig_ax_histogram
+                    ax.stairs(counts, bins, color='dodgerblue', lw=3)
+                    
+                    xgauss = np.linspace(0, round(np.nanmax(bins)), 100)
+                    ygauss = yfunc(xgauss, *popt)
+                    
+                    ax.plot(xgauss, ygauss, lw=3, c='k')
+                    ax.axvline(clean_thres*np.abs(popt[1]), lw=4, c='tomato')
+                    
+                    ax.set_xlabel('Peak residual [km/s]')
+                    ax.set_ylabel('Counts')
+
+
+                ii = peak_resid < clean_thres*popt[1]
+                print ('Rejecting %d peak velocity residuals above %.3f km/s (%dsigma)'%(np.sum(~ii), clean_thres*popt[1], clean_thres))
+
+            else:
+                rej_thresh = np.nanmedian(peak_resid) + clean_thres*np.nanstd(peak_resid)
+                ii = peak_resid < rej_thresh
+                print ('Rejecting %d peak velocity residuals above %.3f km/s (median+%dsigma)'%(np.sum(~ii), rej_thresh, clean_thres))
+
             self.lev_list = self.lev_list[ii]
             self.color_list = self.color_list[ii]
             self.coord_list = self.coord_list[ii]
@@ -114,7 +150,7 @@ class Pick(Rail):
             peak_resid = peak_resid[ii]
             peak_angle = peak_angle[ii]
             peak_sign = peak_sign[ii]
-
+            
         #peak_sky_coords = get_sky_from_disc_coords(self.lev_list, np.radians(peak_angle))
         peak_error = np.ones(len(self.lev_list)) #np.array([centroid_errors2d(peak_sky_coords[0][i], peak_sky_coords[1][i])[0] for i in range(len_res)])
         #peak_error[peak_error/peak_resid>2] = 0
