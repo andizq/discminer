@@ -100,6 +100,7 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
                      method='doublegaussian', kind='mask', sigma_thres=5,
                      sigma_fit=None, mask=None, planck=False,
                      niter=4, neighs=5, av_func=np.nanmedian,
+                     mask_radially=True
 ):
 
     data = cube.data    
@@ -136,7 +137,6 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
         
     else:
         vel2d, int2d, linew2d, lineb2d = model.props
-        R, phi, z = [model.projected_coords[key] for key in ['R', 'phi', 'z']]
         I_upper = int2d['upper']*cube.beam_area
         I_lower = int2d['lower']*cube.beam_area
         print ('Using upper and lower surface properties from discminer model as initial guesses...')
@@ -173,6 +173,10 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
 
     mask = mask | (np.nanmax(data, axis=0) <= sigma_thres*noise)
 
+    if model is not None and mask_radially:
+        R, phi, z = [model.projected_coords[key] for key in ['R', 'phi', 'z']]
+        mask = mask | np.isnan(R['upper'])
+        
     #******************************
     #KERNELS AND RELEVANT FUNCTIONS
     if method=='doublegaussian':
@@ -254,7 +258,7 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
                 deltas = np.sqrt(np.abs(np.diag(var_matrix)))
                 n_two += 1
                 n_fit[i,j] = 2
-                
+
                 r"""
                 if (deltas[:3]==np.inf).any():# or deltas[1] > 0.5*np.abs(dv):
                     coeff, var_matrix = curve_fit(fit_func1d,
