@@ -65,6 +65,43 @@ def grid(xmax, nx, indexing="xy", verbose=True):
         "extent": np.array([-xmax, xmax, -xmax, xmax])*u.m.to(u.au)
     }
 
+def grid_weighted(prop, X, Y, Rmin=0*u.au, Rmax=1000*u.au, norm=None, power=3, npoints=5000, fcond=lambda a, b, c: True):
+    
+    ni, nj = X.shape
+    X_au, Y_au = X.to('au').value, Y.to('au').value
+    Rmin_au, Rmax_au = Rmin.to('au').value, Rmax.to('au').value
+    x, y, values = np.zeros((3, npoints))
+
+    if norm is None:
+        norm = np.nanmax(prop)
+    
+    def accept_point(val):
+        flag = np.random.random()
+        val = (val / norm)**power
+        if val >= flag:
+            return True
+        else:
+            return False
+
+    n = 0        
+    while (n < npoints):        
+        i = np.random.randint(ni)
+        j = np.random.randint(nj)
+        val = prop[i,j]
+        xi = X_au[i,j]
+        yi = Y_au[i,j]
+
+        if accept_point(val) and Rmin_au<=np.hypot(xi,yi)<=Rmax_au and fcond(val, xi, yi):
+            x[n] = xi
+            y[n] = yi
+            values[n] = val
+            n+=1
+        else:
+            continue
+    
+    return x, y, values
+
+
 class GridTools:
     @staticmethod
     def _rotate_sky_plane(x, y, ang):
