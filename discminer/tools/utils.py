@@ -77,12 +77,12 @@ class _JSON(object):
         'bmaj_au': u.au
     }
     
-    def make_parfile(self, keys = ['custom', 'metadata', 'params', 'funcs']):
+    def make_parfile(self, keys = ['custom', 'metadata', 'best_fit', 'funcs']):
 
         master_dict = {
             'custom': self.json_custom,
             'metadata': self.json_metadata,
-            'params': self.json_params,
+            'best_fit': self.json_params,
             'funcs': self.json_funcs
         }
         json_dict = {key: master_dict[key] for key in keys}
@@ -182,12 +182,20 @@ class _JSON(object):
             'v_discminer': __version__,
             'disc': None,
             'mol': "12co",
-            'kind': ['mask']
+            'kind': ['mask'],
+            'file_data': None,
+            'prepare_script': None,
+            'log_file': None,
+            'tag': "",
+            'program': None,
+            'nwalkers': -1,
+            'nsteps': -1,
+            'downsamp_factor': 1            
         }
         self._parse_mol_weight(self._json_metadata)        
         _JSON._convert_units(self._json_metadata)
                                 
-        self._json_custom = { #Custom variables for plots
+        self._json_custom = { #Customisable parameters for plots
                 "chan_step": 2,
                 "nchans": 15,
                 "vlim": 0.4,

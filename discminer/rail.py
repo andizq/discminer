@@ -130,7 +130,7 @@ class Rail(object):
            Threshold to accept points on contours at a given coord_level. If coord_level obtained for a pixel is such that np.abs(level_pixel-level_reference)<acc_threshold the pixel value is accepted
 
         max_prop_threshold : float, optional 
-           Threshold to accept points of contours. Rejects residuals of the contour if they are < max_prop_threshold. Useful to reject hot pixels.
+           Threshold to accept points of contours. Rejects residuals of the contour if they are >= max_prop_threshold. Useful to reject hot pixels.
 
         color_bounds : array_like, shape (nbounds,), optional
            Color bounds for contour colors.
