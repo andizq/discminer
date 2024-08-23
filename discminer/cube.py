@@ -21,7 +21,7 @@ from scipy import ndimage
 import matplotlib
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Button, Cursor, Slider, RectangleSelector
+from matplotlib.widgets import Button, Cursor, Slider, RectangleSelector, TextBox
 
 from collections.abc import Iterable
 import numpy as np
@@ -108,7 +108,7 @@ class Cube(_JSON):
             'bmin': bmin,
             'bpa': bpa,
             'bmaj_au': self.beam_size,
-            'downsamp_factor': 1,
+            'downsamp': 1,
             'clipped': False
         }
         self._update_json_metadata()
@@ -120,7 +120,7 @@ class Cube(_JSON):
     @filename.setter 
     def filename(self, name): 
         self.fileroot = os.path.expanduser(name).split(".fits")[0]        
-        self.json_metadata = {'filename': name}
+        self.json_metadata = {'file_data': name}
         self._filename = name        
         
     def _update_json_metadata(self):
@@ -1047,7 +1047,7 @@ class Cube(_JSON):
         interactive_obj = [get_interactive(self.interactive)]
 
         # ***************
-        # SLIDERS
+        # UPDATE FUNCS
         # ***************
         def update_chan(val):
             chan = int(val)
@@ -1071,6 +1071,24 @@ class Cube(_JSON):
             text_chan.set_text("%4.1f %s" % (vchan, vel_unit))
             fig.canvas.draw_idle()
 
+        def update_clim(expression):
+            vmax = float(expression)
+            img.norm.autoscale([vmin, vmax])
+            ax[1].set_ylim(vmin, vmax)
+            fig.canvas.draw_idle()
+
+        def update_cmap(expression):
+            if 'cmr.' in expression:
+                try:
+                    import cmasher as cmr
+                except ImportError:
+                    print ('cmasher library could not be found...')                    
+            cmapc = copy.copy(plt.get_cmap(expression))
+            cmapc.set_bad(color=(0.9, 0.9, 0.9))
+            img.set_cmap(cmapc)
+            img.cmap.set_under("w")                        
+            fig.canvas.draw_idle()
+            
         if ncubes > 0:
             axcubes = plt.axes([0.2, 0.90, 0.24, 0.025], facecolor="0.7")
             axchan = plt.axes([0.2, 0.95, 0.24, 0.025], facecolor="0.7")
@@ -1196,6 +1214,17 @@ class Cube(_JSON):
             bsurf = Button(axbsurf, "", image=surface_img)
             bsurf.on_clicked(go2surface)
 
+        if MPL_VERSION >= Version("3.5"):
+            axbclim = plt.axes([0.05, 0.16, 0.04, 0.045], frameon=True)
+            clim_box = TextBox(axbclim, 'clim', textalignment='center', color='lightcyan', label_pad=0.1)
+            clim_box.on_submit(update_clim)
+            clim_box.set_val(np.round(vmax, 2))
+
+            axbcmap = plt.axes([0.05, 0.11, 0.074, 0.045], frameon=True)
+            cmap_box = TextBox(axbcmap, 'cmap', textalignment='center', color='lightcyan', label_pad=0.05)
+            cmap_box.on_submit(update_cmap)
+            cmap_box.set_val(cmap)
+        
         plt.show(block=True)
 
     def show_side_by_side(
@@ -1249,12 +1278,12 @@ class Cube(_JSON):
             vmax = 0.7 * max_data
 
         ax[2].set_ylim(vmin, vmax)
-        cmap = copy.copy(plt.get_cmap(cmap))
-        cmap.set_bad(color=(0.9, 0.9, 0.9))
+        cmapc = copy.copy(plt.get_cmap(cmap))
+        cmapc.set_bad(color=(0.9, 0.9, 0.9))
 
         img = ax[0].imshow(
             self.data[chan_init],
-            cmap=cmap,
+            cmap=cmapc,
             extent=extent,
             origin="lower",
             vmin=vmin,
@@ -1262,7 +1291,7 @@ class Cube(_JSON):
         )
         img1 = ax[1].imshow(
             cube1.data[chan_init],
-            cmap=cmap,
+            cmap=cmapc,
             extent=extent,
             origin="lower",
             vmin=vmin,
@@ -1302,7 +1331,7 @@ class Cube(_JSON):
         interactive_obj = [get_interactive(self.interactive)]
 
         # ***************
-        # SLIDERS
+        # UPDATE FUNCS
         # ***************
         def update_chan(val):
             chan = int(val)
@@ -1314,6 +1343,27 @@ class Cube(_JSON):
             text_chan.set_text("%4.1f %s" % (vchan, vel_unit))
             fig.canvas.draw_idle()
 
+        def update_clim(expression):
+            vmax = float(expression)
+            img.norm.autoscale([vmin, vmax])
+            img1.norm.autoscale([vmin, vmax])            
+            ax[2].set_ylim(vmin, vmax)
+            fig.canvas.draw_idle()
+
+        def update_cmap(expression):
+            if 'cmr.' in expression:
+                try:
+                    import cmasher as cmr
+                except ImportError:
+                    print ('cmasher library could not be found...')                    
+            cmapc = copy.copy(plt.get_cmap(expression))
+            cmapc.set_bad(color=(0.9, 0.9, 0.9))
+            img.set_cmap(cmapc)
+            img1.set_cmap(cmapc)            
+            img.cmap.set_under("w")
+            img1.cmap.set_under("w")                                    
+            fig.canvas.draw_idle()
+            
         ncubes = len(compare_cubes)
         axchan = plt.axes([0.2, 0.9, 0.24, 0.05], facecolor="0.7")
         slider_chan = Slider(
@@ -1390,6 +1440,17 @@ class Cube(_JSON):
             bsurf = Button(axbsurf, "", image=surface_img)
             bsurf.on_clicked(go2surface)
 
+        if MPL_VERSION >= Version("3.5"):
+            axbclim = plt.axes([0.05, 0.16, 0.04, 0.045], frameon=True)
+            clim_box = TextBox(axbclim, 'clim', textalignment='center', color='lightcyan', label_pad=0.1)
+            clim_box.on_submit(update_clim)
+            clim_box.set_val(np.round(vmax, 2))
+
+            axbcmap = plt.axes([0.05, 0.11, 0.074, 0.045], frameon=True)
+            cmap_box = TextBox(axbcmap, 'cmap', textalignment='center', color='lightcyan', label_pad=0.05)
+            cmap_box.on_submit(update_cmap)
+            cmap_box.set_val(cmap)
+            
         plt.show(block=True)
 
     # ************************
@@ -1630,7 +1691,7 @@ class Cube(_JSON):
         interactive_obj = [get_interactive(self.interactive_path)]
 
         # ***************
-        # SLIDERS
+        # UPDATE FUNCS
         # ***************
         def update_chan(val):
             chan = int(val)
@@ -1680,6 +1741,24 @@ class Cube(_JSON):
                 img.set_data(compare_cubes[ci - 1].data[chan])
             fig.canvas.draw_idle()
 
+        def update_clim(expression):
+            vmax = float(expression)
+            img.norm.autoscale([vmin, vmax])
+            ax[1].set_ylim(vmin, vmax)
+            fig.canvas.draw_idle()
+
+        def update_cmap(expression):
+            if 'cmr.' in expression:
+                try:
+                    import cmasher as cmr
+                except ImportError:
+                    print ('cmasher library could not be found...')                    
+            cmapc = copy.copy(plt.get_cmap(expression))
+            cmapc.set_bad(color=(0.9, 0.9, 0.9))
+            img.set_cmap(cmapc)
+            img.cmap.set_under("w")                        
+            fig.canvas.draw_idle()
+            
         if ncubes > 0:
             axcubes = plt.axes([0.2, 0.90, 0.24, 0.025], facecolor="0.7")
             axchan = plt.axes([0.2, 0.95, 0.24, 0.025], facecolor="0.7")
@@ -1705,6 +1784,7 @@ class Cube(_JSON):
             )
             slider_cubes.on_changed(update_cubes)
             slider_chan.on_changed(update_chan)
+
         else:
             axchan = plt.axes([0.2, 0.9, 0.24, 0.05], facecolor="0.7")
             slider_chan = Slider(
@@ -1793,6 +1873,17 @@ class Cube(_JSON):
             bsurf = Button(axbsurf, "", image=surface_img)
             bsurf.on_clicked(go2surface)
 
+        if MPL_VERSION >= Version("3.5"):
+            axbclim = plt.axes([0.05, 0.16, 0.04, 0.045], frameon=True)
+            clim_box = TextBox(axbclim, 'clim', textalignment='center', color='lightcyan', label_pad=0.1)
+            clim_box.on_submit(update_clim)
+            clim_box.set_val(np.round(vmax, 2))
+
+            axbcmap = plt.axes([0.05, 0.11, 0.074, 0.045], frameon=True)
+            cmap_box = TextBox(axbcmap, 'cmap', textalignment='center', color='lightcyan', label_pad=0.05)
+            cmap_box.on_submit(update_cmap)
+            cmap_box.set_val(cmap)
+            
         plt.show(block=True)
 
     # *************
