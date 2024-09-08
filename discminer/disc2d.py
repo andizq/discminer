@@ -890,7 +890,7 @@ class Mcmc:
 
 class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
     
-    def __init__(self, datacube, Rmax, Rmin=1.0, prototype=False, subpixels=False, write_extent=True, init_params={}, init_funcs={}):        
+    def __init__(self, datacube, Rmax, Rmin=1.0, prototype=False, subpixels=False, write_extent=True, init_params={}, init_funcs={}, verbose=True):        
         """
         Initialise discminer model object.
 
@@ -926,7 +926,10 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         """
         
         FrontendUtils._print_logo()        
+
         self.prototype = prototype
+        self.verbose = verbose
+
         self.datacube = datacube
         
         mgrid = ModelGrid(datacube, Rmax, Rmin=Rmin, write_extent=write_extent) #Make disc and sky grids
@@ -1042,7 +1045,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                               'height_lower': {'psi': [0, np.pi/2]}
                               }
          
-        if prototype:
+        if prototype and verbose:
             self.params = {}
             for key in self.categories: self.params[key] = {}
             print ('Available categories for prototyping:', self.params.keys())            
@@ -1291,7 +1294,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
     def get_projected_coords(self, z_mirror=False, writebinaries=True, 
                              R_nan_val=0, phi_nan_val=10*np.pi, z_nan_val=0):
             
-        if self.prototype: 
+        if self.prototype and self.verbose: 
             _break_line()
             print ('Computing disc upper and lower surface coordinates, projected on the sky plane...')
             print ('Using height and orientation parameters from prototype model:\n')
@@ -1330,7 +1333,8 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                 for prop in [R, phi, z]: prop[side] = np.where(np.logical_and(R[side]<self.Rmax_m, R[side]>self.Rmin_m), prop[side], np.nan)
 
             if writebinaries:
-                print ('Saving projected R,phi,z disc coordinates for %s emission surface into .npy binaries...'%side)
+                if self.verbose:
+                    print ('Saving projected R,phi,z disc coordinates for %s emission surface into .npy binaries...'%side)
                 np.save('%s_R.npy'%side, R[side])
                 np.save('%s_phi.npy'%side, phi[side])
                 np.save('%s_z.npy'%side, z[side])
@@ -1339,7 +1343,9 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         if R_nan_val is not None: R_nonan = {side: np.where(np.isnan(R[side]), R_nan_val, R[side]) for side in ['upper', 'lower']} #Use np.nan_to_num instead
         if phi_nan_val is not None: phi_nonan = {side: np.where(np.isnan(phi[side]), phi_nan_val, phi[side]) for side in ['upper', 'lower']}
         if z_nan_val is not None: z_nonan = {side: np.where(np.isnan(z[side]), z_nan_val, z[side]) for side in ['upper', 'lower']}
-        _break_line()
+
+        if self.verbose:
+            _break_line()
 
         self.projected_coords = {'R': R,
                                  'phi': phi,
@@ -1385,7 +1391,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         
             
     def make_model(self, z_mirror=False, **kwargs_line_profile):                   
-        if self.prototype: 
+        if self.prototype and self.verbose: 
             _break_line()
             print ('Running prototype model with the following parameters:\n')
             pprint.pprint(self.params)
