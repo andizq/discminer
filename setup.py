@@ -62,6 +62,8 @@ setup(
         'matplotlib>=3.0',
         'astropy>=3',
         'emcee>=3',
+        'corner',
+        'cmasher',
         'radio-beam',
         'scikit-image',
         'scikit-learn',
