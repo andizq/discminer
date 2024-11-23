@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.colors import ListedColormap
 from collections.abc import Iterable
+import cmasher as cmr
 
 from .tools.utils import weighted_std, InputError
 from .tools.fit_kernel import _gauss
@@ -40,15 +41,20 @@ _residuals_cranges = {
 
 _attribute_colors = {
     'velocity': ["#"+tmp for tmp in ["000b14","004f8f","1f9aff","fff7db","ff5a47","cc0033","140200"]],
-    'linewidth': ["#"+tmp for tmp in ["001219","005f73","0a9396","94d2bd","e9d8a6","ee9b00","ca6702","bb3e03","ae2012","9b2226"]],
+    #'linewidth': ["#"+tmp for tmp in ["001219","005f73","0a9396","94d2bd","e9d8a6","ee9b00","ca6702","bb3e03","ae2012","9b2226"]],
+    'linewidth': ['#'+tmp for tmp in ["ffffff","b89e97","000000", "50C878", "FFF7CA"]],
     'intensity': "terrain_r",
     'peakintensity': ['#'+tmp for tmp in ["ffffff","b89e97","000000", "7cf4ff", "c10ff7"]],
-    'intensity_2': ['#'+tmp for tmp in ["ffffff","b89e97","000000", "7cf4ff", "c10ff7"]]
+    'intensity_2': ['#'+tmp for tmp in ["ffffff","b89e97","000000", "7cf4ff", "FFF7CA"]]
+    #'intensity_2': ['#'+tmp for tmp in ["ffffff","b89e97","000000", "7cf4ff", "f6f6f6"]]
+    #'intensity_2': ['#'+tmp for tmp in ["ffffff","b89e97","000000", "7cf4ff", "c10ff7"]]
 }
 
 _attribute_cranges = {
     'velocity': None,
-    'linewidth': None,
+    #'linewidth': None,
+    #'linewidth': "matplotlib",
+    'linewidth': [0, 0.1, 0.25, 0.6, 1.0],
     'intensity': "matplotlib",
     'peakintensity': [0, 0.1, 0.25, 0.6, 1.0],
     'intensity_2': [0, 0.1, 0.25, 0.6, 1.0]
@@ -224,7 +230,7 @@ def add_cbar_ax(fig, ax, perc=8, pad=0.5, w=None, h=None, orientation='horizonta
         
 def make_round_cbar(ax, Rout, levels,
                     rwidth=0.06, cmap=get_discminer_cmap('velocity'),
-                    quadrant=2, clabel='km/s', fmt='%4.1f'):
+                    quadrant=2, clabel='km/s', fmt='%4.1f', fontsize=MEDIUM_SIZE+2):
 
     sign_xy = {1: [1,1],
                2: [-1,1],
@@ -283,10 +289,10 @@ def make_round_cbar(ax, Rout, levels,
 
     for i,cbi in enumerate(cbar_levels_phi):
         Rtext = r1 + 0.03*Rout
-        ax.text(Rtext*np.cos(cbi), Rtext*np.sin(cbi), fmt%cbar_levels_pol[i], fontsize=SMALL_SIZE+2+5, c='0.7',
+        ax.text(Rtext*np.cos(cbi), Rtext*np.sin(cbi), fmt%cbar_levels_pol[i], fontsize=fontsize, c='0.7',
                 ha=cticks_ha, va='center', weight='bold', rotation_mode='anchor', rotation=rot_quad(cbi))
 
-    ax.text(sign_xy[0]*Rtext, -sign_xy[1]*0.1*Rout, clabel, fontsize=SMALL_SIZE+3+7, c='0.7', ha='center', va='center', weight='bold', rotation=0)
+    ax.text(sign_xy[0]*Rtext, -sign_xy[1]*0.1*Rout, clabel, fontsize=fontsize+3, c='0.7', ha='center', va='center', weight='bold', rotation=0)
 
 #********************
 #DISC PLOT DECORATORS
@@ -305,7 +311,7 @@ def _make_text_2D(ax, Rlist, posx=0.0, sposy=1, fmt='%d', va=None, **kwargs_text
         else:
             return 0
 
-    kwargs = dict(fontsize=SMALL_SIZE+3*2, ha='center', va=_va, weight='bold', zorder=20, rotation=0)
+    kwargs = dict(fontsize=MEDIUM_SIZE+1, ha='center', va=_va, weight='bold', zorder=20, rotation=0)
     kwargs.update(kwargs_text)
     for Ri in Rlist:
         ax.text(posx, sposy*(Ri+dy), fmt%Ri, **kwargs)
@@ -326,7 +332,7 @@ def _make_text_1D_substructures(ax, gaps=[], rings=[], kinks=[],
     if label_rings: text_it(rings, r'B%d')
     if label_kinks: text_it(kinks, r'K%d')
 
-def _make_radial_grid_2D(ax, Rout, gaps=[], rings=[], kinks=[], make_labels=True, label_freq=2):
+def _make_radial_grid_2D(ax, Rout, gaps=[], rings=[], kinks=[], make_labels=True, label_freq=2, fontsize=MEDIUM_SIZE+3):
     get_intdigits = lambda n: len(str(n).split('.')[0])
     
     angs = np.linspace(0, 2*np.pi, 100)
@@ -353,25 +359,25 @@ def _make_radial_grid_2D(ax, Rout, gaps=[], rings=[], kinks=[], make_labels=True
 
     if make_labels:
         _make_text_2D(ax, Rgrid_polar[1::label_freq], sposy=-1, fmt='%d',
-                      fontsize=SMALL_SIZE+3+5, color='0.1', va='center') #label in the north
+                      fontsize=fontsize, color='0.1', va='center') #label in the north
         _make_text_2D(ax, Rgrid_polar[1::label_freq], sposy=1, fmt='%d',
-                      fontsize=SMALL_SIZE+3+5, color='0.1', va='center') # and south
+                      fontsize=fontsize, color='0.1', va='center') # and south
 
     ax.plot(0.98*Rout*cos_angs, 0.98*Rout*sin_angs, color='0.4', ls='-', lw=3.0, alpha=1.0)
     ax.plot(0.99*Rout*cos_angs, 0.99*Rout*sin_angs, color='0.2', ls='-', lw=3.0, alpha=1.0)
     ax.plot(1.00*Rout*cos_angs, 1.00*Rout*sin_angs, color='0.0', ls='-', lw=3.0, alpha=1.0)
     
-def _make_azimuthal_grid_2D(ax, Rout, ticks=np.linspace(0, 90, 4)):
+def _make_azimuthal_grid_2D(ax, Rout, ticks=np.linspace(0, 90, 4), fontsize=MEDIUM_SIZE):
     for j, phii in enumerate(np.arange(0, 2*np.pi, np.pi/6)):
         ax.plot([0, Rout*np.cos(phii)], [0, Rout*np.sin(phii)], color='k', ls=':', lw=0.4, alpha=1.0)
 
     for deg in ticks:
         deg_rad = np.radians(deg)
         txt = ax.text(1.04*Rout*np.cos(deg_rad), 1.04*Rout*np.sin(deg_rad), r'$%d$'%deg, c='0.0',
-                      fontsize=SMALL_SIZE+5, ha='center', va='center', weight='bold', rotation=-(90-deg))
+                      fontsize=fontsize, ha='center', va='center', weight='bold', rotation=-(90-deg))
         txt.set_text(r'$%d^{\circ}$'%deg)
 
-def _make_nsky_2D(ax, Rout, xlim, z_func, z_pars, incl, PA, xc=0.0, yc=0.0):
+def _make_nsky_2D(ax, Rout, xlim, z_func, z_pars, incl, PA, xc=0.0, yc=0.0, fontsize=MEDIUM_SIZE+5):
     ynorth = np.linspace(-1.1*Rout, 1.1*Rout, 100)
     xnorth = np.zeros_like(ynorth)
     xn, yn = [], []
@@ -384,7 +390,7 @@ def _make_nsky_2D(ax, Rout, xlim, z_func, z_pars, incl, PA, xc=0.0, yc=0.0):
     xn, yn = np.asarray(xn), np.asarray(yn)
     ax.plot(xn, yn, color='0.0', lw=1.7, dash_capstyle='round', dashes=(1.5, 2.5))
     
-    text_nsky = lambda x, y: ax.text(x, y, r'$\vec{\rm N}$$_{\rm sky}$', fontsize=MEDIUM_SIZE+5,
+    text_nsky = lambda x, y: ax.text(x, y, r'$\vec{\rm N}$$_{\rm sky}$', fontsize=fontsize,
                                      ha='center', va='bottom', weight='bold', rotation=np.degrees(-PA))
 
     if yni>xni:
@@ -425,7 +431,7 @@ def make_substructures(ax, gaps=[], rings=[], kinks=[],
                        coords='disc', polar=False,
                        model=None, surface='upper', #relevant if coords='sky'
                        make_legend=False,                       
-                       label_gaps=False, label_rings=False, label_kinks=False,
+                       label_gaps=False, label_rings=False, label_kinks=False, sposy=-1.15, fontsize=MEDIUM_SIZE+1,
                        kwargs_gaps={}, kwargs_rings={}, kwargs_kinks={}, func1d='axvline'):
     
     '''Overlay ring-like (if twodim) or vertical lines (if not twodim) to illustrate the radial location of substructures in the disc'''
@@ -454,7 +460,7 @@ def make_substructures(ax, gaps=[], rings=[], kinks=[],
 
                 for subst, fmt, label, color in subst_fmt:
                     if label:
-                        _make_text_2D(ax, subst, posx=-45, fmt=fmt, color=color)                
+                        _make_text_2D(ax, subst, posx=-45, fmt=fmt, color=color, fontsize=fontsize)                
             else:
                 cos_phi = np.cos(phi)
                 sin_phi = np.sin(phi)
@@ -464,7 +470,7 @@ def make_substructures(ax, gaps=[], rings=[], kinks=[],
                 
                 for subst, fmt, label, color in subst_fmt:
                     if label:
-                        _make_text_2D(ax, subst, sposy=-1, fmt=fmt, color=color, va='center')
+                        _make_text_2D(ax, subst, sposy=sposy, fmt=fmt, color=color, va='center', fontsize=fontsize)
                         
         elif coords=='sky':
             if model is None:
@@ -533,11 +539,12 @@ def make_round_map(
         map2d, levels, X, Y, Rout,
         z_func=None, z_pars=None, incl=None, PA=None, xc=0, yc=0, #Optional, make N-sky axis
         fig=None, ax=None,
-        make_cbar=True,
+        ticks_phi=np.linspace(0, 90, 4),        
+        fontsize_azimuthal_grid=MEDIUM_SIZE, fontsize_radial_grid=MEDIUM_SIZE+3, 
+        fontsize_cbar=MEDIUM_SIZE+2, fontsize_xaxis=MEDIUM_SIZE+3, fontsize_nskyaxis=MEDIUM_SIZE+5, 
         rwidth=0.06, cmap=get_discminer_cmap('velocity'), clabel='km/s', fmt='%5.2f', quadrant=None, #cbar kwargs
-        make_radial_grid=True, make_azimuthal_grid=True, ticks_phi=np.linspace(0, 90, 4),
-        make_contourf=True,        
-        make_contour=False,        
+        make_cbar=True, make_radial_grid=True, make_azimuthal_grid=True, make_Rout_proj=True, make_xaxis=True, make_nskyaxis=True,
+        make_contourf=True, make_contour=False,        
         gaps=[], rings=[], kinks=[],        
         mask_wedge=None, mask_inner=None,
         kwargs_contourf={},
@@ -577,7 +584,7 @@ def make_round_map(
 
     if make_radial_grid:
         #RADIAL GRID
-        _make_radial_grid_2D(ax, Rout, gaps=gaps, rings=rings, kinks=kinks, label_freq=2)    
+        _make_radial_grid_2D(ax, Rout, gaps=gaps, rings=rings, kinks=kinks, label_freq=2, fontsize=fontsize_radial_grid)    
     else:
         angs = np.linspace(0, 2*np.pi, 100)
         cos_angs = np.cos(angs)
@@ -587,24 +594,32 @@ def make_round_map(
         ax.plot(1.00*Rout*cos_angs, 1.00*Rout*sin_angs, color='0.0', ls='-', lw=3.0, alpha=1.0)
 
     if make_azimuthal_grid:
-        _make_azimuthal_grid_2D(ax, Rout, ticks=ticks_phi)
+        _make_azimuthal_grid_2D(ax, Rout, ticks=ticks_phi, fontsize=fontsize_azimuthal_grid)
     
     #SKY AXIS
-    if np.all(np.asarray([z_func, z_pars, incl, PA])!=None):
-        xni, yni = _make_nsky_2D(ax, Rout, xlim_rec,
-                                 z_func, z_pars, incl, PA, xc=xc, yc=yc)
-    else:
-        xni, yni = None, None
-
+    xni, yni = None, None    
+    if make_nskyaxis:
+        if np.all(np.asarray([z_func, z_pars, incl, PA])!=None):
+            xni, yni = _make_nsky_2D(ax, Rout, xlim_rec,
+                                     z_func, z_pars, incl, PA, xc=xc, yc=yc, fontsize=fontsize_nskyaxis)
+                    
     #SET LIMITS AND AXES
-    for side in ['left','top','right']: ax.spines[side].set_visible(False)
-    make_up_ax(ax,
-               xlims=(-xlim_rec, xlim_rec),
-               ylims=(-xlim_rec, xlim_rec),
-               labelleft=False, left=False, right=False, labeltop=False, top=False, labelbottom=True, bottom=True,
-               labelsize=SMALL_SIZE+3+4, rotation=45)
-    mod_major_ticks(ax, axis='x', nbins=10)
-    ax.set_xlabel('Offset [au]', fontsize=MEDIUM_SIZE+2+5)
+    if make_xaxis:
+        for side in ['left','top','right']: ax.spines[side].set_visible(False)
+        make_up_ax(ax,
+                   xlims=(-xlim_rec, xlim_rec),
+                   ylims=(-xlim_rec, xlim_rec),
+                   labelleft=False, left=False, right=False, labeltop=False, top=False, labelbottom=True, bottom=True,
+                   labelsize=fontsize_xaxis, rotation=45)
+        mod_major_ticks(ax, axis='x', nbins=10)
+        ax.set_xlabel('Offset [au]', fontsize=fontsize_xaxis+5)
+    else:
+        for side in ['left','top','right', 'bottom']: ax.spines[side].set_visible(False)
+        make_up_ax(ax,
+                   xlims=(-xlim_rec, xlim_rec),
+                   ylims=(-xlim_rec, xlim_rec),
+                   labelleft=False, left=False, right=False, labeltop=False, top=False, labelbottom=False, bottom=False)                   
+        
     ax.set_aspect(1)
 
     #MAKE ROUND COLORBAR
@@ -617,15 +632,16 @@ def make_round_map(
             quadrant = 2
 
     if make_cbar:
-        make_round_cbar(ax, Rout, levels, cmap=cmap_c, clabel=clabel, fmt=fmt, quadrant=quadrant)
+        make_round_cbar(ax, Rout, levels, cmap=cmap_c, clabel=clabel, fmt=fmt, quadrant=quadrant, fontsize=fontsize_cbar)
 
     sq = {1: -1,
           2: 1,
           3: 1,
           4: -1,
     }[quadrant]
-        
-    ax.plot([sq*Rout, sq*Rout], [0, -xlim_rec], color='0.0', lw=1.0, dash_capstyle='round', dashes=(1.5, 2.5)) #Rout projected onto Cartesian xaxis
+
+    if make_Rout_proj:
+        ax.plot([sq*Rout, sq*Rout], [0, -xlim_rec], color='0.0', lw=1.0, dash_capstyle='round', dashes=(1.5, 2.5)) #Rout projected onto Cartesian xaxis
 
     #MASK
     if mask_wedge is not None:
