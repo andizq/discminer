@@ -51,7 +51,7 @@ setup(
     ],
     keywords='astronomy, discs, disks, planets, detection',  # Optional
     #package_dir={'discminer': 'discminer'},  # Optional
-    packages=['discminer', 'discminer.tools'],  # Required
+    packages=['discminer', 'discminer.tools', 'discminer.mining'],  # Required
     # https://packaging.python.org/guides/distributing-packages-using-setuptools/#python-requires
     python_requires='>=3.6, <4',
     # https://packaging.python.org/discussions/install-requires-vs-requirements/
