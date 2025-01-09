@@ -12,7 +12,7 @@
 
 
 <div align="center">
-  Welcome to the discminer repository! Looking for quick examples and tutorials? Check out the docs.
+  Welcome to the discminer repository! Looking for quick examples and tutorials? Check out the <mark>example/</mark> folder.
   <br />
   <a href="https://github.com/andizq/discminer/issues/new?assignees=&labels=bug&title=bug%3A+">Report a Bug</a>
   ·
