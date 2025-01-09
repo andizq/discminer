@@ -13,11 +13,11 @@ parser = ArgumentParser(prog='Handle emcee backend', description='Handle emcee b
 parser.add_argument('-b', '--backend', default=1, type=int, choices=[0, 1], help="If 0, create new backend. If 1, reuse existing backend")
 args = parser.parse_args()
 
-#****************
-#SOME DEFINITIONS
-#****************
+#*********************
+#REQUIREd DEFINITIONS
+#*********************
 file_data = 'MWC_480_CO_220GHz.robust_0.5.JvMcorr.image.pbcor_clipped_downsamp_10pix.fits'
-tag_out = 'mwc480_12co_0p2_maps'
+tag_out = 'mwc480_12co_0p2_maps' #PREFERRED FORMAT: disc_mol_chan_program_extratags
 tag_in = tag_out
 
 nwalkers = 150
@@ -26,7 +26,7 @@ nsteps = 15000
 dpc = 162.0*u.pc
 vel_sign = -1 #Rotation direction: -1 or 1
 
-au_to_m = u.au.to('m')
+Rmax = 1000*u.au #Model maximum radius
 
 #*********
 #READ DATA
@@ -34,7 +34,7 @@ au_to_m = u.au.to('m')
 datacube = Data(file_data, dpc) #Read data and convert to Cube object
 vchannels = datacube.vchannels
 
-Rmax = 1000*u.au #Model maximum radius
+au_to_m = u.au.to('m')
 
 #****************************
 #INIT MODEL AND PRESCRIPTIONS
