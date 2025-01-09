@@ -69,6 +69,7 @@ setup(
         'scikit-learn',
         'spectral-cube>=0.6',
         'packaging>=20.9',
+        'termtables',        
     ], 
     # If there are data files included in your packages that need to be
     # installed, specify them here.
@@ -77,7 +78,7 @@ setup(
         [
             'icons/logo.txt',
             'icons/button*',
-            'tools/discminer.mplstyle'
+            'tools/discminer.mplstyle',
         ],
     },
     # https://packaging.python.org/specifications/core-metadata/#project-url-multiple-use
@@ -85,4 +86,9 @@ setup(
         'Bug Reports': 'https://github.com/andizq/discminer/issues',
         'Source': 'https://github.com/andizq/discminer/',
     },
+    entry_points={
+        'console_scripts': [
+            'discminer = discminer.mining_control:main',
+        ],
+    }
 )
