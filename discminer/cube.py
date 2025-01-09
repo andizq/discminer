@@ -584,7 +584,13 @@ class Cube(_JSON):
                     
                 else: 
                     ntypes = 3
-                
+
+                if 'fit_continuum' in kwargs_m:
+                    if kwargs_m['fit_continuum']:
+                        filenames[0] += ['continuum']
+                        filenames[1] += ['delta_continuum']
+                        ntypes+=1
+                        
                 print ('Writing moments into FITS files...')
                 for j in range(2):
                     for i in range(ntypes):                    

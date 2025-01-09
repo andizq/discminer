@@ -1083,7 +1083,10 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                  use_zeus=False,
                  #custom_header={}, custom_kind={}, mc_layers=1,
                  z_mirror=False, 
-                 plot_walkers=True, plot_corner=True, tag='',
+                 plot_walkers=True,
+                 plot_corner=True,
+                 write_log_pars=True,
+                 tag='',
                  mpi=False,
                  **kwargs_model): 
         """
@@ -1256,6 +1259,45 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             plt.savefig('mc_corner_%s_%dwalkers_%dsteps.png'%(tag, nwalkers, nsteps))
             plt.close()
 
+        if write_log_pars:
+
+            cp = lambda x: copy.deepcopy(x)
+
+            params = cp(self.params) #Fit and fixed parameters
+            p0pars = cp(self.params)
+            errpos = cp(self.params)
+            errneg = cp(self.params)
+
+            #print (self.best_fit_dict)
+            for key in self.best_fit_dict: 
+                par = key.split('_')[0]
+                attribute = key.split(par+'_')[1]
+                val = self.best_fit_dict[key].split(',')
+
+                p0pars[attribute][par] = float(val[0])
+                params[attribute][par] = float(val[1])
+                errneg[attribute][par] = float(val[2])        
+                errpos[attribute][par] = float(val[3])    
+
+            allheader = []
+            allp0 = []
+            allpars = []
+            allerrpos = []
+            allerrneg = [] 
+    
+            for attribute in params:
+                for par in params[attribute]:
+                    allheader.append(par)
+                    allp0.append(p0pars[attribute][par])
+                    allpars.append(params[attribute][par])
+                    allerrneg.append(errneg[attribute][par])
+                    allerrpos.append(errpos[attribute][par])
+        
+            #print (allheader, allpars)
+            np.savetxt('log_pars_%s_cube_%dwalkers_%dsteps.txt'%(tag, nwalkers, backend.iteration),
+                       np.array([allp0, allpars, allerrneg, allerrpos]), fmt='%.6f', header=str(allheader))
+            
+            
     def _get_attribute_func(self, attribute):
         return {
             'intensity': self.intensity_func,
