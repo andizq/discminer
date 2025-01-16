@@ -12,7 +12,7 @@
 
 
 <div align="center">
-  Welcome to the discminer repository! Looking for quick examples and tutorials? Check out the docs.
+  Welcome to the discminer repository! Looking for quick examples and tutorials? Check out the <mark>example/</mark> folder.
   <br />
   <a href="https://github.com/andizq/discminer/issues/new?assignees=&labels=bug&title=bug%3A+">Report a Bug</a>
   ·
@@ -22,12 +22,12 @@
 </div>
 
 - Model channel maps from molecular line emission of discs by fitting intensity **and** rotation velocity
-- Study the disc vertical structure by modelling front and back side emission surfaces
+- Analyse the disc's dynamics by modelling Keplerian motion, and optionally pressure support + self-gravity
+- Investigate the disc vertical structure by modelling front and back side emission surfaces
 - Compute moment maps that accurately capture complex line profile morphologies
-- Extract rotation curves, radial and meridional velocities, intensity and line width profiles
-- Analyse the disc dynamical structure by modelling Keplerian motion + pressure support + self-gravity at once
-- Identify velocity and intensity substructures; study their coherence and degree of localisation
-- Non-axisymmetric models are possible; all attributes can be described as a function of $R,\phi,z$ disc coords
+- Extract rotation curves, radial and meridional velocities, intensity, and line width profiles
+- Identify velocity and intensity substructures, and examine their coherence and degree of localisation
+- Support non-axisymmetric models; all attributes can be described in three-dimensional coordinates
 
 
 <img
@@ -37,32 +37,32 @@
 
 ## Mining tools
 
-Discminer offers a wide range of analysis and visualisation tools to fully explore the physical and dynamical structure of your disc.
+Discminer offers a wide range of analysis and visualisation tools to fully explore the physical and dynamical structure of discs.
 
 
 ### cube
 
 - Compute moment maps that accurately capture complex line profile morphologies.
 - Output moment maps include **peak intensity**, **line width**, **line slope**, and **centroid velocity**.
-- Easily clip, downsample, and convert to brightness temperature units.
+- Easily clip, downsample, and convert data to brightness temperature units.
 - Quickly visualise model versus data channels and interactively extract spectra.
 
 ### rail
 
-- Extract azimuthal and radial profiles of intensity, line width and velocity from moment maps.
-- Compute rotation curves and decompose disc velocity into its three-dimensional components.
-- Reveal large-scale signatures and quantify their pitch angle, width, extent, and coherence degree.
+- Extract azimuthal and radial profiles of intensity, line width, and velocity from moment maps.
+- Compute rotation curves and decompose disc velocities into their three-dimensional components.
+- Identify large-scale structures and quantify their pitch angle, width, extent, and degree of coherence.
 
 ### pick
 
-- Identify small-scale velocity and intensity perturbations, and estimate their localisation degree.
+- Identify small-scale perturbations and estimate their degree of localisation.
 
 ### plottools
 
-- Customise intensity channels and residual maps, and highlight coherent and localised perturbations.
-- Use sky or disc projections interchangeably for easier visualisation of features.
-- Easily overlay the disc geometry (orientation and vertical structure) on any observable product.
-- Overlay 1D profiles or 2D maps from external data to e.g. highlight the presence of dust substructures.
+- Customise intensity channels, moments, and residual maps.
+- Use sky or disc projections interchangeably for improved visualisation of features.
+- Easily overlay disc geometry (considering orientation and vertical structure) onto any observable product.
+- Load in 1D profiles or 2D maps from external data e.g. to highlight the presence of dust substructures.
 
 
 ## Installation
@@ -79,7 +79,6 @@ pip install -U discminer
 
 #### Optional dependencies
 
-- [termtables](https://pypi.org/project/termtables)
 - [termplotlib](https://pypi.org/project/termplotlib)
 - [FilFinder](https://pypi.org/project/fil-finder)
 - [schwimmbad](https://pypi.org/project/schwimmbad)
@@ -87,10 +86,9 @@ pip install -U discminer
 
 ## How to use
 
-The package documentation is still under construction, but you can find practical examples demonstrating the main
-functionality of the code in the `./template` folder of this repository.
+You can find practical examples demonstrating the main functionality of the code in the `./example` folder of this repository.
 
-To run the examples on your local machine you can clone this repository and follow the instructions provided in the readme file,
+To run the examples on your local machine, clone this repository and follow the instructions provided in the README file,
 
 ```bash
 git clone https://github.com/andizq/discminer.git
