@@ -359,11 +359,13 @@ class Rail(object):
             mean_list, sigma_list = [], []
             
             for i in range(nconts):
-                psig = int(mask_perc_init*len(resid_list2[i]))
-                isort = np.argsort(resid_list2[i])
-                sigma = np.nanstd(resid_list2[i][isort][psig:-psig])
-                mean_val = np.nanmean(resid_list2[i][isort][psig:-psig])
+                resid2_nonan = resid_list2[i][~np.isnan(resid_list2[i])]
+                psig = int(mask_perc_init*len(resid2_nonan))
+                isort = np.argsort(resid2_nonan)
+                sigma = np.nanstd(resid2_nonan[isort][psig:-psig])
+                mean_val = np.nanmean(resid2_nonan[isort][psig:-psig])
                 ind = np.abs(resid_list2[i]-mean_val)<sigma_thres*sigma
+
                 ind_accep.append(
                     (
                         ((coord_list[i]<90-mask_ang) & (coord_list[i]>-90+mask_ang)) |
@@ -412,8 +414,10 @@ class Rail(object):
                          for i in range(nconts)]
 
         av_annulus = np.array([av_func(resid_list[i][ind_accep[i]]) for i in range(nconts)])
-        
-        if error_func is None: av_error = None
+
+        if error_func is None:
+            av_error = None
+            
         else:
             beams_ring_sqrt = np.sqrt([frac_annulus*Rail.beams_along_annulus(lev, Rgrid, beam_size, X, Y) for lev in lev_list])
             if callable(error_func): #if error map provided, compute average error per radius, divided by sqrt of number of beams (see Michiel Hogerheijde notes on errors)
