@@ -12,7 +12,7 @@ from . import units as sfu
 import matplotlib.pyplot as plt
 import matplotlib
 from matplotlib.axes import Axes
-import numpy as np
+import autograd.numpy as np
 from astropy import units as u
 from scipy.interpolate import griddata
 from collections.abc import Iterable

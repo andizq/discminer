@@ -4,7 +4,7 @@ Pick module
 Classes: Pick
 """
 
-import numpy as np
+import autograd.numpy as np
 
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score

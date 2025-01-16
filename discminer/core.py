@@ -2,7 +2,7 @@ from .cube import Cube
 from .grid import grid as dgrid 
 from .tools.utils import InputError
 
-import numpy as np
+import autograd.numpy as np
 
 from astropy.io import fits
 from astropy import units as u

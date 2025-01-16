@@ -1,4 +1,4 @@
-import numpy as np
+import autograd.numpy as np
 from astropy import units as u
 from astropy import constants as ct
 from scipy.interpolate import interp1d, RectBivariateSpline

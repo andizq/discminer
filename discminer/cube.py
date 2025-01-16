@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, Cursor, Slider, RectangleSelector, TextBox
 
 from collections.abc import Iterable
-import numpy as np
+import autograd.numpy as np
 import copy
 import os
 import warnings
