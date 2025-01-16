@@ -51,7 +51,7 @@ setup(
     ],
     keywords='astronomy, discs, disks, planets, detection',  # Optional
     #package_dir={'discminer': 'discminer'},  # Optional
-    packages=['discminer', 'discminer.tools'],  # Required
+    packages=['discminer', 'discminer.tools', 'discminer.mining'],  # Required
     # https://packaging.python.org/guides/distributing-packages-using-setuptools/#python-requires
     python_requires='>=3.6, <4',
     # https://packaging.python.org/discussions/install-requires-vs-requirements/
@@ -69,6 +69,7 @@ setup(
         'scikit-learn',
         'spectral-cube>=0.6',
         'packaging>=20.9',
+        'termtables',        
     ], 
     # If there are data files included in your packages that need to be
     # installed, specify them here.
@@ -77,7 +78,7 @@ setup(
         [
             'icons/logo.txt',
             'icons/button*',
-            'tools/discminer.mplstyle'
+            'tools/discminer.mplstyle',
         ],
     },
     # https://packaging.python.org/specifications/core-metadata/#project-url-multiple-use
@@ -85,4 +86,9 @@ setup(
         'Bug Reports': 'https://github.com/andizq/discminer/issues',
         'Source': 'https://github.com/andizq/discminer/',
     },
+    entry_points={
+        'console_scripts': [
+            'discminer = discminer.mining_control:main',
+        ],
+    }
 )

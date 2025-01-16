@@ -180,6 +180,36 @@ def intensity_powerlaw_rout_hydro(coord, I0=30.0, R0=100, p=-0.4, z0=100, q=0.3,
 
     return Ieff
 
+def intensity_powerlaw_rbreak_hydro(coord, I0=30.0, p0=-0.4, p1=-0.4, z0=100, q=0.3, Rbreak=20, Rout=500, p=0, func_interp_sigma=None, phip=0.0, weight=1.0):
+    
+    y = coord['x'] 
+    x = coord['y']
+
+    if phip != 0.0:
+        phip = np.radians(phip)
+        x, y = GridTools._rotate_sky_plane(x, y, phip)
+
+    if 'R' not in coord.keys():
+        R = hypot_func(coord['x'], coord['y'])
+    else:
+        R = coord['R']
+
+    if func_interp_sigma is None:
+        sigma = np.zeros_like(R)
+    else:
+        sigma = func_interp_sigma(x,y, grid=False)
+
+    z = coord['z']
+    z0*=au_to_m
+    Rout*=au_to_m
+    Rbreak*=au_to_m
+    A = I0*Rbreak**-p0*z0**-q
+    B = I0*Rbreak**-p1*z0**-q
+    Ieff = np.where(R<=Rbreak, A*R**p0*np.abs(z)**q, B*R**p1*np.abs(z)**q)
+    ind = R>Rout
+    Ieff[ind] = 0.0
+    return Ieff
+
 #***********
 #LINE WIDTH 
 #***********

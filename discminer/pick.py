@@ -13,6 +13,7 @@ from .rail import Rail
 from .tools.utils import weighted_std
 
 import copy
+import warnings
 
 def get_neighbour_peaks(var_x, pos_x, var_y, n_clusters=8, detect_thres=3):
     #Everything is referred to the variance sorted wrt x
@@ -105,7 +106,10 @@ class Pick(Rail):
 
         if clean_thres is not None and np.isfinite(clean_thres):
 
+            got_runtimeerror = False
+            
             if clean_histogram:
+
                 from discminer.tools.fit_kernel import _gauss
                 from scipy.optimize import curve_fit
 
@@ -115,30 +119,35 @@ class Pick(Rail):
                 counts, bins = np.histogram(peak_hist, bins=4*int(round(len(peak_resid)**(1/3.)))-1 )
                                 
                 mbins = 0.5*(bins[1:] + bins[:-1])
-                popt, pcov = curve_fit(yfunc, mbins, counts, p0=[np.max(counts), 0.2])
-                popt = np.abs(popt) #Make sure A and sigma are positive, as our residuals are
+                
+                try:
+                    popt, pcov = curve_fit(yfunc, mbins, counts, p0=[np.max(counts), 0.2])
+                    popt = np.abs(popt) #Make sure A and sigma are positive, as our residuals are
 
-                if fig_ax_histogram is not None:
+                    if fig_ax_histogram is not None:
+                        
+                        import matplotlib.pyplot as plt
 
-                    import matplotlib.pyplot as plt
-
-                    fig, ax = fig_ax_histogram
-                    ax.stairs(counts, bins, color='dodgerblue', lw=3)
+                        fig, ax = fig_ax_histogram
+                        ax.stairs(counts, bins, color='dodgerblue', lw=3)
                     
-                    xgauss = np.linspace(0, round(np.nanmax(bins)), 100)
-                    ygauss = yfunc(xgauss, *popt)
+                        xgauss = np.linspace(0, round(np.nanmax(bins)), 100)
+                        ygauss = yfunc(xgauss, *popt)
                     
-                    ax.plot(xgauss, ygauss, lw=3, c='k')
-                    ax.axvline(clean_thres*np.abs(popt[1]), lw=4, c='tomato')
+                        ax.plot(xgauss, ygauss, lw=3, c='k')
+                        ax.axvline(clean_thres*np.abs(popt[1]), lw=4, c='tomato')
                     
-                    ax.set_xlabel('Peak residual [km/s]')
-                    ax.set_ylabel('Counts')
+                        ax.set_xlabel('Peak residual [km/s]')
+                        ax.set_ylabel('Counts')
 
-
-                ii = peak_resid < clean_thres*popt[1]
-                print ('Rejecting %d peak velocity residuals above %.3f km/s (%dsigma)'%(np.sum(~ii), clean_thres*popt[1], clean_thres))
-
-            else:
+                    ii = peak_resid < clean_thres*popt[1]
+                    print ('Rejecting %d peak velocity residuals above %.3f km/s (%dsigma)'%(np.sum(~ii), clean_thres*popt[1], clean_thres))
+                    
+                except RuntimeError as e:
+                    print('RuntimeError:', e, '*******Rejection of points through histogram method failed. Trying median(peaks)+thres*sigma(peaks) rejection...')
+                    got_runtimeerror = True
+                    
+            if not clean_histogram or got_runtimeerror:
                 rej_thresh = np.nanmedian(peak_resid) + clean_thres*np.nanstd(peak_resid)
                 ii = peak_resid < rej_thresh
                 print ('Rejecting %d peak velocity residuals above %.3f km/s (median+%dsigma)'%(np.sum(~ii), rej_thresh, clean_thres))
