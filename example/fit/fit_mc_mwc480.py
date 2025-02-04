@@ -172,14 +172,3 @@ model.run_mcmc(datacube.data, vchannels,
                noise_stddev=noise) 
 
 print("Backend Final size: {0} steps".format(backend.iteration))
-
-#***************************************
-#SAVE SEEDING, BEST FIT PARS, AND ERRORS
-model.mc_header.append('vel_sign')
-np.savetxt('log_pars_%s_cube_%dwalkers_%dsteps.txt'%(tag_out, nwalkers, backend.iteration), 
-           np.array([np.append(p0, vel_sign),
-                     np.append(model.best_params, vel_sign),
-                     np.append(model.best_params_errneg, 0.0),
-                     np.append(model.best_params_errpos, 0.0)
-           ]), 
-           fmt='%.6f', header=str(model.mc_header))

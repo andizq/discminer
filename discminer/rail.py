@@ -43,12 +43,12 @@ class Rail(object):
         """
         
         _rail_coords = model.projected_coords
-        X, Y = model.skygrid['meshgrid']        
-        self.X = X/sfu.au
+        X, Y = model.skygrid['meshgrid'] #regular square grid
+        self.X = X/sfu.au 
         self.Y = Y/sfu.au
 
-        self.R = _rail_coords['R']
-        self.phi = _rail_coords['phi']
+        self.R = _rail_coords['R'] #disc coord
+        self.phi = _rail_coords['phi'] #disc coord
         self.R_nonan = _rail_coords['R_nonan']                
         self.extent = model.skygrid['extent']
         self.dpc = model.dpc
@@ -183,7 +183,7 @@ class Rail(object):
             first_cont = np.array([coords[0][i] for i in inds_cont])
             second_cont = np.array([coords[1][i] for i in inds_cont])
             prop_cont = np.array([prop[i] for i in inds_cont])
-
+            
             corr_inds = np.abs(first_cont-lev) < acc_threshold #clean based on acc_threshold
             
             _, tmp = np.unique(second_cont, return_index=True) 
@@ -563,7 +563,8 @@ class Rail(object):
             
         x = R*np.cos(phi)
         y = R*np.sin(phi)
-        prop2D = griddata((x, y), prop, (self.X, self.Y), method='linear')
+        #Interpolate onto the same regular grid used for the sky plane; could use any other grid 
+        prop2D = griddata((x, y), prop, (self.X, self.Y), method='linear') 
         
         if return_coords:
             return x, y, prop, prop2D
@@ -694,8 +695,8 @@ class Contours(object):
         inds_cont = [tuple(f) for f in inds_cont]
         first_cont = np.array([prop[i] for i in inds_cont])
         corr_inds = np.abs(first_cont-lev) < acc_threshold
-        x_cont = np.array([X[i] for i in inds_cont])
-        y_cont = np.array([Y[i] for i in inds_cont])
+        x_cont = np.array([X[i] for i in inds_cont]) #Get x sky coords of contour
+        y_cont = np.array([Y[i] for i in inds_cont]) #Get y sky coords of contour
         return x_cont[corr_inds], y_cont[corr_inds], inds_cont, corr_inds
 
     @staticmethod
