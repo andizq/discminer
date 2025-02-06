@@ -68,7 +68,7 @@ def _mining_moments2d(parserobj, prog='moments2d', description='Make (double Gau
 
 def _mining_moment_residuals(parserobj, prog='moment+residuals', description='Show Data vs Model moment map and residuals'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
-    add_parser_args(parser, moment=True, kernel=True, kind=True, surface=True, smooth=True, mask_phi=True, mask_R=True, Router=True)    
+    add_parser_args(parser, moment=True, kernel=True, kind=True, surface=True, smooth=True, mask_phi=True, mask_R=True, Router=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True)  
     return parser
 
 def _mining_moment_offset(parserobj, prog='moment+offset', description='Show moment map and a zoom-in illustrating offset from the centre'):
@@ -101,7 +101,7 @@ def _mining_radial_profiles(parserobj, prog='radprof', description='Extract and 
                         help="Apply a Savitzky-Golay filter to smooth out the plotted curves. DEFAULTS to False.")
     parser.add_argument('-vp', '--vphi_discminer', default=0, type=int,
                         help="Remove discminer vphi background? DEFAULTS to False (i.e. remove perfect Keplerian).")
-    add_parser_args(parser, moment=True, kernel=True, kind=True, surface=True, writetxt=True, mask_minor=True, mask_major=True,
+    add_parser_args(parser, moment=True, kernel=True, kind=True, surface=True, writetxt=True, mask_minor=True, mask_major=True, mask_R=True, mask_phi=True,
                     Rinner=True, absolute_Rinner=True, Router=True, absolute_Router=True, sigma=True, smooth=True)
     return parser
 
