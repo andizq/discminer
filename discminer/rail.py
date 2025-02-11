@@ -571,7 +571,7 @@ class Rail(object):
         else:
             return prop2D
 
-    def make_filaments(self, surface='upper', **kwargs):
+    def make_filaments(self, surface='upper', fill_neg=np.nan, **kwargs):
         #FIND FILAMENTS
         #kwargs docs at https://fil-finder.readthedocs.io/en/latest/tutorial.html#masking
 
@@ -592,12 +592,12 @@ class Rail(object):
         ang_scale = np.abs(self.header['CDELT1'])*u.Unit(self.header['CUNIT1']) #pix size
                        
         Rind = (Rgrid>R_min_m) #& (Rgrid<R_max)
-        fil_pos = FilFinder2D(np.where(Rind & (self.prop>0), np.abs(self.prop), 0), ang_scale=ang_scale, distance=self.dpc)
+        fil_pos = FilFinder2D(np.where(Rind & (self.prop>0), np.abs(self.prop), fill_neg), ang_scale=ang_scale, distance=self.dpc)
         fil_pos.preprocess_image(skip_flatten=True) 
         fil_pos.create_mask(**kw_fil_mask)
         fil_pos.medskel(verbose=False)
         
-        fil_neg = FilFinder2D(np.where(Rind & (self.prop<0), np.abs(self.prop), 0), ang_scale=ang_scale, distance=self.dpc)
+        fil_neg = FilFinder2D(np.where(Rind & (self.prop<0), np.abs(self.prop), fill_neg), ang_scale=ang_scale, distance=self.dpc)
         fil_neg.preprocess_image(skip_flatten=True) 
         fil_neg.create_mask(**kw_fil_mask)
         fil_neg.medskel(verbose=False)
