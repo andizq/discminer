@@ -95,6 +95,23 @@ def _mining_residuals_all(parserobj, prog='residuals+all', description='Show ALL
     add_parser_args(parser, kernel=True, kind=True, surface=True, Rinner=True, Router=True, smooth=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True)    
     return parser
 
+def _mining_pick(parserobj, prog='pick', description='Use Pick tools. Fold residual maps and identify peak and clustered residuals'):
+    parser = _check_and_return_parser(parserobj, prog=prog, description=description)
+    parser.add_argument('-c', '--clean_thres', default=10, type=float, help="Sigma threshold above which peak residuals will be rejected. DEFAULTS to 10.")
+    parser.add_argument('-sp', '--show_peaks', default=1, type=int, help="Show peak residuals on 2D maps. DEFAULTS to 1.")
+    parser.add_argument('-sglobal', '--show_global', default=1, type=int, help="Show global peak. DEFAULTS to 1.")
+    parser.add_argument('-pk', '--percentage_kepler', default=0, type=int, help="Refer velocity residuals to the local Keplerian rotation. DEFAULTS to 0.")
+    parser.add_argument('-clusters', '--clusters', default=0, type=int, help="Make clusters. DEFAULTS to 0.")
+    parser.add_argument('-np', '--nphi', default=6, type=int, help="Number of azimuthal clusters. DEFAULTS to 6.")
+    parser.add_argument('-nr', '--nr', default=6, type=int, help="Number of radial clusters. DEFAULTS to 6.")
+    parser.add_argument('-sleg', '--show_legend', default=0, type=int, help="Show markers legend. DEFAULTS to 0.")
+    add_parser_args(
+        parser,
+        moment=True, kernel=True, kind=True, surface=True, fold=True, projection=True, Rinner=3.0, Router=0.9, absolute_Rinner=True, absolute_Router=True,
+        colorbar=True, smooth=True, mask_phi=True, mask_R=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True
+    )
+    return parser
+
 def _mining_radial_profiles(parserobj, prog='radprof', description='Extract and show radial profiles from moment maps AND residuals'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     parser.add_argument('-sf', '--savgol_filter', default=0, type=int,
@@ -203,7 +220,8 @@ _mining_parser_func = {
     'moment+residuals': _mining_moment_residuals,
     'moment+offset': _mining_moment_offset,
     'residuals+deproj': _mining_residuals_deproj,
-    'residuals+all': _mining_residuals_all,    
+    'residuals+all': _mining_residuals_all,
+    'pick': _mining_pick,
     'gradient': _mining_gradient,
     'isovelocities': _mining_isovelocities,
     'pv': _mining_pv_diagram,
@@ -225,6 +243,7 @@ scripts = {
     'moment+offset': 'plot_moment+offset.py',
     'residuals+deproj': 'plot_residuals+deproj.py',
     'residuals+all': 'plot_residuals+all.py',
+    'pick': 'plot_peak_residuals.py',
     'gradient': 'plot_gradient.py',
     'isovelocities': 'plot_isovelocities.py',
     'pv': 'plot_pv_diagram.py',
