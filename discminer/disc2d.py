@@ -34,7 +34,7 @@ from .cube import Cube
 from .rail import Contours
 from .grid import GridTools
 from .diff_interp import get_griddata
-
+print('I am importing autograd version')
 os.environ["OMP_NUM_THREADS"] = "1"
 
 __all__ = ['Model', 'Mcmc', 'Velocity', 'Intensity', 'Linewidth', 'Lineslope', 'ScaleHeight', 'SurfaceDensity', 'Temperature']
