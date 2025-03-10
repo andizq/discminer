@@ -1,7 +1,7 @@
 *~
 *.c
 *.pyc
-
+*.pth
 *.fits
 *.dat
 *.log

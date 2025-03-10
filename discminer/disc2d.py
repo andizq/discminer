@@ -23,7 +23,7 @@ from astropy.convolution import Gaussian2DKernel, convolve
 from astropy import units as u
 from matplotlib import ticker
 from scipy.integrate import quad
-from scipy.interpolate import griddata, interp1d
+from scipy.interpolate import griddata, interp1d    
 from scipy.optimize import curve_fit
 from scipy.special import ellipe, ellipk
 from .tools.utils import FrontendUtils, InputError, _get_beam_from, hypot_func
@@ -33,7 +33,7 @@ from .core import ModelGrid
 from .cube import Cube
 from .rail import Contours
 from .grid import GridTools
-from .diff_interp import get_griddata
+from .diff_interp import get_griddata_sparse as get_griddata
 print('I am importing autograd version')
 os.environ["OMP_NUM_THREADS"] = "1"
 
@@ -1550,11 +1550,11 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                 for i in range(self.subpixels_sq): #Subpixels are projected on the same plane where true grid is projected
                     props[0][i][side] = griddata_diff(props[0][i][side]) #griddata((x_pro, y_pro), props[0][i][side], (self.mesh[0], self.mesh[1]), method='linear') #subpixels velocity
                 for prop in props[1:]:
-                    prop[side] =  get_griddata(prop[side]) #griddata((x_pro, y_pro), prop[side], (self.mesh[0], self.mesh[1]), method='linear')
+                    prop[side] =  griddata_diff(prop[side]) #griddata((x_pro, y_pro), prop[side], (self.mesh[0], self.mesh[1]), method='linear')
                     if self.Rmax_m is not None: prop[side] = np.where(np.logical_and(R_grid<self.Rmax_m, R_grid>self.Rmin_m), prop[side], np.nan) #Todo: allow for R_in as well
             else:
                 for prop in props:
-                    if not isinstance(prop[side], numbers.Number): prop[side] = get_griddata(prop[side]) #griddata((x_pro, y_pro), prop[side], (self.mesh[0], self.mesh[1]), method='linear')
+                    if not isinstance(prop[side], numbers.Number): prop[side] = griddata_diff(prop[side]) #griddata((x_pro, y_pro), prop[side], (self.mesh[0], self.mesh[1]), method='linear')
                     if self.Rmax_m is not None: prop[side] = np.where(np.logical_and(R_grid<self.Rmax_m, R_grid>self.Rmin_m), prop[side], np.nan)
 
         #*************************************
