@@ -116,8 +116,10 @@ def _mining_radial_profiles(parserobj, prog='radprof', description='Extract and 
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     parser.add_argument('-sf', '--savgol_filter', default=0, type=int,
                         help="Apply a Savitzky-Golay filter to smooth out the plotted curves. DEFAULTS to False.")
-    parser.add_argument('-vp', '--vphi_discminer', default=0, type=int,
-                        help="Remove discminer vphi background? DEFAULTS to False (i.e. remove perfect Keplerian).")
+    parser.add_argument('-vp', '--vphi_discminer', default=1, type=int,
+                        help="Subtract model vphi or perfect Keplerian vphi? DEFAULTS to True (i.e. subtract model vphi).")
+    parser.add_argument('-ig', '--interpgrid', default=0, type=int,
+                        help="Use linear grid interpolation for radial/azimuthal profile extraction. DEFAULTS to False (i.e. use native grid).")
     add_parser_args(parser, moment=True, kernel=True, kind=True, surface=True, writetxt=True, mask_minor=True, mask_major=True, mask_R=True, mask_phi=True,
                     Rinner=True, absolute_Rinner=True, Router=True, absolute_Router=True, sigma=True, smooth=True)
     return parser
@@ -137,6 +139,8 @@ def _mining_azimuthal_profiles(parserobj, prog='azimprof', description='Extract 
                         help="Reference annulus shown as a solid black line. DEFAULTS to 100 au")
     parser.add_argument('-t', '--type', default='residuals', type=str, choices=['data', 'model', 'residuals'],
                         help="Compute profiles on data, model or residual moment map. DEFAULTS to 'residuals'")
+    parser.add_argument('-ig', '--interpgrid', default=0, type=int,
+                        help="Use linear grid interpolation for radial/azimuthal profile extraction. DEFAULTS to False (i.e. use native grid).")
     add_parser_args(parser, moment=True, kernel=True, kind=True, surface=True, Rinner=True, Router=True, smooth=True)
     return parser
 

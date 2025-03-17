@@ -15,6 +15,7 @@ from matplotlib.axes import Axes
 import numpy as np
 from astropy import units as u
 from scipy.interpolate import griddata
+from scipy.ndimage import map_coordinates
 from collections.abc import Iterable
 from skimage import measure
 import numbers
@@ -86,7 +87,7 @@ class Rail(object):
         x_cont = np.array([X[i] for i in inds_cont])
         y_cont = np.array([Y[i] for i in inds_cont])
         return x_cont[corr_inds], y_cont[corr_inds], inds_cont, corr_inds
-        
+    
     @staticmethod
     def beams_along_annulus(lev, Rgrid, beam_size, X, Y):
         xc, yc, _, _ = Rail.make_contour_lev(Rgrid, lev, X, Y)
@@ -98,7 +99,22 @@ class Rail(object):
             return ellipse_perim/beam_size
         except ValueError: #No contour found
             return np.inf
-        
+
+    def make_interpolated_lev(self, prop, lev, phi_beam_frac=1/4.):
+        phi_step = self.beam_size.to('au').value*phi_beam_frac/lev
+        phi_list = np.arange(-np.pi, np.pi, phi_step)
+        zp = self.model.z_upper_func({'R': lev*u.au.to('m')}, **self.model.params['height_upper'])*u.m.to('au')
+        x_samples, y_samples, z_samples = GridTools.get_sky_from_disc_coords(lev, phi_list, zp, **self.model.params['orientation']) 
+    
+        x_min, x_max, y_min, y_max = self.extent
+        j_samples = (x_samples - x_min) / (x_max - x_min) * (self.X.shape[1] - 1)
+        i_samples = (y_samples - y_min) / (y_max - y_min) * (self.X.shape[0] - 1)
+
+        coords = np.vstack([i_samples, j_samples])
+        prop_interp = map_coordinates(prop, coords, order=1, mode='nearest')
+
+        return prop_interp, np.degrees(phi_list), x_samples, y_samples
+
     def prop_along_coords(self,
                           coord_ref=None,
                           surface='upper',
@@ -109,6 +125,7 @@ class Rail(object):
                           color_bounds=[200, 400],
                           colors=['red', 'dodgerblue', '#FFB000'],
                           lws=[0.3, 0.3, 0.3], lw_ax2_factor=1,
+                          interpgrid=False,
                           fold=False,
                           fold_func=np.subtract):
         """
@@ -127,7 +144,7 @@ class Rail(object):
            Additional ax(s) instance(s) to plot the location of contours in the disc. 
            
         acc_threshold : float, optional 
-           Threshold to accept points on contours at a given coord_level. If coord_level obtained for a pixel is such that np.abs(level_pixel-level_reference)<acc_threshold the pixel value is accepted
+           Threshold to accept points on contours at a given coord_level. If coord_level obtained for a pixel is such that np.abs(level_pixel-level_reference)<acc_threshold the pixel value is accepted.
 
         max_prop_threshold : float, optional 
            Threshold to accept points of contours. Rejects residuals of the contour if they are >= max_prop_threshold. Useful to reject hot pixels.
@@ -142,7 +159,10 @@ class Rail(object):
            Contour linewidths within bounds.
 
         lw_ax2_factor : float, optional
-           Fraction of lws for linewidth value of contours in ax2.
+           Linewidth fraction for contours in ax2 with respect to those in ax1.
+
+        interpgrid : bool, optional
+           If True, interpolate prop values from native grid into the path of a perfect annulus. Else, fetch prop values from native grid along annular contours found with skimage.measure.
 
         fold : bool, optional
            If True, subtract residuals by folding along the projected minor axis of the disc. Currently working for azimuthal contours only.
@@ -172,28 +192,37 @@ class Rail(object):
 
         for levi, lev in enumerate(coord_levels):
 
-            contour = measure.find_contours(coords[0], lev) #, fully_connected='high', positive_orientation='high')
+            if interpgrid:
+                prop_cont, second_cont, x_cont, y_cont = self.make_interpolated_lev(prop, lev)
+                corr_inds = slice(None)
 
-            if len(contour)==0:
-                print ('no contours found for phi =', lev)
-                continue
-            ind_good = np.argmin([np.abs(lev-coords[0][tuple(np.round(contour[i][0]).astype(int))]) for i in range(len(contour))]) #get contour id closest to lev
-            inds_cont = np.round(contour[ind_good]).astype(int)
-            inds_cont = [tuple(f) for f in inds_cont]
-            first_cont = np.array([coords[0][i] for i in inds_cont])
-            second_cont = np.array([coords[1][i] for i in inds_cont])
-            prop_cont = np.array([prop[i] for i in inds_cont])
+            else:
+                contour = measure.find_contours(coords[0], lev) #, fully_connected='high', positive_orientation='high')
+
+                if len(contour)==0:
+                    print ('no contours found for phi =', lev)
+                    continue
+                
+                ind_good = np.argmin([np.abs(lev-coords[0][tuple(np.round(contour[i][0]).astype(int))]) for i in range(len(contour))]) #get contour id closest to lev
+                inds_cont = np.round(contour[ind_good]).astype(int)
+                inds_cont = [tuple(f) for f in inds_cont]
+                first_cont = np.array([coords[0][i] for i in inds_cont])
+                second_cont = np.array([coords[1][i] for i in inds_cont])
+                prop_cont = np.array([prop[i] for i in inds_cont])
             
-            corr_inds = np.abs(first_cont-lev) < acc_threshold #clean based on acc_threshold
+                corr_inds = np.abs(first_cont-lev) < acc_threshold #clean based on acc_threshold
+                
+                _, tmp = np.unique(second_cont, return_index=True) 
+                unique_inds = np.zeros_like(second_cont).astype(bool)
+                unique_inds[tmp] = True
+                corr_inds = corr_inds & unique_inds #make sure points are not repeated
+
+
+            if lev == coord_ref:
+                zorder=10
+            else:
+                zorder=np.random.randint(0,10)
             
-            _, tmp = np.unique(second_cont, return_index=True) 
-            unique_inds = np.zeros_like(second_cont).astype(bool)
-            unique_inds[tmp] = True
-            corr_inds = corr_inds & unique_inds #make sure points are not repeated
-
-            if lev == coord_ref: zorder=10
-            else: zorder=np.random.randint(0,10)
-
             if color_bounds is None:
                 if isinstance(colors, Iterable) and not isinstance(colors, str):
                     color = colors[levi]
@@ -296,9 +325,15 @@ class Rail(object):
                     lev_list.append(lev)
                 """
             else:
-                ind_sort = np.argsort(second_cont[corr_inds]) #sorting by azimuth/radius to avoid 'joint' boundaries in plot
-                coord_list.append(second_cont[corr_inds][ind_sort])
-                resid_list.append(prop_cont[corr_inds][ind_sort])
+                if interpgrid:
+                    coord_list.append(second_cont)
+                    resid_list.append(prop_cont)
+                    corr_inds = ind_sort = slice(None)
+                else:
+                    ind_sort = np.argsort(second_cont[corr_inds]) #sorting by azimuth/radius to avoid 'joint' boundaries in plot
+                    coord_list.append(second_cont[corr_inds][ind_sort])
+                    resid_list.append(prop_cont[corr_inds][ind_sort])
+
                 color_list.append(color)
                 lev_list.append(lev)
 
@@ -306,8 +341,9 @@ class Rail(object):
                     ax.plot(second_cont[corr_inds][ind_sort], prop_cont[corr_inds][ind_sort], color=color, lw=lw, zorder=zorder)
 
             if ax2 is not None:
-                x_cont = np.array([X[i] for i in inds_cont])
-                y_cont = np.array([Y[i] for i in inds_cont])
+                if not interpgrid:
+                    x_cont = np.array([X[i] for i in inds_cont])
+                    y_cont = np.array([Y[i] for i in inds_cont])
             if isinstance(ax2, Axes):
                 ax2.plot(x_cont[corr_inds], y_cont[corr_inds], color=color, lw=lw*lw_ax2_factor)
             elif isinstance(ax2, list):
@@ -325,8 +361,7 @@ class Rail(object):
                                    [float, object, object, object]
                 )
         ]
-
-    
+        
     def get_average(self, surface='upper', 
                     av_func=np.nanmean,
                     mask_ang=0,

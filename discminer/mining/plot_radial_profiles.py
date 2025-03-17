@@ -213,7 +213,7 @@ if args.moment=='velocity':
     else:
         mask_map_ref = None
 
-    kw_avg = dict(surface=ref_surf, av_func=np.nanmean, mask_ang=mask_ang, sigma_thres=args.sigma, mask_from_map=mask_map_ref)
+    kw_avg = dict(surface=ref_surf, av_func=np.nanmean, mask_ang=mask_ang, sigma_thres=args.sigma, mask_from_map=mask_map_ref, interpgrid=args.interpgrid)
     
     #VZ
     rail_vz = Rail(model, residuals, R_prof)
@@ -249,7 +249,7 @@ if args.moment=='velocity':
     vr = np.where(np.abs(vr)>5, np.nan, vr) #hot pixels
     
     rail_vr = Rail(model, vr, R_prof)
-    vel_r, vel_r_error = rail_vr.get_average(mask_ang=0.0, surface=ref_surf, av_func=np.nanmedian)
+    vel_r, vel_r_error = rail_vr.get_average(mask_ang=0.0, surface=ref_surf, av_func=np.nanmedian, interpgrid=args.interpgrid)
     
     #Perfect Keplerian rotation
     coords = {'R': R_prof*u.au.to('m')}    
@@ -298,7 +298,7 @@ if args.moment=='velocity':
     rail_phi = Rail(model, np.abs(moment_model-vsys), R_prof)
     #vel_phi, _ = rail_phi.get_average(mask_ang=mask_ang, surface=ref_surf)
     vel_phi, _ = rail_phi.get_average(surface=ref_surf, av_func=np.nanmean, mask_ang=mask_ang, sigma_thres=np.inf,
-                                      mask_from_map=mask_map_ref, tag=tag_base+'_vphi_model', plot_diagnostics=True)
+                                      mask_from_map=mask_map_ref, tag=tag_base+'_vphi_model', interpgrid=args.interpgrid, plot_diagnostics=True)
     div_factor_model = get_normalisation(mask_ang, component='phi')
     vel_phi /= div_factor_model
     ysav_phi, ysav_phi_deriv_mod = make_savgol(vel_phi)
@@ -342,30 +342,30 @@ else:
     #*****************
     #ABSOLUTE PROFILES
     #*****************
-    kw_avg = dict(surface=ref_surf, av_func=np.nanmedian, mask_ang=mask_ang, sigma_thres=args.sigma, mask_from_map=mask_map_ref, plot_diagnostics=True)
+    kw_avg = dict(surface=ref_surf, av_func=np.nanmedian, mask_ang=mask_ang, sigma_thres=args.sigma, mask_from_map=mask_map_ref, interpgrid=args.interpgrid, plot_diagnostics=True)
         
     fig, ax = plt.subplots(ncols=1, nrows=2, figsize=figsize2row)
 
     #DATA CURVE
-    rail_phi = Rail(model, moment_data, R_prof)
-    vel_phi, vel_phi_error = rail_phi.get_average(**kw_avg)
+    rail = Rail(model, moment_data, R_prof)
+    radprof, radprof_error = rail.get_average(**kw_avg)
 
-    ysav_phi, ysav_phi_deriv = make_savgol(vel_phi)    
-    make_profile(ax[0], R_prof, ysav_phi, vel_phi, vel_phi_error, kind='data')    
+    ysav, ysav_deriv = make_savgol(radprof)    
+    make_profile(ax[0], R_prof, ysav, radprof, radprof_error, kind='data')    
 
     #MODEL CURVE
-    rail_phi = Rail(model, moment_model, R_prof)
-    vel_phi, vel_phi_error = rail_phi.get_average(**kw_avg)
+    rail = Rail(model, moment_model, R_prof)
+    radprof, radprof_error = rail.get_average(**kw_avg)
 
-    ysav_phi, ysav_phi_deriv = make_savgol(vel_phi)
-    make_profile(ax[0], R_prof, ysav_phi, vel_phi, vel_phi_error, kind='model')        
+    ysav, ysav_deriv = make_savgol(radprof)
+    make_profile(ax[0], R_prof, ysav, radprof, radprof_error, kind='model')        
 
     #RESIDUALS
-    rail_phi = Rail(model, residuals, R_prof)
-    vel_phi, vel_phi_error = rail_phi.get_average(**kw_avg)
+    rail = Rail(model, residuals, R_prof)
+    radprof, radprof_error = rail.get_average(**kw_avg)
 
-    ysav_phi, ysav_phi_deriv = make_savgol(vel_phi)
-    make_profile(ax[1], R_prof, ysav_phi, vel_phi, vel_phi_error, kind='residuals')
+    ysav, ysav_deriv = make_savgol(radprof)
+    make_profile(ax[1], R_prof, ysav, radprof, radprof_error, kind='residuals')
 
     #***********
     #DECORATIONS
