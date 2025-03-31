@@ -930,7 +930,6 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         
         FrontendUtils._print_logo()        
 
-        self.test_v = 7
         
         self.prototype = prototype
         self.verbose = verbose
