@@ -5,7 +5,7 @@ plottools module
 import os
 import copy
 import matplotlib
-import autograd.numpy as np
+import numpy as np
 from math import ceil
 import scipy.stats as st
 import astropy.units as u
