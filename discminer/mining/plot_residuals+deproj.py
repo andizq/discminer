@@ -22,7 +22,6 @@ from discminer.plottools import (make_round_map,
                                  get_cmap_from_color,
                                  get_continuous_cmap)
 
-
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy import units as u

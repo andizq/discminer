@@ -1,8 +1,10 @@
 from discminer.mining_control import _mining_moment_residuals
 from discminer.mining_utils import (get_2d_plot_decorators,
+                                    init_data_and_model,                                    
                                     get_noise_mask,
                                     load_moments,
                                     load_disc_grid,
+                                    mark_planet_location,
                                     show_output)
 
 from discminer.core import Data
@@ -63,8 +65,7 @@ au_to_m = u.au.to('m')
 #********************
 #LOAD DATA AND GRID
 #********************
-datacube = Data(file_data, dpc) # Read data and convert to Cube object
-#noise_mean, mask = get_noise_mask(datacube)
+datacube, model = init_data_and_model(Rmin=0, Rmax=Rmax)
 
 #Useful definitions for plots
 with open('grid_extent.json') as json_file:
@@ -141,6 +142,7 @@ for i,axi in enumerate(ax):
     #"""
     
 datacube.plot_beam(ax[0], fc='0.8')
+mark_planet_location(ax[2], args, edgecolor='k', lw=2.0, s=200, coords='sky', model=model, midplane=False)
 
 plt.savefig('moment+residuals_%s.png'%mtags['base'], bbox_inches='tight', dpi=200)
 show_output(args)

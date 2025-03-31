@@ -15,9 +15,11 @@ from discminer.plottools import (make_up_ax,
                                  use_discminer_style)
 
 import json
+import copy
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
+from scipy.ndimage import map_coordinates
 from astropy import units as u
 
 use_discminer_style()
@@ -26,9 +28,9 @@ if __name__ == '__main__':
     parser = _mining_pv_diagram(None)
     args = parser.parse_args()
 
-#**************************
-#JSON AND SOME DEFINITIONS
-#**************************
+#**********************
+#JSON AND PARSER STUFF
+#**********************
 with open('parfile.json') as json_file:
     pars = json.load(json_file)
 
@@ -36,12 +38,14 @@ meta = pars['metadata']
 best = pars['best_fit']
 custom = pars['custom']
 
+Mstar = best['velocity']['Mstar']
 vsys = best['velocity']['vsys']
 Rout = best['intensity']['Rout']
 incl = best['orientation']['incl']
 PA = best['orientation']['PA']
 xc = best['orientation']['xc']
 yc = best['orientation']['yc']
+vel_pars = best['velocity']
 
 rings = custom['rings']
 gaps = custom['gaps']
@@ -49,6 +53,9 @@ kinks = []
 
 ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get_2d_plot_decorators(args.moment)
     
+#****************
+#SOME DEFINITIONS
+#****************
 file_data = meta['file_data']
 tag = meta['tag']
 
@@ -58,9 +65,9 @@ au_to_m = u.au.to('m')
 pvphi = np.radians(args.pvphi)
 pvcmap = get_discminer_cmap('peakintensity')
 
-#*******************
+#********************
 #LOAD DATA AND GRID
-#*******************
+#********************
 datacube, model = init_data_and_model(Rmin=0, Rmax=1.0)
 noise_mean, mask = get_noise_mask(datacube, thres=2)
 vchans_shifted = datacube.vchannels - vsys
@@ -74,18 +81,35 @@ extent= np.array([-xmax, xmax, -xmax, xmax])
 
 beam_au = datacube.beam_size.to('au').value
 
-moment_data, moment_model, residuals, mtags = load_moments(args, mask=mask)
-R_prof = np.arange(args.Rinner*beam_au, args.Router*Rout, beam_au/4)
+if args.surface in ['up', 'upper']:
+    z_func = model.z_upper_func
+    z_pars = best['height_upper']
+    
+elif args.surface in ['low', 'lower']:
+    z_func = model.z_lower_func
+    z_pars = best['height_lower']
 
-#*********************
-#DISC REFERENCE FRAME
-#*********************
+#**********************
+#DISC REFERENCE SYSTEM
+#**********************
 R, phi, z = load_disc_grid() #No need to make_model
 R_au = R[args.surface]/au_to_m
 R_au_flat = R_au.flatten()
 phi_rad = phi[args.surface]
+phi_rad_flat = phi_rad.flatten()
 indices = np.arange(len(R_au_flat))
 
+#*******************************
+#MOMENT MAPS AND RADIAL PROFILE
+#*******************************
+moment_data, moment_model, residuals, mtags = load_moments(args, mask=mask)
+
+R_prof = np.arange(args.Rinner*beam_au, args.Router*Rout, beam_au/4)
+R_vkep = np.append(np.linspace(0.1*R_prof[0], R_prof[0], 10), R_prof[1:])
+
+#******
+#UTILS
+#******
 def get_skypixel_ij(Ri, phii, tol=beam_au):
 
     phi_diff = np.abs(phi_rad - phii).flatten()
@@ -101,13 +125,44 @@ def get_skypixel_ij(Ri, phii, tol=beam_au):
 
     return np.unravel_index(indbest, R_au.shape)
 
+def get_sky_intensity(phii):
+
+    zp = z_func({'R': R_prof*u.au.to('m')}, **z_pars)*u.m.to('au')
+    x_samples,y_samples,z_samples = GridTools.get_sky_from_disc_coords(R_prof, phii, zp, incl, PA, xc, yc) 
+    
+    x_min, x_max, y_min, y_max = extent
+    j_samples = (x_samples - x_min) / (x_max - x_min) * (datacube.data.shape[2] - 1)
+    i_samples = (y_samples - y_min) / (y_max - y_min) * (datacube.data.shape[1] - 1)
+
+    coords = np.vstack([i_samples, j_samples])
+    intensity_along_ray = np.zeros((datacube.nchan, len(R_prof)))
+    
+    for n in range(datacube.nchan):
+        intensity_along_ray[n] = map_coordinates(datacube.data[n], coords, order=1, mode='nearest')
+    
+    return intensity_along_ray.T    
+
+def get_vkep(Mstar=None):
+
+    R_prof = R_vkep*u.au.to('m')
+    z_prof = z_func({'R': R_prof}, **z_pars)
+
+    if Mstar is None:
+        v_pars = vel_pars
+    else:
+        v_pars = copy.copy(vel_pars)
+        v_pars['Mstar'] = Mstar
+        
+    v_m = model.velocity_func({'R': R_prof, 'z': z_prof}, **v_pars)
+
+    return v_m*np.sin(incl)*np.cos(pvphi)
+
 #**********
 #MAKE PLOT
-#**********
+#*********
 fig, ax = plt.subplots(ncols=2, nrows=1, figsize=(15,8))
 
 ax[0].set_aspect(1)
-
 pos0 = ax[0].get_position()
 height1 = 0.5
 ax1 = fig.add_axes([pos0.x1+0.05, pos0.y0+0.5*pos0.height-0.5*height1, 0.4, height1])
@@ -115,56 +170,47 @@ ax[1].axis('off')
 
 ax_cbar0 = fig.add_axes([pos0.x0, 0.09, pos0.width, 0.04])
 
-
-if args.surface=='upper':
-    z_prof = model.z_upper_func({'R': R_prof*u.au.to('m')}, **model.params['height_upper'])*u.m.to('au')
-elif args.surface=='lower':
-    z_prof = model.z_lower_func({'R': R_prof*u.au.to('m')}, **model.params['height_lower'])*u.m.to('au')
-else:
-    raise InputError(surface, "Only 'upper' or 'lower' are valid surfaces.")
-
-
-kwargs_axes = dict(ls=':', lw=4.5, dash_capstyle='round', dashes=(0.5, 1.5), alpha=1)
-
-make_ax = lambda ax, x, y, color: ax.plot(x, y, color=color, **kwargs_axes)        
-
-pv_axis0 = np.zeros_like(R_prof) + pvphi
-pv_axis1 = np.zeros_like(R_prof) + pvphi - np.pi 
-
-isort = np.argsort(R_prof)
-x_cont, y_cont, _ = GridTools.get_sky_from_disc_coords(R_prof[isort], pv_axis0, z_prof[isort], incl, PA, xc, yc)    
-make_ax(ax[0], x_cont, y_cont, 'tomato')
-
-x_cont, y_cont, _ = GridTools.get_sky_from_disc_coords(R_prof[isort], pv_axis1, z_prof[isort], incl, PA, xc, yc)    
-make_ax(ax[0], x_cont, y_cont, 'dodgerblue')
-
-isky_p, jsky_p = [], []
-isky_m, jsky_m = [], []
-
-line_profile_p = []
-line_profile_m = []
-for Ri in R_prof:
-    i, j = get_skypixel_ij(Ri, pvphi)
-    isky_p.append(i)
-    jsky_p.append(j)
-    #ax[0].scatter(model.skygrid['meshgrid'][0][i,j]/au_to_m, model.skygrid['meshgrid'][1][i,j]/au_to_m, s=80, zorder=10)
-    line_profile_p.append(datacube.data[:,i,j])
-
-    i, j = get_skypixel_ij(Ri, pvphi-np.pi)
-    isky_m.append(i)
-    jsky_m.append(j)
-    line_profile_m.append(datacube.data[:,i,j])
-    
-line_profiles = np.append(line_profile_m[::-1], line_profile_p, axis=0)
+intensity_interp_p = get_sky_intensity(pvphi)
+intensity_interp_n = get_sky_intensity(pvphi-np.pi)
+line_profiles = np.append(intensity_interp_n[::-1], intensity_interp_p, axis=0)
 
 R_axis = np.append(-R_prof[::-1], R_prof)
 ax1.contourf(R_axis, vchans_shifted, line_profiles.T, levels=np.linspace(0, np.nanmax(line_profiles), 32), cmap=pvcmap)
 
 ax1.fill_between([-R_prof[0], R_prof[0]], vchans_shifted[0], vchans_shifted[-1], color='k', alpha=0.4)
 
-#****************
-#PLOT MOMENT MAP
-#****************
+#***************
+#OVERLAY PV CUT
+#***************
+z_prof = z_func({'R': R_prof*u.au.to('m')}, **z_pars)*u.m.to('au')
+isort = np.argsort(R_prof)
+ 
+kwargs_axes = dict(ls=':', lw=4.5, dash_capstyle='round', dashes=(0.5, 1.5), alpha=1)
+make_ax = lambda ax, x, y, color: ax.plot(x, y, color=color, **kwargs_axes)        
+ 
+pv_axis0 = np.zeros_like(R_prof) + pvphi
+pv_axis1 = np.zeros_like(R_prof) + pvphi - np.pi 
+ 
+x_cont, y_cont, _ = GridTools.get_sky_from_disc_coords(R_prof[isort], pv_axis0, z_prof[isort], incl, PA, xc, yc)    
+make_ax(ax[0], x_cont, y_cont, 'tomato')
+ 
+x_cont, y_cont, _ = GridTools.get_sky_from_disc_coords(R_prof[isort], pv_axis1, z_prof[isort], incl, PA, xc, yc)    
+make_ax(ax[0], x_cont, y_cont, 'dodgerblue')
+
+#*************
+#OVERLAY VKEP
+#*************
+v_model = get_vkep()
+kw_plot = dict(color='k', lw=2, dash_capstyle='round', dashes=(2.0, 2.0), alpha=0.9)
+ax1.plot(R_vkep, v_model, -R_vkep, -v_model, **kw_plot)
+#v_p = get_vkep(1.1*Mstar)
+#v_n = get_vkep(0.9*Mstar)
+#ax1.plot(R_vkep, v_p*np.sin(incl), -R_vkep, -v_p*np.sin(incl), **kw_plot)
+#ax1.plot(R_vkep, v_n*np.sin(incl), -R_vkep, -v_n*np.sin(incl), **kw_plot)
+
+#***********
+#MOMENT MAP
+#***********
 kwargs_im = dict(cmap=cmap_mom, extent=extent, levels=levels_im)
 kwargs_cc = dict(colors='k', linestyles='-', extent=extent, levels=levels_cc, linewidths=0.4)
 kwargs_cbar = dict(orientation='horizontal', pad=0.03, shrink=0.95, aspect=15)
@@ -198,6 +244,8 @@ Contours.emission_surface(ax[0], R, phi, extent=extent,
                           kwargs_phi={'colors': '0.1', 'linewidths': 0.4}
 )
    
+
+
 ax[0].set_ylabel('Offset [au]', fontsize=15)
 ax[0].set_title(ctitle, pad=40, fontsize=17)
 

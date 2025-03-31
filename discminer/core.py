@@ -91,6 +91,7 @@ class Data(Cube):
                 beams = Beams.from_fits_bintable(cube_vel.hdulist[1])
                 beam = beams.common_beam() #Smallest common beam
                 header.update(beam.to_header_keywords()) #Add single beam to header
+                
             else:
                 raise InputError(cube_vel,
                                  'The input datacube is not valid. Only the following spectral_cube instances are supported: SpectralCube, VaryingResolutionSpectralCube.')

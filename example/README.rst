@@ -8,7 +8,7 @@ To get started, let's download and prepare (clip and downsample) the datacube th
 
 .. code-block:: bash
 
-   ./download-MAPS.sh #Download MWC480 12CO data from the MAPS website
+   bash download-MAPS.sh #Download MWC480 12CO data from the MAPS website
    python prepare_data.py #Clip and downsample cube
 
 Here is a preview of selected channel maps from this disc and tracer,
