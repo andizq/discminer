@@ -17,8 +17,8 @@ from multiprocessing import Pool
 import matplotlib
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
-import autograd.numpy as np
-from autograd import grad
+import numpy as np
+
 from astropy.convolution import Gaussian2DKernel, convolve
 from astropy import units as u
 from matplotlib import ticker
@@ -35,7 +35,6 @@ from .rail import Contours
 from .grid import GridTools
 
 from .diff_interp import get_griddata_sparse as get_griddata
-print('I am using the new interpolation strategy')
 
 os.environ["OMP_NUM_THREADS"] = "1"
 
