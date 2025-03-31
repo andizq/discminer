@@ -89,7 +89,7 @@ ax2 = fig.add_axes([0.85,0.6,0.3*6/14,0.3])
 
 R_list, phi_list, resid_list, color_list = rail.prop_along_coords(coord_ref=args.radius, surface=args.surface,
                                                                   color_bounds=color_bounds, lws=lws,
-                                                                  ax=ax, ax2=ax2)
+                                                                  ax=ax, ax2=ax2, interpgrid=args.interpgrid)
 
 ax.set_xlabel(r'Azimuth [deg]')
 ax.set_ylabel(clabel)

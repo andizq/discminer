@@ -1421,7 +1421,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
 
         return R, phi, z, R_nonan, phi_nonan, z_nonan
 
-    def make_disc_axes(self, ax, Rmax=None, surface='upper'): 
+    def make_disc_axes(self, ax, Rmax=None, surface='upper', **kwargs_plot): 
         if Rmax is None:
             Rmax = self.Rmax.to('au')
         else:
@@ -1439,7 +1439,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         else:
             raise InputError(surface, "Only 'upper' or 'lower' are valid surfaces.")
 
-        Contours.disc_axes(ax, R_daxes.value, z_daxes, incl, PA, xc=xc, yc=yc)
+        Contours.disc_axes(ax, R_daxes.value, z_daxes, incl, PA, xc=xc, yc=yc, **kwargs_plot)
 
     def make_emission_surface(self, ax, R_lev=None, phi_lev=None,
                               proj_offset=None, which='both',

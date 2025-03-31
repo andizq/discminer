@@ -644,7 +644,7 @@ def make_and_save_filaments(map2d,
         return fil_pos_list, fil_neg_list, colors_dict
 
 
-def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', zfunc=None, zpars=None, incl=None, PA=None, xc=None, yc=None, dpc=None, kwargs_text={}, **kwargs_scatter):
+def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', model=None, zfunc=None, zpars=None, incl=None, PA=None, xc=None, yc=None, dpc=None, midplane=True, kwargs_text={}, **kwargs_scatter):
 
     kwargs_sc = dict(edgecolors='gold', facecolors='none', marker='o', s=450, lw=4.5, alpha=1.0, label=None, zorder=22)
     kwargs_sc.update(kwargs_scatter)
@@ -667,6 +667,23 @@ def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', zfunc
     if len(labels)==1:
         labels = labels*npoints
 
+    #Fetch orientation and surface parameters from model obj if passed
+    if (coords=='sky' or args.input_coords=='sky') and model is not None:
+
+        dpc = model.dpc
+        orientation = model.params['orientation']
+        incl = orientation['incl']
+        PA = orientation['PA']
+        xc = orientation['xc']
+        yc = orientation['yc']
+
+        if args.surface=='upper':
+            zpars = model.params['height_upper']
+            zfunc = model.z_upper_func
+        else:
+            zpars = model.params['height_lower']
+            zfunc = model.z_lower_func
+            
     xcoords, ycoords = [], []
     for i in range(npoints):
 
@@ -682,6 +699,8 @@ def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', zfunc
             elif coords=='sky':
                 phii = np.radians(phis[i])
                 zp = zfunc({'R': rs[i]*u.au.to('m')}, **zpars)*u.m.to('au')
+                if midplane:
+                    zp*=0
                 xi,yi,zi = GridTools.get_sky_from_disc_coords(rs[i], phii, zp, incl, PA, xc, yc) 
 
         elif args.input_coords=='sky':
@@ -691,7 +710,7 @@ def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', zfunc
             ysky = rsky*np.cos(phisky)
             
             if coords=='disc':
-                xdisc, ydisc = GridTools.get_disc_from_sky_coords(xsky, ysky, zfunc, zpars, incl, PA, xc=xc, yc=yc, midplane=True)
+                xdisc, ydisc = GridTools.get_disc_from_sky_coords(xsky, ysky, zfunc, zpars, incl, PA, xc=xc, yc=yc, midplane=midplane)
                 
                 if args.projection=='cartesian':
                     xi, yi = xdisc, ydisc
