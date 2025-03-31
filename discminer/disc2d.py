@@ -1087,7 +1087,6 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                  nthreads=None,
                  backend=None, #emcee
                  use_zeus=False,
-                 use_nuts=False,
                  #custom_header={}, custom_kind={}, mc_layers=1,
                  z_mirror=False, 
                  plot_walkers=True,
@@ -1132,7 +1131,6 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         self.mc_nchan = len(vchannels)
         self.noise_stddev = noise_stddev
         if use_zeus: import zeus as sampler_id
-        elif use_nuts: import emcee_nuts.NUTSSampler as sampler_id 
         else: import emcee as sampler_id
             
         kwargs_model.update({'z_mirror': z_mirror})
@@ -1186,10 +1184,8 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                 if not pool.is_master():
                     pool.wait()
                     sys.exit(0)
-                if use_nuts:
-                    sampler = sampler_id.NUTSSampler(ndim, self.ln_likelihood, self.grad_ln_likelihood)
-                else:
-                    sampler = sampler_id.EnsembleSampler(nwalkers, ndim, self.ln_likelihood, pool=pool, backend=backend, kwargs=kwargs_model)                                                        
+                
+                sampler = sampler_id.EnsembleSampler(nwalkers, ndim, self.ln_likelihood, pool=pool, backend=backend, kwargs=kwargs_model)                                                        
                 start = time.time()
                 if backend is not None and backend.iteration!=0:
                     sampler.run_mcmc(None, nsteps, progress=True)
@@ -1201,10 +1197,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
 
         else:
             with Pool(processes=nthreads) as pool:
-                if use_nuts:
-                    sampler = sampler_id.NUTSSampler(ndim, self.ln_likelihood, self.grad_ln_likelihood)
-                else:
-                    sampler = sampler_id.EnsembleSampler(nwalkers, ndim, self.ln_likelihood, pool=pool, backend=backend, kwargs=kwargs_model)                                                        
+                sampler = sampler_id.EnsembleSampler(nwalkers, ndim, self.ln_likelihood, pool=pool, backend=backend, kwargs=kwargs_model)                                                        
                 start = time.time()
                 if backend is not None and backend.iteration!=0:
                     sampler.run_mcmc(None, nsteps, progress=True)
