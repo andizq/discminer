@@ -1,4 +1,4 @@
-import autograd.numpy as np
+import numpy as np
 from scipy.interpolate import LinearNDInterpolator
 import scipy.sparse as sp
 
