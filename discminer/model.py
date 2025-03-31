@@ -3,7 +3,7 @@ from .tools.utils import InputError
 from .disc2d import Model
 from .cart import *
 
-import autograd.numpy as np
+import numpy as np
 
 from astropy.io import fits
 from astropy import units as u

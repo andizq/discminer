@@ -1,7 +1,7 @@
 from .tools.utils import FrontendUtils
 from astropy import units as u
 from scipy.optimize import root
-import autograd.numpy as np
+import numpy as np
 
 _break_line = FrontendUtils._break_line
 au_to_m = u.au.to('m')
