@@ -890,9 +890,6 @@ class Mcmc:
             
         return lnx2 if np.isfinite(lnx2) else -np.inf
     
-    def grad_ln_likelihood(self, new_params, **kwargs):
-        return grad(self.ln_likelihood)
-    
 
 class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
     
