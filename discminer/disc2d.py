@@ -18,11 +18,12 @@ import matplotlib
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
+
 from astropy.convolution import Gaussian2DKernel, convolve
 from astropy import units as u
 from matplotlib import ticker
 from scipy.integrate import quad
-from scipy.interpolate import griddata, interp1d
+from scipy.interpolate import interp1d    
 from scipy.optimize import curve_fit
 from scipy.special import ellipe, ellipk
 from .tools.utils import FrontendUtils, InputError, _get_beam_from, hypot_func
@@ -32,6 +33,8 @@ from .core import ModelGrid
 from .cube import Cube
 from .rail import Contours
 from .grid import GridTools
+
+from .diff_interp import get_griddata_sparse as get_griddata
 
 os.environ["OMP_NUM_THREADS"] = "1"
 
@@ -237,7 +240,7 @@ class SurfaceDensity:
         else: R = coord['R'] 
         R = R/sfu.au
         return Ec*(R/Rc)**-gamma * np.exp(-(R/Rc)**(2-gamma))
-    
+
 
 class Temperature:
     @property
@@ -927,6 +930,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         
         FrontendUtils._print_logo()        
 
+        
         self.prototype = prototype
         self.verbose = verbose
 
@@ -1049,8 +1053,6 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             self.params = {}
             for key in self.categories: self.params[key] = {}
             print ('Available categories for prototyping:', self.params.keys())            
-
-
         else: 
             self.mc_header, self.mc_kind, self.mc_nparams, self.mc_boundaries_list, self.mc_params_indices = Model._get_params2fit(self.mc_params, self.mc_boundaries)
             #print ('Default parameter header for mcmc fitting:', self.mc_header)
@@ -1178,7 +1180,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                 if not pool.is_master():
                     pool.wait()
                     sys.exit(0)
-               
+                
                 sampler = sampler_id.EnsembleSampler(nwalkers, ndim, self.ln_likelihood, pool=pool, backend=backend, kwargs=kwargs_model)                                                        
                 start = time.time()
                 if backend is not None and backend.iteration!=0:
@@ -1365,11 +1367,19 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             if PA: x_pro, y_pro = self._rotate_sky_plane(x_pro, y_pro, PA)             
             x_pro = x_pro+xc
             y_pro = y_pro+yc
-            R[side] = griddata((x_pro, y_pro), self.R_true, (self.mesh[0], self.mesh[1]), method='linear')
-            x_grid = griddata((x_pro, y_pro), xt, (self.mesh[0], self.mesh[1]), method='linear')
-            y_grid = griddata((x_pro, y_pro), yt, (self.mesh[0], self.mesh[1]), method='linear')
+            
+            griddata_diff = get_griddata((x_pro, y_pro), (self.mesh[0], self.mesh[1]))
+            
+            
+            #R[side] = griddata((x_pro, y_pro), self.R_true, (self.mesh[0], self.mesh[1]), method='linear')
+            R[side] = griddata_diff(self.R_true)
+            #x_grid = griddata((x_pro, y_pro), xt, (self.mesh[0], self.mesh[1]), method='linear')
+            x_grid = griddata_diff(xt)
+            #y_grid = griddata((x_pro, y_pro), yt, (self.mesh[0], self.mesh[1]), method='linear')
+            y_grid = griddata_diff(yt)
             phi[side] = np.arctan2(y_grid, x_grid) #-np.pi, np.pi output for user 
-            z[side] = griddata((x_pro, y_pro), z_true[side], (self.mesh[0], self.mesh[1]), method='linear')
+            #z[side] = griddata((x_pro, y_pro), z_true[side], (self.mesh[0], self.mesh[1]), method='linear')
+            z[side] = griddata_diff( z_true[side])
             #r[side] = hypot_func(R[side], z[side])
             if self.Rmax_m is not None: 
                 for prop in [R, phi, z]: prop[side] = np.where(np.logical_and(R[side]<self.Rmax_m, R[side]>self.Rmin_m), prop[side], np.nan)
@@ -1519,20 +1529,22 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             if PA: x_pro, y_pro = self._rotate_sky_plane(x_pro, y_pro, PA)             
             x_pro = x_pro+xc
             y_pro = y_pro+yc
-            if self.Rmax_m is not None: R_grid = griddata((x_pro, y_pro), self.R_true, (self.mesh[0], self.mesh[1]), method='linear')
+            
+            griddata_diff = get_griddata((x_pro, y_pro), (self.mesh[0], self.mesh[1]))
+            if self.Rmax_m is not None: R_grid = griddata_diff(self.R_true) #griddata((x_pro, y_pro), self.R_true, (self.mesh[0], self.mesh[1]), method='linear')
             x_pro_dict[side] = x_pro
             y_pro_dict[side] = y_pro
             z_pro_dict[side] = z_pro
 
             if self.subpixels:
                 for i in range(self.subpixels_sq): #Subpixels are projected on the same plane where true grid is projected
-                    props[0][i][side] = griddata((x_pro, y_pro), props[0][i][side], (self.mesh[0], self.mesh[1]), method='linear') #subpixels velocity
+                    props[0][i][side] = griddata_diff(props[0][i][side]) #griddata((x_pro, y_pro), props[0][i][side], (self.mesh[0], self.mesh[1]), method='linear') #subpixels velocity
                 for prop in props[1:]:
-                    prop[side] = griddata((x_pro, y_pro), prop[side], (self.mesh[0], self.mesh[1]), method='linear')
+                    prop[side] =  griddata_diff(prop[side]) #griddata((x_pro, y_pro), prop[side], (self.mesh[0], self.mesh[1]), method='linear')
                     if self.Rmax_m is not None: prop[side] = np.where(np.logical_and(R_grid<self.Rmax_m, R_grid>self.Rmin_m), prop[side], np.nan) #Todo: allow for R_in as well
             else:
                 for prop in props:
-                    if not isinstance(prop[side], numbers.Number): prop[side] = griddata((x_pro, y_pro), prop[side], (self.mesh[0], self.mesh[1]), method='linear')
+                    if not isinstance(prop[side], numbers.Number): prop[side] = griddata_diff(prop[side]) #griddata((x_pro, y_pro), prop[side], (self.mesh[0], self.mesh[1]), method='linear')
                     if self.Rmax_m is not None: prop[side] = np.where(np.logical_and(R_grid<self.Rmax_m, R_grid>self.Rmin_m), prop[side], np.nan)
 
         #*************************************
