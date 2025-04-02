@@ -205,7 +205,8 @@ def intensity_powerlaw_rbreak_hydro(coord, I0=30.0, p0=-0.4, p1=-0.4, z0=100, q=
     Rbreak*=au_to_m
     A = I0*Rbreak**-p0*z0**-q
     B = I0*Rbreak**-p1*z0**-q
-    Ieff = np.where(R<=Rbreak, A*R**p0*np.abs(z)**q, B*R**p1*np.abs(z)**q)
+    Ieff = np.where(R<=Rbreak, A*R**p0*np.abs(z)**q, B*R**p1*np.abs(z)**q) * (sigma/np.max(sigma))**weight
+    #print (np.nanmax(sigma), np.nanmin(sigma))
     ind = R>Rout
     Ieff[ind] = 0.0
     return Ieff
