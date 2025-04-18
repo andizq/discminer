@@ -20,8 +20,8 @@ file_data = 'MWC_480_CO_220GHz.robust_0.5.JvMcorr.image.pbcor_clipped_downsamp_1
 tag_out = 'mwc480_12co_0p2_maps' #PREFERRED FORMAT: disc_mol_chan_program_extratags
 tag_in = tag_out
 
-nwalkers = 150
-nsteps = 15000
+nwalkers = 230
+nsteps = 5000
 
 dpc = 162.0*u.pc
 vel_sign = -1 #Rotation direction: -1 or 1
@@ -77,7 +77,7 @@ model.mc_params['velocity']['vel_sign'] = vel_sign
 model.mc_params['velocity']['Mstar'] = True
 model.mc_params['velocity']['vsys'] = True 
 model.mc_params['orientation']['incl'] = True
-model.mc_params['orientation']['PA'] = True 
+model.mc_params['orientation']['PA'] = True
 model.mc_params['orientation']['xc'] = True
 model.mc_params['orientation']['yc'] = True
 model.mc_params['intensity'] = {'I0': True, 'p': True, 'q': True, 'Rout': True}

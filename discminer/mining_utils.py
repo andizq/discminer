@@ -69,7 +69,12 @@ def init_data_and_model(parfile='parfile.json', Rmin=0, Rmax=1.1, twodim=False, 
     best = pars['best_fit']
     custom = pars['custom']
 
-    file_data = meta['file_data']
+    try:
+        dir_data = meta['dir_data']
+    except KeyError:
+        dir_data = './'
+        
+    file_data = os.path.join(dir_data, meta['file_data'])
     Rout = best['intensity']['Rout']
     dpc = meta['dpc']*u.pc
 
@@ -167,23 +172,23 @@ def init_data_and_model(parfile='parfile.json', Rmin=0, Rmax=1.1, twodim=False, 
         return datacube
 
     
-def read_json(decimals=True): #Read json file again but keep track of (if) decimals
+def read_json(parfile='parfile.json', decimals=True): #Read json file again but keep track of (if) decimals
     if decimals:
         parse_func = lambda x: decimal.Decimal(str(x))
     else:
         parse_func = float
 
-    with open('parfile.json') as json_file: 
+    with open(parfile) as json_file: 
         pars = json.load(json_file, parse_float=parse_func)
     return pars
             
-def get_2d_plot_decorators(moment, unit_simple=False, fmt_vertical=False):    
+def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fmt_vertical=False):    
     I_res2abs = 3.0
     v_res2abs = 20.0
     L_res2abs = 5.0
     Ls_res2abs = 3.0
 
-    pars = read_json()
+    pars = read_json(parfile=parfile)
     vsys = float(pars['best_fit']['velocity']['vsys'])
     custom = pars['custom']
     meta = pars['metadata']
@@ -297,13 +302,13 @@ def get_2d_plot_decorators(moment, unit_simple=False, fmt_vertical=False):
         
     return ctitle, clabel, fclim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit
 
-def get_1d_plot_decorators(moment, tag=''):
+def get_1d_plot_decorators(moment, parfile='parfile.json', tag=''):
     I_res2abs = 5.0
     v_res2abs = 20.0
     L_res2abs = 7.0
     Ls_res2abs = 3.0
         
-    pars = read_json(decimals=False)
+    pars = read_json(parfile=parfile, decimals=False)
     vsys = float(pars['best_fit']['velocity']['vsys'])
     custom = pars['custom']
     meta = pars['metadata']
@@ -461,8 +466,12 @@ def get_noise_mask(
 def load_moments(
         args, moment=None, kernel=None, mask=[],
         clip_Rgrid=None, clip_Rmin=0*u.au, clip_Rmax=np.inf*u.au,
-        deltas=False
-):    
+        deltas=False, parfile='parfile.json'
+):
+
+    pars = read_json(parfile=parfile, decimals=False)
+    meta = pars['metadata']
+    
     if moment is None:
         moment = args.moment
 
@@ -493,10 +502,20 @@ def load_moments(
 
     if deltas:
         tag_base = 'delta_'+tag_base
+
+    try:
+        dir_data = meta['dir_data']
+    except KeyError:
+        dir_data = './'
+
+    try:
+        dir_model = meta['dir_model']
+    except KeyError:
+        dir_model = './'
         
     #Read and mask moment maps, and compute residuals
-    moment_data = fits.getdata(tag_base+'_data.fits').squeeze()
-    moment_model = fits.getdata(tag_base+'_model.fits').squeeze()
+    moment_data = fits.getdata(os.path.join(dir_data, tag_base+'_data.fits')).squeeze()
+    moment_model = fits.getdata(os.path.join(dir_model, tag_base+'_model.fits')).squeeze()
 
     try:
         if args.smooth>0.0:

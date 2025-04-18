@@ -54,6 +54,10 @@ def _mining_moments1d(parserobj, prog='moments1d', description='Make (gaussian, 
                         help="Return peak from fitted kernel (1) or global peak intensity (0). DEFAULTS to 1 (Return peak from kernel).")
     parser.add_argument('-fc', '--fit_continuum', default=0, type=int,
                         help="Fit continuum and save into .fits file? Defaults to 0")
+    parser.add_argument('-fdata', '--fit_data', default=1, type=int,
+                        help="Fit datacube and save moments into .fits files? Defaults to 1")
+    parser.add_argument('-fmodel', '--fit_model', default=1, type=int,
+                        help="Fit modelcube and save moments into .fits files? Defaults to 1")    
     add_parser_args(parser, kernel=True, planck=True, sigma=4)
     return parser
 
@@ -63,6 +67,10 @@ def _mining_moments2d(parserobj, prog='moments2d', description='Make (double Gau
                         help="Number of iterations to re-do fit on hot pixels. DEFAULS to 10")
     parser.add_argument('-ne', '--neighs', default=5, type=int,
                         help="Number of neighbour pixels on each side of hot pixel considered for the iterative fit. DEFAULS to 5")
+    parser.add_argument('-fdata', '--fit_data', default=1, type=int,
+                        help="Fit datacube and save moments into .fits files? Defaults to 1")
+    parser.add_argument('-fmodel', '--fit_model', default=1, type=int,
+                        help="Fit modelcube and save moments into .fits files? Defaults to 1")
     add_parser_args(parser, kernel='doublebell', kind=True, planck=True, sigma=3)
     return parser
 
@@ -199,6 +207,9 @@ def _mining_parcube(parserobj, prog='parcube', description='Show cube reconstruc
 
 def _mining_parfile(parserobj, prog='parfile', description='Make JSON parameter file based on input log_pars.txt and prepare_data.py'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
+    parser.add_argument('-dir_log', '--dir_log', default='./', type=str, help="Directory where log_pars.txt is located. DEFAULTS to './'")
+    parser.add_argument('-dir_data', '--dir_data', default='./', type=str, help="Directory where the input datacube.fits is located. DEFAULTS to './'")
+    parser.add_argument('-dir_model', '--dir_model', default='./', type=str, help="Directory where model files will be stored. DEFAULTS to './'")    
     parser.add_argument('-f', '--log_file', default='', type=str, help="If not specified, try to guess input log_pars.txt with existing files. DEFAULTS to ''.")
     parser.add_argument('-p', '--prepare_data', default='prepare_data.py', type=str, help="Script employed to clip and downsample the cube of interest. DEFAULTS to prepare_data.py.")
     parser.add_argument('-j', '--json_file', default='parfile.json', type=str, help="Name of output JSON file. DEFAULTS to parfile.json.")

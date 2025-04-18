@@ -34,7 +34,6 @@ Rmax = 1.1*Rout*u.au #Max model radius
 #LOAD DATA AND MODEL
 #*******************
 datacube, model = init_data_and_model()
-model.make_model()
 
 #**************
 #MAKE PLOT
