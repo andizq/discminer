@@ -45,7 +45,7 @@ def _mining_channels(parserobj, prog='channels', description='Make model channel
     parser.add_argument('-mb', '--make_beam', default=-1, choices=[-1,0,1], type=int,
                         help="Convolve by beam? Defaults to -1 (convolve if downsampling size used for fit < beam size)")
     #Define and parse additional arguments. 'True' means 'enable' the argument, they can default to different values; use -h for help.
-    add_parser_args(parser, planck=True) 
+    add_parser_args(parser, planck=True, writefits=1) 
     return parser
 
 def _mining_moments1d(parserobj, prog='moments1d', description='Make (gaussian, bell, or quadratic) moment maps and save output into .fits files'):
@@ -58,7 +58,7 @@ def _mining_moments1d(parserobj, prog='moments1d', description='Make (gaussian, 
                         help="Fit datacube and save moments into .fits files? Defaults to 1")
     parser.add_argument('-fmodel', '--fit_model', default=1, type=int,
                         help="Fit modelcube and save moments into .fits files? Defaults to 1")    
-    add_parser_args(parser, kernel=True, planck=True, sigma=4)
+    add_parser_args(parser, kernel=True, planck=True, sigma=3)
     return parser
 
 def _mining_moments2d(parserobj, prog='moments2d', description='Make (double Gauss or double Bell) moment maps and save output into .fits files'):
@@ -76,14 +76,14 @@ def _mining_moments2d(parserobj, prog='moments2d', description='Make (double Gau
 
 def _mining_moment_residuals(parserobj, prog='moment+residuals', description='Show Data vs Model moment map and residuals'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
-    add_parser_args(parser, moment=True, kernel=True, kind=True, surface=True, smooth=True, mask_phi=True, mask_R=True, Router=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True)  
+    add_parser_args(parser, moment=True, kernel=True, kind=True, sigma=3, surface=True, smooth=True, mask_phi=True, mask_R=True, Router=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True)  
     return parser
 
 def _mining_moment_offset(parserobj, prog='moment+offset', description='Show moment map and a zoom-in illustrating offset from the centre'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     parser.add_argument('-scontours', '--show_contours', default=1, type=int, help="Overlay moment map contours? DEFAULTS to 1.")
     parser.add_argument('-zoom', '--zoom_size', default=100, type=float, help="Physical size of the zoom-in region. DEFAULTS to 100 au.")
-    add_parser_args(parser, moment=True, kernel=True, kind=True, show_continuum='none', surface=True, smooth=True,
+    add_parser_args(parser, moment=True, kernel=True, kind=True, sigma=True, show_continuum='none', surface=True, smooth=True,
                     radius_planet=True, phi_planet=True, label_planet=True, input_coords=True)
     return parser
 
@@ -91,7 +91,7 @@ def _mining_residuals_deproj(parserobj, prog='residuals+deproj', description='Sh
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     add_parser_args(
         parser,
-        moment=True, kernel=True, kind=True, surface=True, projection=True, Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True, smooth=True,
+        moment=True, kernel=True, kind=True, sigma=3, surface=True, projection=True, Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True, smooth=True,
         show_continuum=True, show_filaments=True, spiral_ids=True, spiral_type=True, spiral_moment=True, colorbar=True,
         mask_R=True, mask_phi=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True
     )
@@ -100,7 +100,7 @@ def _mining_residuals_deproj(parserobj, prog='residuals+deproj', description='Sh
 def _mining_residuals_all(parserobj, prog='residuals+all', description='Show ALL moment map residuals, deprojected onto the sky OR disc reference frame'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     parser.add_argument('-c', '--coords', default='sky', type=str, choices=['disc', 'disk', 'sky'], help="Reference frame in which the maps will be displayed. DEFAULTS to 'sky'.")
-    add_parser_args(parser, kernel=True, kind=True, surface=True, Rinner=True, Router=True, smooth=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True)    
+    add_parser_args(parser, kernel=True, kind=True, sigma=3, surface=True, Rinner=True, Router=True, smooth=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True)    
     return parser
 
 def _mining_pick(parserobj, prog='pick', description='Use Pick tools. Fold residual maps and identify peak and clustered residuals'):
@@ -116,7 +116,7 @@ def _mining_pick(parserobj, prog='pick', description='Use Pick tools. Fold resid
     add_parser_args(
         parser,
         moment=True, kernel=True, kind=True, surface=True, fold=True, projection=True, Rinner=3.0, Router=0.9, absolute_Rinner=True, absolute_Router=True,
-        colorbar=True, smooth=True, mask_phi=True, mask_R=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True
+        colorbar=True, smooth=True, mask_phi=True, mask_R=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True, writetxt=1, writefits=0
     )
     return parser
 
@@ -303,7 +303,7 @@ def add_parser_args(parser,
                     mask_minor=False, mask_major=False, 
                     mask_phi=False, mask_R=False,
                     fold=False,
-                    writetxt=False, writefits=False,
+                    writetxt=False, writefits=True,
                     gradient=False,
                     colorbar=False,
                     show_continuum=False, show_filaments=False,
@@ -318,172 +318,172 @@ def add_parser_args(parser,
         else:
             return val
         
-    if moment:
+    if moment is not False:
         d0 = set_default(moment, 'velocity')
         parser.add_argument('-m', '--moment', default=d0, type=str,
                             choices=['velocity', 'linewidth', 'lineslope', 'peakint', 'peakintensity', 'v0r', 'v0phi', 'v0z', 'vr_leftover', 'delta_velocity', 'delta_linewidth', 'delta_peakintensity', 'reducedchi2'],
                             help="Type of moment map to be analysed. DEFAULTS to '%s'"%d0)
 
-    if kernel:
+    if kernel is not False:
         d0 = set_default(kernel, 'gaussian')
         parser.add_argument('-k', '--kernel', default=d0, type=str,
                             choices=['gauss', 'gaussian', 'bell', 'quadratic', 'dgauss', 'doublegaussian', 'dbell', 'doublebell'],
                             help="Kernel used for line profile fit and calculation of moment maps. DEFAULTS to '%s'"%d0)
         
-    if kind:
+    if kind is not False:
         d0 = set_default(kind, 'mask')
         parser.add_argument('-ki', '--kind', default=d0, type=str, choices=['mask', 'sum'],
                             help="Method for merging upper and lower surface kernel profiles. DEFAULTS to '%s'"%d0)
         
-    if surface:
+    if surface is not False:
         d0 = set_default(surface, 'upper')
         parser.add_argument('-s', '--surface', default=d0, type=str,
                             choices=['up', 'upper', 'low', 'lower', 'both'],
                             help="Use upper or lower surface moment map. DEFAULTS to '%s'"%d0)
     
-    if show_continuum:
+    if show_continuum is not False:
         d0 = set_default(show_continuum, 'none')
         parser.add_argument('-sc', '--show_continuum', default=d0, type=str,
                             choices=['none', 'all', 'band7', 'scattered'],
                             help="Which continuum map to show. DEFAULTS to '%s'"%d0)
 
-    if show_filaments:
+    if show_filaments is not False:
         d0 = set_default(show_filaments, 0)
         parser.add_argument('-sf', '--show_filaments', default=d0, type=int,
                             choices=[0, 1],
                             help="Make and show filaments? DEFAULTS to '%s'"%d0)        
-    if show_output:
+    if show_output is not False:
         d0 = set_default(show_output, 1)
         parser.add_argument('-so', '--show_output', default=d0, type=int,
                             choices=[0, 1],
                             help="Show output plots? DEFAULTS to '%s'"%d0)        
 
-    if show_block:
+    if show_block is not False:
         d0 = set_default(show_block, 1)
         parser.add_argument('-sb', '--show_block', default=d0, type=int,
                             choices=[0, 1],
                             help="Block ipython session when a figure is displayed? DEFAULTS to '%s'"%d0)        
         
-    if mask_minor:
+    if mask_minor is not False:
         d0 = set_default(mask_minor, 30.0)
         parser.add_argument('-b', '--mask_minor', default=d0, type=float,
                             help="+- azimuthal mask around disc minor axis for calculation of vphi and vz velocity components. DEFAULTS to %.1f deg"%d0)
 
-    if mask_major:
+    if mask_major is not False:
         d0 = set_default(mask_major, 30.0)
         parser.add_argument('-a', '--mask_major', default=d0, type=float,
                             help="+- azimuthal mask around disc major axis for calculation of vR velocity component. DEFAULTS to %.1f deg"%d0)
 
-    if mask_phi:
+    if mask_phi is not False:
         d0 = set_default(mask_phi, [])
         parser.add_argument('-mask_phi', '--mask_phi', nargs='*', default=d0, type=float, help="Azimuthal boundaries of mask(s) to apply to data and model products. FORMAT: -mask_phi 30 40 -60 -40 means two masks, with boundaries (30, 40) and (-60, -40) deg. DEFAULTS to [].")
 
-    if mask_R:
+    if mask_R is not False:
         d0 = set_default(mask_R, [])
         parser.add_argument('-mask_R', '--mask_R', nargs='*', default=d0, type=float, help="Radial boundaries of mask(s) to apply to data and model products. FORMAT: -mask_R 50 75 30 60 means two masks, with boundaries (50, 75) and (30, 60) au . DEFAULTS to [].")                
 
-    if fold:
+    if fold is not False:
         d0 = set_default(fold, 'absolute')        
         parser.add_argument('-f', '--fold', default=d0, type=str,
                             choices=['absolute', 'standard'],
                             help="if moment=velocity, fold absolute or standard velocity residuals. DEFAULTS to '%s'"%d0)
 
-    if projection:
+    if projection is not False:
         d0 = set_default(projection, 'cartesian')                
         parser.add_argument('-p', '--projection', default=d0, type=str,
                             choices=['cartesian', 'polar'],
                             help="Project residuals onto a cartesian or a polar map. DEFAULTS to '%s'"%d0)
 
-    if planck:
+    if planck is not False:
         d0 = set_default(planck, 0)                
         parser.add_argument('-planck', '--planck', default=d0, type=int,
                             choices=[0, 1],
                             help="Use full Planck's law to convert Jy/bm to K. Defaults to 0 (i.e. assume RJ)")
         
-    if writetxt:
+    if writetxt is not False:
         d0 = set_default(writetxt, 1)                
         parser.add_argument('-w', '--writetxt', default=d0, type=int,
                             choices=[0, 1],
                             help="Write output into txt file(s)? DEFAULTS to %d"%d0)
 
-    if writefits:
-        d0 = set_default(writefits, 1)                
+    if writefits is not False:
+        d0 = set_default(writefits, 0)                
         parser.add_argument('-wf', '--writefits', default=d0, type=int,
                             choices=[0, 1],
                             help="Write output into fits file(s)? DEFAULTS to %d"%d0)
         
-    if Rinner:
+    if Rinner is not False:
         d0 = set_default(Rinner, 1.0)                        
         parser.add_argument('-i', '--Rinner', default=d0, type=float,
                             help="Number of beams to mask out from the disc inner region. DEFAULTS to %.2f"%d0)
 
-    if absolute_Rinner:
+    if absolute_Rinner is not False:
         d0 = set_default(absolute_Rinner, -1)
         parser.add_argument('-ai', '--absolute_Rinner', default=d0, type=float,
                             help="If >= 0, assume this absolute value instead of Rinner to set the inner radius of the analysis domain. Defaults to -1.")
         
-    if Router:
+    if Router is not False:
         d0 = set_default(Router, 0.98)                
         parser.add_argument('-o', '--Router', default=d0, type=float,
                             help="Fraction of Rout to consider as the disc outer radius for the analysis. DEFAULTS to %.2f"%d0)
 
-    if absolute_Router:
+    if absolute_Router is not False:
         d0 = set_default(absolute_Router, -1)
         parser.add_argument('-ao', '--absolute_Router', default=d0, type=float,
                             help="If >= 0, assume this absolute value instead of Router to set the outer radius of the analysis domain. Defaults to -1.")
                 
-    if sigma:
+    if sigma is not False:
         d0 = set_default(sigma, 5)                
         parser.add_argument('-si', '--sigma', default=d0, type=float,
                             help="Mask out pixels with values below sigma threshold. DEFAULTS to %.1f"%d0)
 
-    if gradient:
+    if gradient is not False:
         d0 = set_default(gradient, 'r')
         parser.add_argument('-g', '--gradient', default=d0, type=str, choices=['peak', 'r', 'phi'],
                             help="Coordinate along which the gradient will be computed. If 'peak', the maximum gradient is computed. DEFAULTS to '%s'"%d0)
 
-    if colorbar:
+    if colorbar is not False:
         d0 = set_default(colorbar, 1)
         parser.add_argument('-cbar', '--colorbar', default=d0, type=int, help="Show colorbar. DEFAULTS to %d"%d0)        
         
-    if smooth:
+    if smooth is not False:
         d0 = set_default(smooth, 0.0)
         parser.add_argument('-sm', '--smooth', default=d0, type=float,
                             help="Smooth up moment_data using scipy.ndimage gaussian_filter? DEFAULTS to %.1f (characteristic size of smoothing kernel in pixels)"%d0)        
 
-    if spiral_ids:
+    if spiral_ids is not False:
         d0 = set_default(spiral_ids, [])
         parser.add_argument('-spids', '--spiral_ids', nargs='*', default=d0, type=int, help="Which filament should be fitted with a spiral function. Spirals are overlaid on the map and their best-fit parameters are saved into a txt file. FORMAT: -spids 1 3 -2. DEFAULTS to [].")
 
-    if spiral_type:
+    if spiral_type is not False:
         d0 = set_default(spiral_type, 'linear')        
         parser.add_argument('-sptype', '--spiral_type', default=d0, choices=['linear', 'log'], help="Type of spiral functional form to fit filaments. DEFAULTS to %s."%d0)
 
-    if spiral_moment:
+    if spiral_moment is not False:
         d0 = set_default(spiral_moment, 'velocity')        
         parser.add_argument('-spmom', '--spiral_moment', default=d0, choices=['velocity', 'linewidth', 'peakint', 'peakintensity'], help="Moment map from which spirals were extracted. DEFAULTS to %s."%d0)        
 
-    if filament_ids:
+    if filament_ids is not False:
         d0 = set_default(filament_ids, [])
         parser.add_argument('-filids', '--filament_ids', nargs='*', default=d0, type=int, help="Filament(s) to be shown. FORMAT: -filids 1 3 -2. DEFAULTS to [].")
 
-    if filament_moment:
+    if filament_moment is not False:
         d0 = set_default(filament_moment, 'velocity')        
         parser.add_argument('-filmom', '--filament_moment', default=d0, choices=['velocity', 'linewidth', 'peakint', 'peakintensity'], help="Moment map from which filament(s) were extracted. DEFAULTS to %s."%d0)        
 
-    if radius_planet:
+    if radius_planet is not False:
         d0 = set_default(radius_planet, [])                
         parser.add_argument('-rp', '--rp', nargs='*', default=d0, type=float, help="Mark radial location of planet(s) in au. DEFAULTS to [].")
 
-    if phi_planet:
+    if phi_planet is not False:
         d0 = set_default(phi_planet, [])                
         parser.add_argument('-phip', '--phip', nargs='*', default=d0, type=float, help="Mark azimuthal location of planet(s) in degrees. DEFAULTS to [].")
         
-    if label_planet:
+    if label_planet is not False:
         d0 = set_default(label_planet, [])                
         parser.add_argument('-labelp', '--labelp', nargs='*', default=d0, type=str, help="Add label(s) centred on the planet(s) marker. DEFAULTS to [].")
 
-    if input_coords:
+    if input_coords is not False:
         d0 = set_default(input_coords, 'disc')
         parser.add_argument('-input_coords', '--input_coords', default=d0, type=str,
                             choices=['sky', 'disc', 'disk'],

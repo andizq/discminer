@@ -3,7 +3,7 @@ from discminer.mining_utils import (init_data_and_model,
                                     get_noise_mask,
                                     get_1d_plot_decorators,
                                     load_moments,
-                                    load_disc_grid,                                    
+                                    load_disc_grid,
                                     show_output,
                                     MEDIUM_SIZE)
 

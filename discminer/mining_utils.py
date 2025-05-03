@@ -547,6 +547,10 @@ def load_moments(
         
     residuals = moment_data - moment_model
 
+    if args.writefits:
+        header = fits.getheader(os.path.join(dir_data, tag_base+'_data.fits'))
+        fits.writeto(os.path.join(dir_model, tag_base+'_residuals.fits'), residuals, header=header, overwrite=True)
+        
     if args.surface in ['low', 'lower']:
         pass
         #from scipy.ndimage import gaussian_filter
@@ -556,6 +560,8 @@ def load_moments(
     return moment_data, moment_model, residuals, dict(surf = tag_surf,
                                                       ref_surf = ref_surf,
                                                       base = tag_base,
+                                                      dir_data = dir_data,
+                                                      dir_model = dir_model,
                                                       mask = np.isnan(moment_data),
                                                       data_unmasked = moment_data_unma,
                                                       model_unmasked = moment_model_unma)
@@ -734,7 +740,6 @@ def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', model
                 if args.projection=='cartesian':
                     xi, yi = xdisc, ydisc
                     ri = np.hypot(xdisc, ydisc)
-                    print (ri)
                     
                 elif args.projection=='polar':
                     phii = np.arctan2(ydisc, xdisc)

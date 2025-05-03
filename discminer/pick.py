@@ -353,58 +353,75 @@ class Pick(Rail):
 
     def writetxt(self, filename='pick_summary.txt'):
 
-        arr_global_peak = [
-            [
-                self.peak_global_angle,
-                self.peak_global_radius,
-                self.peak_global_val*self.peak_global_sign,
-                self.peak_global_sigma,
-                self.peak_mean,
-                self.peak_std,
-                'global_peak'
-            ]
-        ]
-        
-        arr_clusters_phi = []        
-        for n, ind in enumerate(self.acc_peaks_phi):
-            arr_clusters_phi.append(
-                [
-                    self.kcent_sort_phi[ind],
-                    np.nan,
-                    self.var_y_sort_phi[ind],
-                    self.peak_variance_sigmas_phi[n],
-                    self.peak_variance_mean_phi,
-                    self.peak_variance_std_phi,
-                    'cluster_phi_%d'%n
-                ]
-            )
+        ncols = 7
 
-        arr_clusters_R = []            
-        for n, ind in enumerate(self.acc_peaks_R):
-            arr_clusters_R.append(
-                [                    
-                    np.nan,
-                    self.kcent_sort_R[ind],
-                    self.var_y_sort_R[ind],
-                    self.peak_variance_sigmas_R[n],
-                    self.peak_variance_mean_R,
-                    self.peak_variance_std_R,
-                    'cluster_R_%d'%n
+        #Global peak
+        try:
+            arr_global_peak = [
+                [
+                    self.peak_global_angle,
+                    self.peak_global_radius,
+                    self.peak_global_val*self.peak_global_sign,
+                    self.peak_global_sigma,
+                    self.peak_mean,
+                    self.peak_std,
+                    'global_peak'
                 ]
-            )
-            
-        arr_clusters_acc = [
-            [
-                self.acc_phi,
-                self.acc_R,
-                np.nan,
-                np.nan,
-                np.nan,
-                np.nan,                
-                'weighted_mean_centre_from_accepted_clusters'
             ]
-        ]
+        except AttributeError:
+            arr_global_peak = [[np.nan]*ncols]
+            print ('Writing .txt pick summary file without global peak information...')            
+
+        #Clusters
+        arr_clusters_phi = []
+        arr_clusters_R = []
+        arr_clusters_acc = []        
+        try:
+            for n, ind in enumerate(self.acc_peaks_phi):
+                arr_clusters_phi.append(
+                    [
+                        self.kcent_sort_phi[ind],
+                        np.nan,
+                        self.var_y_sort_phi[ind],
+                        self.peak_variance_sigmas_phi[n],
+                        self.peak_variance_mean_phi,
+                        self.peak_variance_std_phi,
+                        'cluster_phi_%d'%n
+                    ]
+                )
+
+
+            for n, ind in enumerate(self.acc_peaks_R):
+                arr_clusters_R.append(
+                    [                    
+                        np.nan,
+                        self.kcent_sort_R[ind],
+                        self.var_y_sort_R[ind],
+                        self.peak_variance_sigmas_R[n],
+                        self.peak_variance_mean_R,
+                        self.peak_variance_std_R,
+                        'cluster_R_%d'%n
+                    ]
+                )
             
+            arr_clusters_acc = [
+                [
+                    self.acc_phi,
+                    self.acc_R,
+                    np.nan,
+                    np.nan,
+                    np.nan,
+                    np.nan,                
+                    'weighted_mean_centre_from_accepted_clusters'
+                ]
+            ]
+        except AttributeError:
+            arr_clusters_phi.append([np.nan]*ncols)
+            arr_clusters_R.append([np.nan]*ncols)
+            arr_clusters_acc.append([np.nan]*ncols)
+            print ('Writing .txt pick summary file without cluster information...')
+
+        #Gather info
         arr_tot = np.asarray(arr_global_peak + arr_clusters_phi + arr_clusters_R + arr_clusters_acc, dtype=object).squeeze()
 
         np.savetxt(

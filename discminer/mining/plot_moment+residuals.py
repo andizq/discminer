@@ -78,7 +78,7 @@ extent= np.array([-xmax, xmax, -xmax, xmax])
 #*************************
 #LOAD DISC GEOMETRY
 R, phi, z = load_disc_grid()
-noise_mean, mask = get_noise_mask(datacube, thres=4,
+noise_mean, mask = get_noise_mask(datacube, thres=args.sigma,
                                   mask_phi={'map2d': np.degrees(phi['upper']),
                                             'lims': args.mask_phi},
                                   mask_R={'map2d': R['upper']/au_to_m,
@@ -88,7 +88,7 @@ noise_mean, mask = get_noise_mask(datacube, thres=4,
 #*************************
 #LOAD MOMENT MAPS    
 moment_data, moment_model, residuals, mtags = load_moments(args, mask=mask)
-        
+
 #**************************
 #MAKE PLOT
 fig, ax = plt.subplots(ncols=3, nrows=1, figsize=(15,6))
@@ -146,3 +146,4 @@ mark_planet_location(ax[2], args, edgecolor='k', lw=2.0, s=200, coords='sky', mo
 
 plt.savefig('moment+residuals_%s.png'%mtags['base'], bbox_inches='tight', dpi=200)
 show_output(args)
+

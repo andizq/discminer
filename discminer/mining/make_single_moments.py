@@ -35,7 +35,7 @@ if args.fit_data:
     datacube = Data(file_data, dpc) # Read datacube and convert to Cube object
 if args.fit_model:
     modelcube = Data(file_model, dpc) # Read modelcube and convert to Cube object
-
+    
 #**********************
 #MAKE MOMENT MAPS
 #**********************

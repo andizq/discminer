@@ -61,7 +61,7 @@ Rmax = 1.1*args.Router*Rout*u.au
 #*******************
 #datacube = Data(file_data, dpc) # Read data and convert to Cube object
 datacube, model = init_data_and_model(Rmin=0, Rmax=Rmax)
-noise_mean, mask = get_noise_mask(datacube)
+noise_mean, mask = get_noise_mask(datacube, thres=args.sigma)
 
 #Useful definitions for plots
 with open('grid_extent.json') as json_file:

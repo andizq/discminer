@@ -110,7 +110,7 @@ R, phi, z = load_disc_grid()
 R_s = R[args.surface]*u.m.to('au')
 phi_s = phi[args.surface]
 
-noise_mean, mask = get_noise_mask(datacube, thres=2,
+noise_mean, mask = get_noise_mask(datacube, thres=args.sigma,
                                   mask_phi={'map2d': np.degrees(phi['upper']),
                                             'lims': args.mask_phi},
                                   mask_R={'map2d': R['upper']/au_to_m,
@@ -126,7 +126,7 @@ Yproj = R[args.surface]*np.sin(phi[args.surface])
 # Masked sections are visually drawn at the end
 moment_data, moment_model, residuals, mtags = load_moments(
     args,
-    #mask=mask, #fill masked cells with nans
+    mask=mask, #fill masked cells with nans
     clip_Rmin=0.0*u.au,
     clip_Rmax=Rmod_out*u.au,
     clip_Rgrid=R[args.surface]*u.m

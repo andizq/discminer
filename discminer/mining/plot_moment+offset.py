@@ -58,13 +58,13 @@ Rmax = Rmax_frac*Rout*u.au
 #********************
 #datacube = Data(file_data, dpc) # Read data and convert to Cube object
 datacube, model = init_data_and_model(Rmin=0, Rmax=Rmax)
-noise_mean, mask = get_noise_mask(datacube)
+noise_mean, mask = get_noise_mask(datacube, thres=args.sigma)
 
 with open('grid_extent.json') as json_file:
     grid = json.load(json_file)
 
 xmax = grid['xsky'] 
-xlim = 1.15*np.min([xmax, Rmax.value])
+xlim = 1.0*np.min([xmax, Rmax.value])
 extent= np.array([-xmax, xmax, -xmax, xmax])
 
 R, phi, z = load_disc_grid()
@@ -78,19 +78,24 @@ ax_cbar0 = fig.add_axes([0.13, 0.09, 0.77, 0.05])
 kwargs_im = dict(cmap=cmap_mom, extent=extent, levels=levels_im)
 kwargs_cc = dict(colors='k', linestyles='-', extent=extent, levels=levels_cc, linewidths=0.4)
 kwargs_cbar = dict(orientation='horizontal', pad=0.03, shrink=0.95, aspect=15)
-zoomcolor = '0.3'
+zoomcolor = '0.9'
+zoomlabelcolor = '0.3'
 zoomwidth = args.zoom_size
 
-def make_plot(ax, xlim=xlim, color='k', labelcolor='k'):
-    im = ax.contourf(moment_data, extend='both', **kwargs_im)
+def make_plot(ax, xlim=xlim, tickcolor='k', labelcolor='k'):
+    if args.moment=='velocity':
+        extend='both'
+    else:
+        extend='max'
+    im = ax.contourf(moment_data, extend=extend, **kwargs_im)
     if args.surface!='lower' and args.show_contours:
         cc = ax.contour(moment_data, **kwargs_cc)
-    make_up_ax(ax, xlims=(-xlim, xlim), ylims=(-xlim, xlim), labelsize=17, color=color, labelcolor=labelcolor)
+    make_up_ax(ax, xlims=(-xlim, xlim), ylims=(-xlim, xlim), labelsize=17, color=tickcolor, labelcolor=labelcolor)
     return im
 
 for i,axi in enumerate(ax):
     if i==1:
-        im = make_plot(axi, xlim=zoomwidth, color=zoomcolor, labelcolor=zoomcolor)
+        im = make_plot(axi, xlim=zoomwidth, tickcolor=zoomlabelcolor, labelcolor=zoomlabelcolor)
         axi.scatter(best['orientation']['xc'], best['orientation']['yc'],
                     ec='k', fc='w', marker='X', lw=0.5+i, s=60*(i+1), zorder=20)                
     else:
@@ -105,19 +110,38 @@ for axi in ax[1:]:
     axi.tick_params(labelleft=False)
     for side in ['top','bottom','left','right']:
         axi.spines[side].set_linewidth(4.0)
-        axi.spines[side].set_color(zoomcolor)
+        axi.spines[side].set_color(zoomlabelcolor)
         axi.spines[side].set_linestyle((0, (1,1.5)))
         axi.spines[side].set_capstyle('round')
     axi.grid(color='k', ls='--')
-    
+
+R_lev = np.arange(25, Rmax_frac*Rout, 50)*u.au.to('m')
+surf_color = edge_color = '0.1'
+
 for i,axi in enumerate([ax[0]]):
-    Contours.emission_surface(axi, R, phi, extent=extent,
-                              R_lev=np.arange(25, Rmax_frac*Rout, 50)*u.au.to('m'),
+    Contours.emission_surface(axi, R, phi,
+                              extent=extent,
+                              R_lev=R_lev,
                               which=mtags['surf'],
-                              kwargs_R={'colors': '0.1', 'linewidths': 0.5},
-                              kwargs_phi={'colors': '0.1', 'linewidths': 0.4}
+                              kwargs_R={'colors': surf_color, 'linewidths': 0.5},
+                              kwargs_phi={'colors': surf_color, 'linewidths': 0.4}
     )
-    #R_lev=np.linspace(0.1, 1.0, 10)*Rout*
+    Contours.emission_surface(axi, R, phi,
+                              extent=extent,
+                              R_lev=[R_lev[-1]],
+                              which='upper',
+                              kwargs_R={'colors': edge_color, 'linewidths': 1.4, 'linestyles': '-', 'alpha': 0.8},
+                              kwargs_phi={'colors': edge_color, 'linewidths': 0., 'linestyles': '-'}
+        )
+
+    Contours.emission_surface(axi, R, phi,
+                              extent=extent,
+                              R_lev=[R_lev[-1]],
+                              which='lower',
+                              kwargs_R={'colors': edge_color, 'linewidths': 1.1, 'linestyles': '-', 'alpha': 0.3},
+                              kwargs_phi={'colors': edge_color, 'linewidths': 0., 'linestyles': '-'}
+        )
+    
 
 model.make_disc_axes(ax[0], surface=args.surface)
     
@@ -131,7 +155,7 @@ mod_nticks_cbars([cbar0], nbins=10)
 cbar0.set_label(clabel, fontsize=16)
 ax[0].set_ylabel('Offset [au]', fontsize=17)
 ax[0].set_title(ctitle, pad=40, fontsize=19)
-ax[1].set_title('Zoom-in', pad=40, fontsize=19, color=zoomcolor)
+ax[1].set_title('Zoom-in', pad=40, fontsize=19, color=zoomlabelcolor)
 
 #SHOW CONTINUUM?        
 if args.show_continuum in ['all', 'scattered']:
@@ -152,8 +176,8 @@ if args.show_continuum in ['all', 'band7']:
 #*************
 #MARK PLANETS
 #*************
-kwargs_sc = dict(s=150, lw=2.0, edgecolors='k')
-for axi in ax:
+kwargs_sc = dict(s=700, lw=3.0, edgecolors='tomato')
+for axi in ax[1:]:
     mark_planet_location(axi, args, dpc=dpc, coords='sky', zfunc=model.z_upper_func, zpars=best['height_upper'], **best['orientation'], **kwargs_sc)
 
 plt.savefig('moment+offset_%s.png'%mtags['base'], bbox_inches='tight', dpi=200)

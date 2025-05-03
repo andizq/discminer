@@ -25,8 +25,10 @@ from discminer.plottools import (get_discminer_cmap,
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy import units as u
+from astropy.io import fits
 
 import json
+import os
 
 use_discminer_style()
 
@@ -138,8 +140,8 @@ fig, ax = plt.subplots(ncols=2, nrows=1, figsize=(11,5))
 ax_c = fig.add_axes([0.8,0.65,0.23*5/11,0.23]) #AxesSubplot for showing contour colours 
 
 pick = Pick(model, residuals, R_prof, fold=True, color_bounds = np.array([0.33, 0.66, 1.0])*Rmod_out, ax2=ax_c)
-folded_map = pick.make_2d_map() #Map where peaks will be picked from
-
+xf, yf, folded_orig, folded_map = pick.make_2d_map(return_coords=True) #Map where peaks will be picked from
+        
 figh, axh = plt.subplots(ncols=1, nrows=1, figsize=(9,6))    
 pick.find_peaks(clean_thres=args.clean_thres, fig_ax_histogram=(figh, axh), clean_histogram=True)
 figh.savefig('histogram_peak_residuals_%s.png'%mtags['base'], bbox_inches='tight', dpi=200)
@@ -152,7 +154,7 @@ peak_angle = pick.peak_angle
 model.make_emission_surface(ax_c)
 model.make_disc_axes(ax_c)
 ax_c.axis('off')
-
+    
 #*******************
 #SHOW PEAK RESIDUALS
 #*******************
@@ -290,7 +292,7 @@ if args.projection=='cartesian':
     ax.set_title('%s, folded map'%ctitle, fontsize=16, color='k')
 
     
-elif args.projection=='polar':
+elif args.projection=='polar': #Currently displaying folded map only
     levels_resid = np.linspace(-clim, clim, 48)
 
     Rf = np.hypot(pick.X, pick.Y)
@@ -310,13 +312,27 @@ elif args.projection=='polar':
 if len(args.mask_R)>0 or len(args.mask_phi)>0:
     make_masks(ax, args.mask_R, args.mask_phi, Rmax=Rmod_out)
 
-if args.clusters:    
-    pick.writetxt(filename='pick_summary_%s.txt'%mtags['base'])
-
-plt.savefig('folded_residuals_deproj_%s_%s.png'%(mtags['base'], args.projection), bbox_inches='tight', dpi=200)
-show_output(args)
-
+    
 symm_mean = np.nanmean(peak_resid)
 symm_std = np.nanstd(peak_resid)
 symm = symm_mean + symm_std
 print ('Non-axisymmetric factor from peak folded residuals mean, std, (mean+1std): %.3f, %.3f, %.3f km/s'%(symm_mean, symm_std, symm))
+    
+#*********************
+#MAKE FILES AND PLOTS
+#*********************
+#Write Pick summary file
+if args.writetxt:    
+    pick.writetxt(filename='pick_summary_%s.txt'%mtags['base'])
+
+#Write interpolated folded_map into file
+if args.writefits:
+    fits.writeto(os.path.join(mtags['dir_model'], mtags['base']+'_foldedresiduals.fits'), folded_map, header=datacube.header, overwrite=True)    
+
+#Write folded values into file, along with original x,y coordinates:
+if args.writetxt:
+    tmp = np.asarray([xf, yf, folded_orig]).T
+    np.savetxt(os.path.join(mtags['dir_model'], mtags['base']+'_foldedresiduals.txt'), tmp, fmt='%.3f')
+    
+plt.savefig('folded_residuals_deproj_%s_%s.png'%(mtags['base'], args.projection), bbox_inches='tight', dpi=200)
+show_output(args)
