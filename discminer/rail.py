@@ -375,7 +375,7 @@ class Rail(object):
         if self._lev_list is None:
             kwargs_along_coords.update({'surface': surface})
             self.prop_along_coords(**kwargs_along_coords)
-
+        
         lev_list, coord_list, resid_list = self._lev_list, self._coord_list, self._resid_list
         Rgrid = self.R_nonan[surface]/sfu.au
         X = self.X
@@ -387,7 +387,7 @@ class Rail(object):
 
         if mask_from_map is not None:
             mrail = Rail(self.model, mask_from_map, lev_list)
-            _, coord_list2, resid_list2, _ = mrail.prop_along_coords(surface=surface)
+            _, coord_list2, resid_list2, _ = mrail.prop_along_coords(**kwargs_along_coords)
             
             resid_thres = []
             ind_accep = []
