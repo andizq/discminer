@@ -32,6 +32,7 @@ from .core import ModelGrid
 from .cube import Cube
 from .rail import Contours
 from .grid import GridTools
+from .cart import orientation_constant
 
 os.environ["OMP_NUM_THREADS"] = "1"
 
@@ -655,21 +656,21 @@ class Intensity:
         #velocity nans might differ from Int nans when a z surf is zero and SG is active, nanmax must be used
         return np.nanmax([Iup, Ilow], axis=0)
     
-    def get_line_profile(self, v_chan, vel2d, linew2d, lineb2d, **kwargs):
+    def get_line_profile(self, v_chan, vel2d, int2d, linew2d, lineb2d, **kwargs):
         if self.subpixels:
-            v_near, v_far = [], []
+            int2d_near, int2d_far = [], []
             for i in range(self.subpixels_sq):
-                v_near.append(self.line_profile(v_chan, vel2d[i]['upper'], linew2d['upper'], lineb2d['upper'], **kwargs))
-                v_far.append(self.line_profile(v_chan, vel2d[i]['lower'], linew2d['lower'], lineb2d['lower'], **kwargs))
+                int2d_near.append(int2d[i]['upper'] * self.line_profile(v_chan, vel2d[i]['upper'], linew2d[i]['upper'], lineb2d[i]['upper'], **kwargs))
+                int2d_far.append(int2d[i]['lower'] * self.line_profile(v_chan, vel2d[i]['lower'], linew2d[i]['lower'], lineb2d[i]['lower'], **kwargs))
 
-            integ_v_near = np.sum(np.array(v_near), axis=0) * self.sub_dA / self.pix_dA
-            integ_v_far = np.sum(np.array(v_far), axis=0) * self.sub_dA / self.pix_dA
-            return integ_v_near, integ_v_far
+            integ_subpix_near = np.sum(np.array(int2d_near), axis=0) * self.sub_dA / self.pix_dA
+            integ_subpix_far = np.sum(np.array(int2d_far), axis=0) * self.sub_dA / self.pix_dA
+            return integ_subpix_near, integ_subpix_far
         
         else: 
             v_near = self.line_profile(v_chan, vel2d['upper'], linew2d['upper'], lineb2d['upper'], **kwargs)
             v_far = self.line_profile(v_chan, vel2d['lower'], linew2d['lower'], lineb2d['lower'], **kwargs)
-            return v_near, v_far 
+            return int2d['upper']*v_near, int2d['lower']*v_far 
 
     def get_channel(self, velocity2d, intensity2d, linewidth2d, lineslope2d, v_chan, **kwargs):                    
         vel2d, int2d, linew2d, lineb2d = velocity2d, {}, {}, {}
@@ -681,7 +682,7 @@ class Intensity:
         if isinstance(lineslope2d, numbers.Number): lineb2d['upper'] = lineb2d['lower'] = lineslope2d
         else: lineb2d = lineslope2d
     
-        v_near, v_far = self.get_line_profile(v_chan, vel2d, linew2d, lineb2d, **kwargs)
+        int2d_near, int2d_far = self.get_line_profile(v_chan, vel2d, int2d, linew2d, lineb2d, **kwargs)
         int2d_full = self.line_uplow(int2d_near, int2d_far)
         
         if self.beam_kernel is not None:
@@ -693,7 +694,6 @@ class Intensity:
                  rms=None, tb={'nu': False, 'beam': False, 'full': True}, return_data_only=False, header=None, dpc=None, disc=None, mol='12co', kind=['mask'], **kwargs_line):
         
         vel2d, int2d, linew2d, lineb2d = velocity2d, {}, {}, {}
-        int2d_shape = np.shape(velocity2d['upper'])
         
         if isinstance(intensity2d, numbers.Number):
             int2d['upper'] = int2d['lower'] = intensity2d
@@ -710,6 +710,11 @@ class Intensity:
         else:
             lineb2d = lineslope2d
 
+        if self.subpixels:
+            int2d_shape = np.shape(int2d[0]['upper'])
+        else:
+            int2d_shape = np.shape(int2d['upper'])
+            
         """
         if self.subpixels:
             vel2d_near_nan = np.isnan(vel2d[self.sub_centre_id]['upper'])
@@ -723,9 +728,7 @@ class Intensity:
         noise = 0.0
         #for _ in itertools.repeat(None, nchan):
         for vchan in vchannels:
-            v_near, v_far = self.get_line_profile(vchan, vel2d, linew2d, lineb2d, **kwargs_line)
-            int2d_near = int2d['upper'] * v_near
-            int2d_far = int2d['lower'] * v_far
+            int2d_near, int2d_far = self.get_line_profile(vchan, vel2d, int2d, linew2d, lineb2d, **kwargs_line)
             int2d_full = self.line_uplow(int2d_near, int2d_far) 
             
             if rms is not None:
@@ -952,7 +955,8 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         self.beam_size = datacube.beam_size        
         self.beam_area = datacube.beam_area
         self.beam_kernel = datacube.beam_kernel
-        
+
+        self.orientation_func = orientation_constant
         self._z_upper_func = Model.z_cone
         self._z_lower_func = Model.z_cone_neg
         self._velocity_func = Model.keplerian
@@ -978,6 +982,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         self.R_1d = None #modified if selfgravity is considered
 
         if subpixels and isinstance(subpixels, int):
+            #Make n=subpixels**2 versions of discgrid, slightly shifted by dx=pix_size/subpixels
             if subpixels%2 == 0: subpixels+=1 #Force it to be odd to contain parent pix centre
             pix_size = grid['step']
             dx = dy = pix_size / subpixels
@@ -1326,12 +1331,6 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             
         attribute_func = self._get_attribute_func(attribute)
         return attribute_func(coords, **self.params[attribute])
-
-    @staticmethod
-    def orientation(incl=np.pi/4, PA=0.0, xc=0.0, yc=0.0):
-        xc = xc*sfu.au
-        yc = yc*sfu.au
-        return incl, PA, xc, yc
     
     def get_projected_coords(self, z_mirror=False, writebinaries=True, 
                              R_nan_val=0, phi_nan_val=10*np.pi, z_nan_val=0):
@@ -1342,7 +1341,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             print ('Using height and orientation parameters from prototype model:\n')
             pprint.pprint({key: self.params[key] for key in ['height_upper', 'height_lower', 'orientation']})
             
-        incl, PA, xc, yc = Model.orientation(**self.params['orientation'])
+        incl, PA, xc, yc = self.orientation_func({'R': self.R_true}, **self.params['orientation'])
         cos_incl, sin_incl = np.cos(incl), np.sin(incl)
 
         #*******************************************
@@ -1362,7 +1361,11 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         for side in ['upper', 'lower']:
             xt, yt, zt = grid_true[side][:3]
             x_pro, y_pro, z_pro = self._project_on_skyplane(xt, yt, zt, cos_incl, sin_incl)
-            if PA: x_pro, y_pro = self._rotate_sky_plane(x_pro, y_pro, PA)             
+            if len(np.atleast_1d(PA)) > 0:
+                x_pro, y_pro = self._rotate_sky_plane_ewise(x_pro, y_pro, PA)
+            else:
+                if PA != 0.0:
+                    x_pro, y_pro = self._rotate_sky_plane(x_pro, y_pro, PA)                    
             x_pro = x_pro+xc
             y_pro = y_pro+yc
             R[side] = griddata((x_pro, y_pro), self.R_true, (self.mesh[0], self.mesh[1]), method='linear')
@@ -1406,7 +1409,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             Rmax = Rmax.to('au')
         R_daxes = np.linspace(0, Rmax, 50)
         
-        incl, PA, xc, yc = Model.orientation(**self.params['orientation'])
+        incl, PA, xc, yc = self.orientation_func({'R': self.R_true}, **self.params['orientation'])
         xc /= sfu.au
         yc /= sfu.au        
         
@@ -1439,7 +1442,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             pprint.pprint(self.params)
             _break_line(init='\n')
 
-        incl, PA, xc, yc = Model.orientation(**self.params['orientation'])
+        incl, PA, xc, yc = self.orientation_func({'R': self.R_true}, **self.params['orientation'])
         int_kwargs = self.params['intensity']
         vel_kwargs = self.params['velocity']
         lw_kwargs = self.params['linewidth']
@@ -1471,9 +1474,12 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         true_kwargs = [isinstance(kwarg, dict) for kwarg in avai_kwargs]
         prop_kwargs = [kwarg for i, kwarg in enumerate(avai_kwargs) if true_kwargs[i]]
         prop_funcs = [func for i, func in enumerate(avai_funcs) if true_kwargs[i]]
-       
+        nfuncs = len(prop_funcs)
+        
         if self.subpixels:
-            subpix_vel = []
+
+            props = [[] for k in range(nfuncs)]
+
             for i in range(self.subpixels):
                 for j in range(self.subpixels):
                     z_true = self.z_upper_func({'R': self.sub_R_true[i][j]}, **self.params['height_upper'])
@@ -1481,19 +1487,19 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                     if z_mirror: z_true_far = -z_true
                     else: z_true_far = self.z_lower_func({'R': self.sub_R_true[i][j]}, **self.params['height_lower']) 
 
-                    subpix_grid_true = {'upper': [self.sub_x_true[j], self.sub_y_true[i], z_true, self.sub_R_true[i][j], self.sub_phi_true[i][j]], 
-                                        'lower': [self.sub_x_true[j], self.sub_y_true[i], z_true_far, self.sub_R_true[i][j], self.sub_phi_true[i][j]]}
-                    subpix_vel.append(self._compute_prop(subpix_grid_true, [self.velocity_func], [vel_kwargs])[0])
+                    subpix_grid_true = {'upper': [self.sub_x_true[j], self.sub_y_true[i], z_true, self.sub_R_true[i][j], self.sub_phi_true[i][j], None, None], 
+                                        'lower': [self.sub_x_true[j], self.sub_y_true[i], z_true_far, self.sub_R_true[i][j], self.sub_phi_true[i][j], None, None]}
+                    #subpix_vel.append(self._compute_prop(subpix_grid_true, [self.velocity_func], [vel_kwargs])[0])
+                    for k in range(nfuncs):
+                        tmp = self._compute_prop(subpix_grid_true, [prop_funcs[k]], [prop_kwargs[k]])[0]
+                        if true_kwargs[0] and k==0: #i.e. velocity
+                            ang_fac = sin_incl * np.cos(self.sub_phi_true[i][j])
+                            for side in ['upper', 'lower']:
+                                tmp[side] *= ang_fac
+                                tmp[side] += vel_kwargs['vsys']
+                                
+                        props[k].append(tmp)                    
 
-            ang_fac = sin_incl * np.cos(self.phi_true) 
-            for i in range(self.subpixels_sq):
-                for side in ['upper', 'lower']:
-                    subpix_vel[i][side] *= ang_fac
-                    subpix_vel[i][side] += vel_kwargs['vsys']
-                    
-            props = self._compute_prop(grid_true, prop_funcs[1:], prop_kwargs[1:])
-            props.insert(0, subpix_vel)
-            
         else: 
             props = self._compute_prop(grid_true, prop_funcs, prop_kwargs)
             if true_kwargs[0]: #Convention: positive vel (+) means gas receding from observer
@@ -1516,20 +1522,26 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         for side in ['upper', 'lower']:
             xt, yt, zt = grid_true[side][:3]
             x_pro, y_pro, z_pro = self._project_on_skyplane(xt, yt, zt, cos_incl, sin_incl)
-            if PA: x_pro, y_pro = self._rotate_sky_plane(x_pro, y_pro, PA)             
+            if len(np.atleast_1d(PA)) > 0:
+                x_pro, y_pro = self._rotate_sky_plane_ewise(x_pro, y_pro, PA)
+            else:
+                if PA != 0.0:
+                    x_pro, y_pro = self._rotate_sky_plane(x_pro, y_pro, PA)                    
             x_pro = x_pro+xc
             y_pro = y_pro+yc
-            if self.Rmax_m is not None: R_grid = griddata((x_pro, y_pro), self.R_true, (self.mesh[0], self.mesh[1]), method='linear')
+            if self.Rmax_m is not None:
+                R_grid = griddata((x_pro, y_pro), self.R_true, (self.mesh[0], self.mesh[1]), method='linear')
             x_pro_dict[side] = x_pro
             y_pro_dict[side] = y_pro
             z_pro_dict[side] = z_pro
 
             if self.subpixels:
-                for i in range(self.subpixels_sq): #Subpixels are projected on the same plane where true grid is projected
-                    props[0][i][side] = griddata((x_pro, y_pro), props[0][i][side], (self.mesh[0], self.mesh[1]), method='linear') #subpixels velocity
-                for prop in props[1:]:
-                    prop[side] = griddata((x_pro, y_pro), prop[side], (self.mesh[0], self.mesh[1]), method='linear')
-                    if self.Rmax_m is not None: prop[side] = np.where(np.logical_and(R_grid<self.Rmax_m, R_grid>self.Rmin_m), prop[side], np.nan) #Todo: allow for R_in as well
+                for prop in props:
+                    for i in range(self.subpixels_sq): #Subpixels are projected on the same plane where true grid is projected
+                        if not isinstance(prop[i][side], numbers.Number):
+                            prop[i][side] = griddata((x_pro, y_pro), prop[i][side], (self.mesh[0], self.mesh[1]), method='linear')
+                        if self.Rmax_m is not None:
+                            prop[i][side] = np.where(np.logical_and(R_grid<self.Rmax_m, R_grid>self.Rmin_m), prop[i][side], np.nan)
             else:
                 for prop in props:
                     if not isinstance(prop[side], numbers.Number): prop[side] = griddata((x_pro, y_pro), prop[side], (self.mesh[0], self.mesh[1]), method='linear')
@@ -1607,8 +1619,10 @@ class _Rosenfeld2d(Velocity, Intensity, Linewidth, GridTools): #Deprecated
         velocity2d : array_like, size (nx, ny)
            If set get_2d=True: Velocity field computed using the Rosenfeld+2013 model, reshaped to 2D to facilitate plotting.
         """
-        if PA: x_plane, y_plane = Rosenfeld2d._rotate_sky_plane(self.x_true, self.y_true, -PA)
-        else: x_plane, y_plane = self.x_true, self.y_true
+        if PA != 0.0:
+            x_plane, y_plane = Rosenfeld2d._rotate_sky_plane(self.x_true, self.y_true, -PA)
+        else:
+            x_plane, y_plane = self.x_true, self.y_true
 
         cos_incl = np.cos(incl)
         sin_incl = np.sin(incl)

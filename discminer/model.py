@@ -33,6 +33,7 @@ class ReferenceModel(Cube):
             Rmax = 700*u.au,
             dpc = 100*u.pc,
             npix = 128,
+            subpixels = 0,
             vchannels = np.linspace(-5.0, 5.0, 101),
             write_extent = True,
             beam = Beam(
@@ -179,7 +180,7 @@ class ReferenceModel(Cube):
         Cube.__init__(self, data, hdu.header, vchannels, dpc, beam=beam, filename=filename, disc=disc, mol=mol, kind=kind, parfile=parfile)
         
         #Init model
-        model = Model(self, Rmax=Rmax, Rmin=Rmin, write_extent=write_extent, prototype=True) 
+        model = Model(self, Rmax=Rmax, Rmin=Rmin, write_extent=write_extent, prototype=True, subpixels=subpixels) 
         
         model.velocity_func = self.funcs['velocity']
         model.z_upper_func = self.funcs['z_upper']
