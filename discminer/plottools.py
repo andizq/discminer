@@ -12,6 +12,7 @@ import astropy.units as u
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.colors import ListedColormap
+from scipy.ndimage import maximum_filter
 from collections.abc import Iterable
 import cmasher as cmr
 
@@ -663,8 +664,6 @@ def make_round_map(
         
     return fig, ax
 
-
-from scipy.ndimage import maximum_filter
 
 def find_gradient_peaks(image, neighborhood_size=3, threshold=0):
     # Apply maximum filter to find local maxima

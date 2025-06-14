@@ -112,6 +112,14 @@ class GridTools:
                         [sin_ang, cos_ang]])
         return np.dot(rot, xy)
 
+    @staticmethod    
+    def _rotate_sky_plane_ewise(x, y, ang):
+        cos_ang = np.cos(ang)
+        sin_ang = np.sin(ang)
+        x_rot = cos_ang * x - sin_ang * y
+        y_rot = sin_ang * x + cos_ang * y
+        return x_rot, y_rot
+    
     @staticmethod
     def _rotate_sky_plane3d(x, y, z, ang, axis='z'):
         xyz = np.array([x,y,z])

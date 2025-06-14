@@ -64,7 +64,15 @@ def velocity_hydro2d(coord, func_interp_R=None, func_interp_phi=None, Mstar=1.0,
     vz = np.zeros_like(vR)
     
     return [vel_sign*(vphi), vR, 0]
-    
+
+#************
+#ORIENTATION
+#************
+def orientation_constant(coords, incl=np.pi/4, PA=0.0, xc=0.0, yc=0.0):
+    xc = xc*au_to_m
+    yc = yc*au_to_m
+    return incl, PA, xc, yc
+
 #******************
 #EMISSION SURFACES
 #******************
