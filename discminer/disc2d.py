@@ -983,7 +983,8 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
 
         if subpixels and isinstance(subpixels, int):
             #Make n=subpixels**2 versions of discgrid, slightly shifted by dx=pix_size/subpixels
-            if subpixels%2 == 0: subpixels+=1 #Force it to be odd to contain parent pix centre
+            if subpixels%2 == 0: subpixels+=1 #Force it to be an odd number so that parent pix centre is included
+            print ('Subpixels per image pixel:', subpixels)            
             pix_size = grid['step']
             dx = dy = pix_size / subpixels
             centre = int(round((subpixels-1)/2.))

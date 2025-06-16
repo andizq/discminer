@@ -2126,11 +2126,22 @@ class Cube(_JSON):
                 im.append(axji.contourf(data_i, **kwargs_cf))
 
                 if contours_from is not None:
-                    try:
-                        vel2d, int2d, linew2d, lineb2d = contours_from.props #i.e. if Model instance provided
+                    try: #If Model instance provided
+                        vel2d, int2d, linew2d, lineb2d = contours_from.props
+                        
+                        if contours_from.subpixels > 0:                            
+                            dF = contours_from.sub_dA / contours_from.pix_dA
+                            vel2dup, vel2dlow = [], []
+                            for k in range(contours_from.subpixels_sq):
+                                vel2dup.append(vel2d[k]['upper'])
+                                vel2dlow.append(vel2d[k]['lower'])
+                            vel2d = {}
+                            vel2d['upper'] = np.sum(np.array(vel2dup), axis=0) * dF
+                            vel2d['lower'] = np.sum(np.array(vel2dlow), axis=0) * dF
+                            
                         axji.contour(vel2d['upper'], levels=[plot_channels[ichan]], linestyles='-', **kwargs_cc)                        
                         axji.contour(vel2d['lower'], levels=[plot_channels[ichan]], linestyles='--', **kwargs_cc)
-                    except AttributeError:
+                    except AttributeError: #If input is not a Model instance, assume it's an array
                         cca = np.moveaxis(np.atleast_3d(contours_from), -1, 0)
                         for cci in cca:
                             axji.contour(cci, levels=[plot_channels[ichan]], linestyles='-', **kwargs_cc)
@@ -2140,8 +2151,10 @@ class Cube(_JSON):
                                                     
                 if j==nrows-1 and i==0:
                     labelbottom, labelleft = True, True
-                    if projection=='wcs': xlabel, ylabel = 'Right Ascension', 'Declination'
-                    else: xlabel, ylabel = 'Offset%s'%unit_coordinates, 'Offset%s'%unit_coordinates
+                    if projection=='wcs':
+                        xlabel, ylabel = 'Right Ascension', 'Declination'
+                    else:
+                        xlabel, ylabel = 'Offset%s'%unit_coordinates, 'Offset%s'%unit_coordinates
                     axji.set_xlabel(xlabel, labelpad=4, fontsize=MEDIUM_SIZE-3, color=fakecolor)                       
                     axji.set_ylabel(ylabel, labelpad=4, fontsize=MEDIUM_SIZE-3, color=fakecolor)
 

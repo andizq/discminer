@@ -10,6 +10,7 @@ import runpy
 import copy
 import sys
 import os
+import re
 
 from discminer.plottools import get_discminer_cmap, make_1d_legend
 from discminer.tools.utils import FrontendUtils
@@ -73,7 +74,14 @@ def init_data_and_model(parfile='parfile.json', Rmin=0, Rmax=1.1, twodim=False, 
         dir_data = meta['dir_data']
     except KeyError:
         dir_data = './'
-        
+
+    if subpixels==0: #try looking for subpixel factor in the parfile metadata
+        for kindi in meta['kind']:
+            if 'subpix' in kindi:
+                tmp = re.findall(r'\d+', kindi)
+                if len(tmp)>0:
+                    subpixels = int(tmp[0])
+
     file_data = os.path.join(dir_data, meta['file_data'])
     Rout = best['intensity']['Rout']
     dpc = meta['dpc']*u.pc
