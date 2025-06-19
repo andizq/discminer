@@ -1410,7 +1410,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             Rmax = Rmax.to('au')
         R_daxes = np.linspace(0, Rmax, 50)
         
-        incl, PA, xc, yc = self.orientation_func({'R': self.R_true}, **self.params['orientation'])
+        incl, PA, xc, yc = self.orientation_func({'R': R_daxes.to('m').value}, **self.params['orientation'])
         xc /= sfu.au
         yc /= sfu.au        
         

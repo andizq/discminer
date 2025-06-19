@@ -21,6 +21,7 @@ from skimage import measure
 import numbers
 
 get_sky_from_disc_coords = GridTools.get_sky_from_disc_coords
+au_to_m = u.au.to('m')
 
 class Rail(object):
     def __init__(self, model, prop, coord_levels=None):
@@ -101,10 +102,14 @@ class Rail(object):
             return np.inf
 
     def make_interpolated_lev(self, prop, lev, phi_beam_frac=1/4.):
+        lev_m = lev*au_to_m
         phi_step = self.beam_size.to('au').value*phi_beam_frac/lev
         phi_list = np.arange(-np.pi, np.pi, phi_step)
-        zp = self.model.z_upper_func({'R': lev*u.au.to('m')}, **self.model.params['height_upper'])*u.m.to('au')
-        x_samples, y_samples, z_samples = GridTools.get_sky_from_disc_coords(lev, phi_list, zp, **self.model.params['orientation']) 
+        zp = self.model.z_upper_func({'R': lev_m}, **self.model.params['height_upper'])/au_to_m
+        incl, PA, xc, yc = self.model.orientation_func({'R': lev_m}, **self.model.params['orientation'])
+        xc /= au_to_m
+        yc /= au_to_m        
+        x_samples, y_samples, z_samples = GridTools.get_sky_from_disc_coords(lev, phi_list, zp, incl, PA, xc, yc)
     
         x_min, x_max, y_min, y_max = self.extent
         j_samples = (x_samples - x_min) / (x_max - x_min) * (self.X.shape[1] - 1)
@@ -701,7 +706,6 @@ class Contours(object):
 
     @staticmethod
     def disc_axes(ax, R_list, z_list, incl, PA, xc=0, yc=0, **kwargs_axes):
-
         kwargs_ax = dict(color='k', ls=':', lw=1.5, dash_capstyle='round', dashes=(0.5, 1.5), alpha=0.7)
         kwargs_ax.update(kwargs_axes)
         

@@ -153,13 +153,19 @@ class GridTools:
         yp = R*np.sin(az)
         zp = z
         xp, yp, zp = GridTools._project_on_skyplane(xp, yp, zp, np.cos(incl), np.sin(incl))
-        xp, yp = GridTools._rotate_sky_plane(xp, yp, PA)
+        if len(np.atleast_1d(PA)) > 0:
+            xp, yp = GridTools._rotate_sky_plane_ewise(xp, yp, PA)
+        else:
+            xp, yp = GridTools._rotate_sky_plane(xp, yp, PA)
         return xp+xc, yp+yc, zp
 
     @staticmethod
     def get_disc_from_sky_coords(xs, ys, z_func, z_pars, incl, PA, xc=0, yc=0, midplane=False):
         #xs, ys: x and y on sky plane
-        xs, ys = GridTools._rotate_sky_plane(xs-xc, ys-yc, -PA) 
+        if len(np.atleast_1d(PA)) > 0:
+            xs, ys = GridTools._rotate_sky_plane_ewise(xs-xc, ys-yc, -PA)
+        else:
+            xs, ys = GridTools._rotate_sky_plane(xs-xc, ys-yc, -PA)
         xd = xs
         cos_incl = np.cos(incl)
         sin_incl = np.sin(incl)
