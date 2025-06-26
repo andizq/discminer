@@ -37,10 +37,20 @@ au_to_m = u.au.to('m')
 
 dpc = meta['dpc']*u.pc
 
+if args.absolute_Rinner>=0:
+    Rmin = args.absolute_Rinner*u.au
+else:
+    Rmin = args.Rinner
+    
+if args.absolute_Router>=0:
+    Rmax = args.absolute_Router*u.au
+else:
+    Rmax = args.Router
+    
 #*******************
 #LOAD DATA AND MODEL
 #*******************
-datacube, model = init_data_and_model(Rmin=0, Rmax=1.2)
+datacube, model = init_data_and_model(Rmin=Rmin, Rmax=Rmax)
 vchannels = datacube.vchannels
 pix_downsamp = model.grid['step']*meta['downsamp_fit']/au_to_m
 

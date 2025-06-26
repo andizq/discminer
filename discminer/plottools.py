@@ -94,6 +94,8 @@ def make_up_ax(ax, xlims=(None, None), ylims=(None, None),
 def make_1d_legend(ax, **kwargs):
     kwargs_def = dict(
         frameon=False,
+        framealpha=1.0,
+        edgecolor='inherit',
         fontsize=MEDIUM_SIZE,
         ncol=3,
         handlelength=2.0,
@@ -684,7 +686,8 @@ def make_polar_map(
         Rin = 0.0,
         fig=None, ax=None, 
         cmap=get_discminer_cmap('velocity'),
-        fmt='%5.2f', clabel=None,
+        fmt='%5.2f',
+        make_cbar=True, clabel=None,
         make_contourf=True, make_contour=False, #Only one working right now
         gradient=0, findpeaks='pos', filepeaks=None,
         kwargs_gradient_peaks = {},
@@ -798,14 +801,17 @@ def make_polar_map(
     ax.set_xlabel('Azimuth [deg]', fontsize=MEDIUM_SIZE)
     ax.set_ylabel('Radius [au]', fontsize=MEDIUM_SIZE)
     mod_major_ticks(ax, axis='y', nbins=10)
-                       
-    cax = add_cbar_ax(fig, ax, **kwargs_cb)
-    cbar = plt.colorbar(im, cax=cax, format=fmt, orientation='vertical', ticks=np.linspace(levels.min(), levels.max(), 5))
-    cbar.ax.tick_params(which='major', direction='in', width=2.7, size=4.8, pad=4, labelsize=SMALL_SIZE)
-    cbar.ax.tick_params(which='minor', direction='in', width=2.7, size=3.3)
-    cbar.set_label(clabel, fontsize=SMALL_SIZE, labelpad=20, rotation=270)
-    mod_minor_ticks(cbar.ax)
 
+    if make_cbar:
+        cax = add_cbar_ax(fig, ax, **kwargs_cb)
+        cbar = plt.colorbar(im, cax=cax, format=fmt, orientation='vertical', ticks=np.linspace(levels.min(), levels.max(), 5))
+        cbar.ax.tick_params(which='major', direction='in', width=2.7, size=4.8, pad=4, labelsize=SMALL_SIZE)
+        cbar.ax.tick_params(which='minor', direction='in', width=2.7, size=3.3)
+        cbar.set_label(clabel, fontsize=SMALL_SIZE, labelpad=20, rotation=270)
+        mod_minor_ticks(cbar.ax)
+    else:
+        cbar = None
+        
     return fig, ax, cbar
 
 

@@ -45,7 +45,7 @@ def _mining_channels(parserobj, prog='channels', description='Make model channel
     parser.add_argument('-mb', '--make_beam', default=-1, choices=[-1,0,1], type=int,
                         help="Convolve by beam? Defaults to -1 (convolve if downsampling size used for fit < beam size)")
     #Define and parse additional arguments. 'True' means 'enable' the argument, they can default to different values; use -h for help.
-    add_parser_args(parser, planck=True, writefits=1) 
+    add_parser_args(parser, planck=True, Rinner=0.0, Router=1.2, absolute_Rinner=True, absolute_Router=True, writefits=1) 
     return parser
 
 def _mining_moments1d(parserobj, prog='moments1d', description='Make (gaussian, bell, or quadratic) moment maps and save output into .fits files'):
