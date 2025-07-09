@@ -75,25 +75,8 @@ class Cube(_JSON):
         self.mol = mol
         self.kind = kind
         self._init_sky_extent()
-        
-        if isinstance(beam, Beam):
-            self._init_beam_kernel()  # Get 2D Gaussian kernel from beam
-            bmaj = self.beam.major
-            bmin = self.beam.minor
-            bpa = self.beam.pa
-
-        elif beam is None:
-            self.beam_size = None
-            self.beam_area = None
-            self.beam_kernel = None
-            self.beam_area_arcsecs = None
-            bmaj = 0.0*u.deg
-            bmin = 0.0*u.deg
-            bpa = 0.0*u.deg
+        self._init_beam_kernel() 
             
-        else:
-            raise InputError(beam, "beam must be either None or radio_beam.Beam object")
-
         self._interactive = self._cursor
         self._interactive_path = self._curve
 
@@ -104,15 +87,15 @@ class Cube(_JSON):
         
         self.json_metadata = {
             'dpc': dpc,
-            'bmaj': bmaj,
-            'bmin': bmin,
-            'bpa': bpa,
+            'bmaj': self.bmaj,
+            'bmin': self.bmin,
+            'bpa': self.bpa,
             'bmaj_au': self.beam_size,
             'downsamp': 1,
             'clipped': False
         }
         self._update_json_metadata()
-        
+        print (self.json_metadata)
     @property
     def filename(self): 
         return self._filename
@@ -145,7 +128,7 @@ class Cube(_JSON):
         
     def _init_beam_kernel(self):
         """
-        Compute 2D Gaussian kernel in pixels from beam info.
+        Initialise beam properties based on the input image header.
 
         References
         ----------
@@ -153,19 +136,52 @@ class Cube(_JSON):
 
            * https://science.nrao.edu/facilities/vla/proposing/TBconv  
         """
-        sigma2fwhm = np.sqrt(8 * np.log(2))
-        x_stddev = ((self.beam.major / self.pix_size) / sigma2fwhm).decompose().value
-        y_stddev = ((self.beam.minor / self.pix_size) / sigma2fwhm).decompose().value
-        beam_angle = (90 * u.deg + self.beam.pa).to(u.radian).value
-        self.beam_kernel = Gaussian2DKernel(x_stddev, y_stddev, beam_angle)
-        # area of gaussian beam in pixels**2
-        self.beam_area = 2*np.pi*x_stddev*y_stddev
-        # area of gaussian beam in arcsecs**2
-        bmaj = self.beam.major.to(u.arcsecond).value
-        bmin = self.beam.minor.to(u.arcsecond).value        
-        self.beam_area_arcsecs = 2*np.pi * (bmaj * bmin) / sigma2fwhm**2        
-        #self.beam_area_arcsecs = np.pi * (bmaj * bmin) / (4 * np.log(2))
-        self.beam_size = bmaj*self.dpc.to('pc').value * u.au
+
+        if isinstance(self.beam, Beam):
+            
+            sigma2fwhm = np.sqrt(8 * np.log(2))
+            x_stddev = ((self.beam.major / self.pix_size) / sigma2fwhm).decompose().value
+            y_stddev = ((self.beam.minor / self.pix_size) / sigma2fwhm).decompose().value
+            beam_angle = (90 * u.deg + self.beam.pa).to(u.radian).value
+            self.beam_kernel = Gaussian2DKernel(x_stddev, y_stddev, beam_angle)
+            self.beam_area = 2*np.pi*x_stddev*y_stddev #Area of gaussian beam in pixels**2
+            bmaj = self.beam.major.to(u.arcsecond).value
+            bmin = self.beam.minor.to(u.arcsecond).value        
+            self.beam_area_arcsecs = 2*np.pi * (bmaj * bmin) / sigma2fwhm**2 #Area of gaussian beam in arcsecs**2        
+            self.beam_size = bmaj*self.dpc.to('pc').value * u.au #in au
+            
+            self.bmaj = self.beam.major.to(u.arcsecond)
+            self.bmin = self.beam.minor.to(u.arcsecond)
+            self.bpa = self.beam.pa.to(u.deg)
+
+        elif self.beam is None:
+            
+            if self.header['BUNIT']=='Jy/arcsec^2':
+                
+                self.beam_kernel = None
+                self.beam_size = 1 * self.dpc.to('pc').value * u.au 
+                self.beam_area_arcsecs = 1*1 
+                self.beam_area = self.beam_area_arcsecs / self.pix_size.to(u.arcsecond).value**2 #Area in pixels**2
+                
+                self.bmaj = 1.0*u.arcsecond
+                self.bmin = 1.0*u.arcsecond
+                self.bpa = 0.0*u.deg
+                warnings.warn("No beam information was found. Setting resolution element area to 1x1 arcsecond**2, assuming Jy/arcsec^2 intensity units...")
+                
+            else: #Assume Jy/pixel
+
+                self.beam_kernel = None                
+                self.beam_size = self.pix_size.to(u.arcsecond).value * self.dpc.to('pc').value * u.au 
+                self.beam_area_arcsecs = self.pix_size.to(u.arcsecond).value**2
+                self.beam_area = 1*1
+                
+                self.bmaj = self.pix_size.to(u.arcsecond)
+                self.bmin = self.pix_size.to(u.arcsecond)
+                self.bpa = 0.0*u.deg
+                warnings.warn('No beam information was found. Setting resolution element area to 1x1 pixel**2 (in arcsecond**2), assuming Jy/pixel intensity units...')
+                
+        else:
+            raise InputError(self.beam, "beam must be either None or radio_beam.Beam object")
         
     @staticmethod
     def _channel_picker(channels, warn_hdr=True):
@@ -389,13 +405,7 @@ class Cube(_JSON):
                 self.wcs = WCS(self.header)
 
             self._init_sky_extent()
-            
-            if isinstance(self.beam, Beam):
-                self._init_beam_kernel()  # Get 2D Gaussian kernel from beam
-            elif self.beam is None:
-                pass
-            else:
-                raise InputError(self.beam, "beam must be either None or radio_beam.Beam object")
+            self._init_beam_kernel()
 
             # keeping track of changes to original cube
             self.header[hdrkey] = (True, hdrcard)

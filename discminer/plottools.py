@@ -320,8 +320,9 @@ def _make_text_2D(ax, Rlist, posx=0.0, sposy=1, fmt='%d', va=None, **kwargs_text
         ax.text(posx, sposy*(Ri+dy), fmt%Ri, **kwargs)
         
 def _make_text_1D_substructures(ax, gaps=[], rings=[], kinks=[],
-                                label_gaps=False, label_rings=False, label_kinks=False):
-    kwargs_text = dict(fontsize=SMALL_SIZE+2, ha='center', va='bottom', transform=ax.transAxes, weight='bold', rotation=90)    
+                                label_gaps=False, label_rings=False, label_kinks=False, **kwargs_text):
+    kwargs = dict(fontsize=SMALL_SIZE+2, ha='center', va='bottom', transform=ax.transAxes, weight='bold', rotation=90)
+    kwargs.update(kwargs_text)
     xlims = ax.get_xlim()
     xext = xlims[1]-xlims[0]
 
@@ -329,7 +330,7 @@ def _make_text_1D_substructures(ax, gaps=[], rings=[], kinks=[],
         for Ri in R:
             if Ri < xlims[0]: continue
             posx = (Ri-xlims[0])/xext
-            ax.text(posx, 1.02, text%Ri, **kwargs_text)        
+            ax.text(posx, 1.02, text%Ri, **kwargs)        
 
     if label_gaps: text_it(gaps, r'D%d')
     if label_rings: text_it(rings, r'B%d')
@@ -435,7 +436,7 @@ def make_substructures(ax, gaps=[], rings=[], kinks=[],
                        model=None, surface='upper', #relevant if coords='sky'
                        make_legend=False,                       
                        label_gaps=False, label_rings=False, label_kinks=False, sposy=-1.15, fontsize=MEDIUM_SIZE+1,
-                       kwargs_gaps={}, kwargs_rings={}, kwargs_kinks={}, func1d='axvline'):
+                       kwargs_gaps={}, kwargs_rings={}, kwargs_kinks={}, kwargs_text1d={}, func1d='axvline'):
     
     '''Overlay ring-like (if twodim) or vertical lines (if not twodim) to illustrate the radial location of substructures in the disc'''
     kwargs_g = dict(color='0.2', ls='--', lw=1.7, dash_capstyle='round', dashes=(3.0, 2.5), alpha=1.0)
@@ -527,7 +528,8 @@ def make_substructures(ax, gaps=[], rings=[], kinks=[],
         for R in kinks: func1d(R, **kwargs_k)
 
         _make_text_1D_substructures(ax, gaps=gaps, rings=rings, kinks=kinks,
-                                    label_gaps=label_gaps, label_rings=label_rings, label_kinks=label_kinks)
+                                    label_gaps=label_gaps, label_rings=label_rings, label_kinks=label_kinks,
+                                    **kwargs_text1d)
         
     if make_legend and len(gaps)>0: ax.plot([None], [None], label='Gaps', **kwargs_g)
     if make_legend and len(rings)>0: ax.plot([None], [None], label='Rings', **kwargs_r)
