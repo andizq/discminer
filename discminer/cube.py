@@ -158,7 +158,7 @@ class Cube(_JSON):
 
         elif self.beam is None:
             
-            if self.header['BUNIT'] in ['Jy/arcsec^2', 'Jy / arcsec^2' , 'arcsec-2 Jy']:
+            if self.header['BUNIT'] in ['Jy/arcsec^2', 'Jy / arcsec^2' , 'arcsec-2 Jy', 'Jy arcsec-2']:
                 self.beam_kernel = None
                 self.beam_size = 15*u.au #Arbitrary scale, useful for analysis scripts
                 #self.beam_size = 1 * self.dpc.to('pc').value * u.au                 
