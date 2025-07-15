@@ -172,7 +172,9 @@ def init_data_and_model(parfile='parfile.json', Rmin=0, Rmax=1.1, twodim=False, 
         #PROTOTYPE PARAMS
         #****************
         model.params = copy.copy(best)
-        model.params['intensity']['I0'] /= meta['downsamp_factor']
+
+        if datacube.beam is not None:
+            model.params['intensity']['I0'] /= meta['downsamp_factor']
 
         return datacube, model
 

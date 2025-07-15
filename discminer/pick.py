@@ -151,7 +151,7 @@ class Pick(Rail):
                 rej_thresh = np.nanmedian(peak_resid) + clean_thres*np.nanstd(peak_resid)
                 ii = peak_resid < rej_thresh
                 print ('Rejecting %d peak velocity residuals above %.3f km/s (median+%dsigma)'%(np.sum(~ii), rej_thresh, clean_thres))
-                self.cutout_thres = rej_thres
+                self.cutout_thres = rej_thresh
                 
             self.lev_list = self.lev_list[ii]
             self.color_list = self.color_list[ii]

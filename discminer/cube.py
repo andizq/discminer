@@ -74,6 +74,7 @@ class Cube(_JSON):
         self.disc = disc
         self.mol = mol
         self.kind = kind
+        
         self._init_sky_extent()
         self._init_beam_kernel() 
             
@@ -84,7 +85,7 @@ class Cube(_JSON):
         _JSON.__init__(self, init_metadata=dict(disc=disc, mol=mol, kind=kind), parfile=parfile)
 
         self.filename = filename #init and run setter; potentially variable for the same obj
-        
+
         self.json_metadata = {
             'dpc': dpc,
             'bmaj': self.bmaj,
@@ -96,12 +97,13 @@ class Cube(_JSON):
         }
         self._update_json_metadata()
         print (self.json_metadata)
+        
     @property
-    def filename(self): 
+    def filename(self):        
         return self._filename
           
     @filename.setter 
-    def filename(self, name): 
+    def filename(self, name):
         self.fileroot = os.path.expanduser(name).split(".fits")[0]        
         self.json_metadata = {'file_data': name}
         self._filename = name        
@@ -156,10 +158,10 @@ class Cube(_JSON):
 
         elif self.beam is None:
             
-            if self.header['BUNIT']=='Jy/arcsec^2':
-                
+            if self.header['BUNIT'] in ['Jy/arcsec^2', 'Jy / arcsec^2' , 'arcsec-2 Jy']:
                 self.beam_kernel = None
-                self.beam_size = 1 * self.dpc.to('pc').value * u.au 
+                self.beam_size = 15*u.au #Arbitrary scale, useful for analysis scripts
+                #self.beam_size = 1 * self.dpc.to('pc').value * u.au                 
                 self.beam_area_arcsecs = 1*1 
                 self.beam_area = self.beam_area_arcsecs / self.pix_size.to(u.arcsecond).value**2 #Area in pixels**2
                 
@@ -168,17 +170,17 @@ class Cube(_JSON):
                 self.bpa = 0.0*u.deg
                 warnings.warn("No beam information was found. Setting resolution element area to 1x1 arcsecond**2, assuming Jy/arcsec^2 intensity units...")
                 
-            else: #Assume Jy/pixel
-
-                self.beam_kernel = None                
-                self.beam_size = self.pix_size.to(u.arcsecond).value * self.dpc.to('pc').value * u.au 
+            else: #Assume pixel size for reference resolution element, even if 'BUNIT'=='K'
+                self.beam_kernel = None
+                self.beam_size = 15*u.au #Arbitrary scale, useful for analysis scripts 
+                #self.beam_size = self.pix_size.to(u.arcsecond).value * self.dpc.to('pc').value * u.au 
                 self.beam_area_arcsecs = self.pix_size.to(u.arcsecond).value**2
                 self.beam_area = 1*1
                 
                 self.bmaj = self.pix_size.to(u.arcsecond)
                 self.bmin = self.pix_size.to(u.arcsecond)
                 self.bpa = 0.0*u.deg
-                warnings.warn('No beam information was found. Setting resolution element area to 1x1 pixel**2 (in arcsecond**2), assuming Jy/pixel intensity units...')
+                warnings.warn('No beam information was found. Setting resolution element area to 1x1 pixel**2 (in arcsecond**2), convenient for cubes in Jy/pixel or K intensity units...')
                 
         else:
             raise InputError(self.beam, "beam must be either None or radio_beam.Beam object")
@@ -279,7 +281,11 @@ class Cube(_JSON):
         kwargs_io = dict(overwrite=True)  # Default kwargs
         kwargs_io.update(kwargs)
 
-        I = self.data * u.Unit(self.header["BUNIT"]).to("beam-1 Jy")
+        try:
+            I = self.data * u.Unit(self.header["BUNIT"]).to("beam-1 Jy")
+        except u.core.UnitConversionError:
+            I = self.data #Assume Jy
+            
         nu = self.header["RESTFRQ"]  # in Hz
         # beam_area: C*bmin['']*bmaj[''] * (dist[pc])**2 --> beam area in au**2 units
         # beam solid angle: beam_area/(dist[m])**2.
