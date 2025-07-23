@@ -149,7 +149,7 @@ def _mining_azimuthal_profiles(parserobj, prog='azimprof', description='Extract 
                         help="Compute profiles on data, model or residual moment map. DEFAULTS to 'residuals'")
     parser.add_argument('-ig', '--interpgrid', default=0, type=int,
                         help="Use linear grid interpolation for radial/azimuthal profile extraction. DEFAULTS to False (i.e. use native grid).")
-    add_parser_args(parser, moment=True, kernel=True, kind=True, surface=True, Rinner=True, Router=True, smooth=True)
+    add_parser_args(parser, moment=True, kernel=True, kind=True, surface=True, Rinner=True, Router=True, smooth=True, writetxt=True)
     return parser
 
 def _mining_spectra(parserobj, prog='spectra', description='Extract and show line profiles along a specific annulus, every 30 deg'):

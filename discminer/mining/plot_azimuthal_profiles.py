@@ -17,6 +17,7 @@ import json
 import numpy as np
 from astropy import units as u
 import matplotlib.pyplot as plt
+from functools import reduce
 
 use_discminer_style()
 
@@ -105,6 +106,14 @@ ax.tick_params(labelbottom=True, top=True, right=True, which='both', direction='
 
 tick_angles = np.arange(-150, 181, 30)
 ax.set_xticks(tick_angles)
+
+if args.writetxt:
+    txt = []
+    for i in range(len(R_list)):
+        phitxt = reduce(lambda a,b: '%s,%s'%(a,b), np.round(phi_list[i], 5))
+        residtxt = reduce(lambda a,b: '%s,%s'%(a,b), np.round(resid_list[i], 5))
+        txt.append('%s %s %s'%(np.round(R_list[i], 5), phitxt, residtxt))
+    np.savetxt('azimuthal_%s_%s_%s.txt'%(args.moment, args.type, meta['disc']), txt, fmt='%s')
 
 plt.savefig('azimuthal_%s_%s.png'%(args.moment, args.type), bbox_inches='tight', dpi=200)
 show_output(args)
