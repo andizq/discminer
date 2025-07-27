@@ -89,6 +89,7 @@ def init_data_and_model(parfile='parfile.json', Rmin=0, Rmax=1.1, twodim=False, 
     datacube = Data(file_data, dpc, twodim=twodim, disc=meta['disc'], mol=meta['mol']) # Read data and convert to Cube object
 
     func_defaults = {
+        'orientation_func': cart.orientation_constant,                
         'velocity_func': cart.keplerian_vertical,
         'z_upper_func': cart.z_upper_exp_tapered,
         'z_lower_func': cart.z_lower_exp_tapered,
@@ -769,12 +770,15 @@ def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', model
                 if args.projection=='cartesian':
                     xi, yi = xdisc, ydisc
                     ri = np.hypot(xdisc, ydisc)
+                    phii = np.arctan2(ydisc, xdisc)
                     
                 elif args.projection=='polar':
                     phii = np.arctan2(ydisc, xdisc)
                     ri = np.hypot(xdisc, ydisc)
                     xi, yi = np.degrees(phii), ri
 
+                print ('Planet orbital radius and azmith in disc frame (au, deg):', ri, np.degrees(phii))
+                
             elif coords=='sky':
                 xi, yi = xsky, ysky
                 
