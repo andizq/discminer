@@ -1,7 +1,6 @@
 *~
 *.c
 *.pyc
-
 *.fits
 *.dat
 *.log
