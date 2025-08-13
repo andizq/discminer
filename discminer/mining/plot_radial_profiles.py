@@ -90,6 +90,7 @@ if args.moment=='velocity':
 #**************************
 #RADIAL BINS AND UTILS
 beam_au = datacube.beam_size.to('au').value
+    
 if args.absolute_Rinner>=0:
     Rprof_in = args.absolute_Rinner
 else:

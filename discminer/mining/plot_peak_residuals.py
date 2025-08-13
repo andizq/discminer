@@ -281,7 +281,7 @@ if args.projection=='cartesian':
     #Mark planet location if passed as an arg
     kwargs_planet = dict(edgecolors='gold', facecolors='none', marker='o', lw=4.5, alpha=1.0, zorder=22)    
 
-    mark_planet_location(ax, args, edgecolor='k', lw=3.5, s=sb+200, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc)    
+    mark_planet_location(ax, args, edgecolors='k', lw=3.5, s=sb+200, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc)    
     
     #mark_planet_location(ax, args, s=sb+200, **kwargs_planet)
     ax.scatter(None, None, label='Planet', s=sb, **kwargs_planet) #for legend

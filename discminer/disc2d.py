@@ -1306,6 +1306,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             
     def _get_attribute_func(self, attribute):
         return {
+            'orientation': self.orientation_func,
             'intensity': self.intensity_func,
             'linewidth': self.linewidth_func,
             'lineslope': self.lineslope_func,

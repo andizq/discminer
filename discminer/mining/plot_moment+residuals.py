@@ -130,7 +130,8 @@ for i,axi in enumerate(ax):
     if i>=1:
         axi.tick_params(labelleft=False)
         
-    Contours.emission_surface(axi, R, phi, extent=extent, R_lev=np.arange(25, 0.98*Rout, 50)*u.au.to('m'), which='both')
+    Contours.emission_surface(axi, R, phi, extent=extent, which='both',
+                              R_lev=np.linspace(0.1, 1.0, 10)*Rout*au_to_m)
     r"""
     #Overlay dust rings?
     Contours.emission_surface(
@@ -142,7 +143,7 @@ for i,axi in enumerate(ax):
     #"""
     
 datacube.plot_beam(ax[0], fc='0.8')
-mark_planet_location(ax[2], args, edgecolor='k', lw=2.0, s=200, coords='sky', model=model, midplane=False)
+mark_planet_location(ax[2], args, edgecolors='k', lw=2.0, s=200, coords='sky', model=model, midplane=False)
 
 plt.savefig('moment+residuals_%s.png'%mtags['base'], bbox_inches='tight', dpi=200)
 show_output(args)
