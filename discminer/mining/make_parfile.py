@@ -1,4 +1,5 @@
 from discminer.mining_control import _mining_parfile
+from discminer._version import __version__
 
 import os
 import json
@@ -139,18 +140,22 @@ files_dir = os.listdir()
 file_data = ''
 
 if args.log_file == '':
-    log_file = files_dir[np.argmax(['log_pars' in f for f in files_dir])]
+    log_file = os.path.join(
+        args.dir_log,
+        files_dir[np.argmax(['log_pars' in f for f in files_dir])]
+    )
     for f in files_dir:
         if 'log_pars' in f and 'default' in f and 'converted' not in f:
-            log_file = f
+            log_file = os.path.join(args.dir_log, f)
             break        
 else:
     log_file = args.log_file
     
 def get_tags_dict(log_file):
     global file_data
-    tag_full = log_file.split('log_pars_')[1].split('_cube')[0]
-    log_file_split = np.asarray(log_file.split('_'))
+    dir_log, log_tail = os.path.split(log_file)
+    tag_full = log_tail.split('log_pars_')[1].split('_cube')[0]
+    log_file_split = np.asarray(log_tail.split('_'))
     tag_disc = log_file_split[2]
     tag_mol = log_file_split[3]
     tag_dv = log_file_split[4]
@@ -204,7 +209,7 @@ def get_tags_dict(log_file):
         file_data += '_downsamp_%dpix'%pro
     file_data += '.fits'
 
-    return dict(file_data=file_data, prepare_script=pfile, log_file=log_file, tag=tag_full, disc=tag_disc, mol=tag_mol, dpc=dpc, dv=tag_dv, program=tag_program, kind=tag_kind.tolist(), nwalkers=int(tag_walkers), nsteps=int(tag_steps), downsamp_pro=int(pro), downsamp_fit=int(fit), downsamp_factor=(fit/pro)**2)
+    return dict(dir_data=args.dir_data, dir_model=args.dir_model, file_data=os.path.join(args.dir_data, file_data), prepare_script=pfile, log_file=log_file, tag=tag_full, disc=tag_disc, mol=tag_mol, dpc=dpc, dv=tag_dv, program=tag_program, kind=tag_kind.tolist(), nwalkers=int(tag_walkers), nsteps=int(tag_steps), downsamp_pro=int(pro), downsamp_fit=int(fit), downsamp_factor=(fit/pro)**2, v_discminer=__version__)
 
 
 def get_base_pars(log_file, tags_dict):
@@ -220,7 +225,8 @@ def get_base_pars(log_file, tags_dict):
         return log_pars, header
     
     try:
-        log_file_split = np.asarray(log_file.split('_'))
+        head, tail = os.path.split(log_file)
+        log_file_split = np.asarray(tail.split('_'))
         tag_disc = log_file_split[2]
 
         log_pars, header = read_logpars(log_file)
@@ -423,7 +429,7 @@ def make_all():
     try:
         custom_dict.update(gaps=gaps_dict[tags_dict['disc']], rings=rings_dict[tags_dict['disc']], kinks=kinks_dict[tags_dict['disc']])
     except KeyError:
-        custom_dict.update(gaps=[], rings=[], kinks=[])
+        custom_dict.update(gaps=[], rings=[0], kinks=[])
             
     make_json(dicts_list = [custom_dict, tags_dict, pars_dict, units_dict], keys_list = ['custom', 'metadata', 'best_fit', 'units'])
 

@@ -227,7 +227,7 @@ for axi in ax:
 
     make_substructures(axi, gaps=gaps, rings=rings, twodim=True, polar=True, label_rings=label_rings, kwargs_gaps=kc, kwargs_rings=kc)
     
-mark_planet_location(ax[-1], args, edgecolor='k', lw=3.5, s=550, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc)    
+mark_planet_location(ax[-1], args, edgecolors='k', lw=3.5, s=550, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc)    
 ax[0].set_title(ctitle, fontsize=16, color='k')
 
 plt.savefig('gradient_residuals_deproj_%s_d%s_polar.png'%(mtags['base'], args.gradient), bbox_inches='tight', dpi=200)

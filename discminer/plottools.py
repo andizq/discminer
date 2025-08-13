@@ -12,6 +12,7 @@ import astropy.units as u
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.colors import ListedColormap
+from scipy.ndimage import maximum_filter
 from collections.abc import Iterable
 import cmasher as cmr
 
@@ -93,6 +94,8 @@ def make_up_ax(ax, xlims=(None, None), ylims=(None, None),
 def make_1d_legend(ax, **kwargs):
     kwargs_def = dict(
         frameon=False,
+        framealpha=1.0,
+        edgecolor='inherit',
         fontsize=MEDIUM_SIZE,
         ncol=3,
         handlelength=2.0,
@@ -317,8 +320,9 @@ def _make_text_2D(ax, Rlist, posx=0.0, sposy=1, fmt='%d', va=None, **kwargs_text
         ax.text(posx, sposy*(Ri+dy), fmt%Ri, **kwargs)
         
 def _make_text_1D_substructures(ax, gaps=[], rings=[], kinks=[],
-                                label_gaps=False, label_rings=False, label_kinks=False):
-    kwargs_text = dict(fontsize=SMALL_SIZE+2, ha='center', va='bottom', transform=ax.transAxes, weight='bold', rotation=90)    
+                                label_gaps=False, label_rings=False, label_kinks=False, **kwargs_text):
+    kwargs = dict(fontsize=SMALL_SIZE+2, ha='center', va='bottom', transform=ax.transAxes, weight='bold', rotation=90)
+    kwargs.update(kwargs_text)
     xlims = ax.get_xlim()
     xext = xlims[1]-xlims[0]
 
@@ -326,7 +330,7 @@ def _make_text_1D_substructures(ax, gaps=[], rings=[], kinks=[],
         for Ri in R:
             if Ri < xlims[0]: continue
             posx = (Ri-xlims[0])/xext
-            ax.text(posx, 1.02, text%Ri, **kwargs_text)        
+            ax.text(posx, 1.02, text%Ri, **kwargs)        
 
     if label_gaps: text_it(gaps, r'D%d')
     if label_rings: text_it(rings, r'B%d')
@@ -432,7 +436,7 @@ def make_substructures(ax, gaps=[], rings=[], kinks=[],
                        model=None, surface='upper', #relevant if coords='sky'
                        make_legend=False,                       
                        label_gaps=False, label_rings=False, label_kinks=False, sposy=-1.15, fontsize=MEDIUM_SIZE+1,
-                       kwargs_gaps={}, kwargs_rings={}, kwargs_kinks={}, func1d='axvline'):
+                       kwargs_gaps={}, kwargs_rings={}, kwargs_kinks={}, kwargs_text1d={}, func1d='axvline'):
     
     '''Overlay ring-like (if twodim) or vertical lines (if not twodim) to illustrate the radial location of substructures in the disc'''
     kwargs_g = dict(color='0.2', ls='--', lw=1.7, dash_capstyle='round', dashes=(3.0, 2.5), alpha=1.0)
@@ -524,7 +528,8 @@ def make_substructures(ax, gaps=[], rings=[], kinks=[],
         for R in kinks: func1d(R, **kwargs_k)
 
         _make_text_1D_substructures(ax, gaps=gaps, rings=rings, kinks=kinks,
-                                    label_gaps=label_gaps, label_rings=label_rings, label_kinks=label_kinks)
+                                    label_gaps=label_gaps, label_rings=label_rings, label_kinks=label_kinks,
+                                    **kwargs_text1d)
         
     if make_legend and len(gaps)>0: ax.plot([None], [None], label='Gaps', **kwargs_g)
     if make_legend and len(rings)>0: ax.plot([None], [None], label='Rings', **kwargs_r)
@@ -664,8 +669,6 @@ def make_round_map(
     return fig, ax
 
 
-from scipy.ndimage import maximum_filter
-
 def find_gradient_peaks(image, neighborhood_size=3, threshold=0):
     # Apply maximum filter to find local maxima
     neighborhood = np.ones((neighborhood_size, neighborhood_size))
@@ -685,7 +688,8 @@ def make_polar_map(
         Rin = 0.0,
         fig=None, ax=None, 
         cmap=get_discminer_cmap('velocity'),
-        fmt='%5.2f', clabel=None,
+        fmt='%5.2f',
+        make_cbar=True, clabel=None,
         make_contourf=True, make_contour=False, #Only one working right now
         gradient=0, findpeaks='pos', filepeaks=None,
         kwargs_gradient_peaks = {},
@@ -799,14 +803,17 @@ def make_polar_map(
     ax.set_xlabel('Azimuth [deg]', fontsize=MEDIUM_SIZE)
     ax.set_ylabel('Radius [au]', fontsize=MEDIUM_SIZE)
     mod_major_ticks(ax, axis='y', nbins=10)
-                       
-    cax = add_cbar_ax(fig, ax, **kwargs_cb)
-    cbar = plt.colorbar(im, cax=cax, format=fmt, orientation='vertical', ticks=np.linspace(levels.min(), levels.max(), 5))
-    cbar.ax.tick_params(which='major', direction='in', width=2.7, size=4.8, pad=4, labelsize=SMALL_SIZE)
-    cbar.ax.tick_params(which='minor', direction='in', width=2.7, size=3.3)
-    cbar.set_label(clabel, fontsize=SMALL_SIZE, labelpad=20, rotation=270)
-    mod_minor_ticks(cbar.ax)
 
+    if make_cbar:
+        cax = add_cbar_ax(fig, ax, **kwargs_cb)
+        cbar = plt.colorbar(im, cax=cax, format=fmt, orientation='vertical', ticks=np.linspace(levels.min(), levels.max(), 5))
+        cbar.ax.tick_params(which='major', direction='in', width=2.7, size=4.8, pad=4, labelsize=SMALL_SIZE)
+        cbar.ax.tick_params(which='minor', direction='in', width=2.7, size=3.3)
+        cbar.set_label(clabel, fontsize=SMALL_SIZE, labelpad=20, rotation=270)
+        mod_minor_ticks(cbar.ax)
+    else:
+        cbar = None
+        
     return fig, ax, cbar
 
 

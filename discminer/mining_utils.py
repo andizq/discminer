@@ -10,6 +10,7 @@ import runpy
 import copy
 import sys
 import os
+import re
 
 from discminer.plottools import get_discminer_cmap, make_1d_legend
 from discminer.tools.utils import FrontendUtils
@@ -59,7 +60,7 @@ moltex = {
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-def init_data_and_model(parfile='parfile.json', Rmin=0, Rmax=1.1, twodim=False, init_model=True, write_extent=True, verbose=True):
+def init_data_and_model(parfile='parfile.json', Rmin=0, Rmax=1.1, twodim=False, init_model=True, write_extent=True, verbose=True, subpixels=0):
     #Rmin: If dimensionless, fraction of beam_size
     #Rmax: If dimensionless, fraction of Rout    
     with open(parfile) as jf:
@@ -69,13 +70,26 @@ def init_data_and_model(parfile='parfile.json', Rmin=0, Rmax=1.1, twodim=False, 
     best = pars['best_fit']
     custom = pars['custom']
 
-    file_data = meta['file_data']
+    try:
+        dir_data = meta['dir_data']
+    except KeyError:
+        dir_data = './'
+
+    if subpixels==0: #try looking for subpixel factor in the parfile metadata
+        for kindi in meta['kind']:
+            if 'subpix' in kindi:
+                tmp = re.findall(r'\d+', kindi)
+                if len(tmp)>0:
+                    subpixels = int(tmp[0])
+
+    file_data = os.path.join(dir_data, meta['file_data'])
     Rout = best['intensity']['Rout']
     dpc = meta['dpc']*u.pc
 
     datacube = Data(file_data, dpc, twodim=twodim, disc=meta['disc'], mol=meta['mol']) # Read data and convert to Cube object
 
     func_defaults = {
+        'orientation_func': cart.orientation_constant,                
         'velocity_func': cart.keplerian_vertical,
         'z_upper_func': cart.z_upper_exp_tapered,
         'z_lower_func': cart.z_lower_exp_tapered,
@@ -151,7 +165,7 @@ def init_data_and_model(parfile='parfile.json', Rmin=0, Rmax=1.1, twodim=False, 
         if isinstance(Rmax, numbers.Real):
             Rmax = Rmax*Rout*u.au
             
-        model = Model(datacube, Rmax=Rmax, Rmin=Rmin, write_extent=write_extent, prototype=True, verbose=verbose)
+        model = Model(datacube, Rmax=Rmax, Rmin=Rmin, write_extent=write_extent, prototype=True, verbose=verbose, subpixels=subpixels)
 
         set_model_funcs(model)
 
@@ -159,7 +173,9 @@ def init_data_and_model(parfile='parfile.json', Rmin=0, Rmax=1.1, twodim=False, 
         #PROTOTYPE PARAMS
         #****************
         model.params = copy.copy(best)
-        model.params['intensity']['I0'] /= meta['downsamp_factor']
+
+        if datacube.beam is not None:
+            model.params['intensity']['I0'] /= meta['downsamp_factor']
 
         return datacube, model
 
@@ -167,23 +183,23 @@ def init_data_and_model(parfile='parfile.json', Rmin=0, Rmax=1.1, twodim=False, 
         return datacube
 
     
-def read_json(decimals=True): #Read json file again but keep track of (if) decimals
+def read_json(parfile='parfile.json', decimals=True): #Read json file again but keep track of (if) decimals
     if decimals:
         parse_func = lambda x: decimal.Decimal(str(x))
     else:
         parse_func = float
 
-    with open('parfile.json') as json_file: 
+    with open(parfile) as json_file: 
         pars = json.load(json_file, parse_float=parse_func)
     return pars
             
-def get_2d_plot_decorators(moment, unit_simple=False, fmt_vertical=False):    
+def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fmt_vertical=False):    
     I_res2abs = 3.0
     v_res2abs = 20.0
     L_res2abs = 5.0
     Ls_res2abs = 3.0
 
-    pars = read_json()
+    pars = read_json(parfile=parfile)
     vsys = float(pars['best_fit']['velocity']['vsys'])
     custom = pars['custom']
     meta = pars['metadata']
@@ -297,13 +313,13 @@ def get_2d_plot_decorators(moment, unit_simple=False, fmt_vertical=False):
         
     return ctitle, clabel, fclim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit
 
-def get_1d_plot_decorators(moment, tag=''):
+def get_1d_plot_decorators(moment, parfile='parfile.json', tag=''):
     I_res2abs = 5.0
     v_res2abs = 20.0
     L_res2abs = 7.0
     Ls_res2abs = 3.0
         
-    pars = read_json(decimals=False)
+    pars = read_json(parfile=parfile, decimals=False)
     vsys = float(pars['best_fit']['velocity']['vsys'])
     custom = pars['custom']
     meta = pars['metadata']
@@ -461,8 +477,12 @@ def get_noise_mask(
 def load_moments(
         args, moment=None, kernel=None, mask=[],
         clip_Rgrid=None, clip_Rmin=0*u.au, clip_Rmax=np.inf*u.au,
-        deltas=False
-):    
+        deltas=False, parfile='parfile.json', mask_comp=None
+):
+
+    pars = read_json(parfile=parfile, decimals=False)
+    meta = pars['metadata']
+    
     if moment is None:
         moment = args.moment
 
@@ -493,10 +513,20 @@ def load_moments(
 
     if deltas:
         tag_base = 'delta_'+tag_base
+
+    try:
+        dir_data = meta['dir_data']
+    except KeyError:
+        dir_data = './'
+
+    try:
+        dir_model = meta['dir_model']
+    except KeyError:
+        dir_model = './'
         
     #Read and mask moment maps, and compute residuals
-    moment_data = fits.getdata(tag_base+'_data.fits').squeeze()
-    moment_model = fits.getdata(tag_base+'_model.fits').squeeze()
+    moment_data = fits.getdata(os.path.join(dir_data, tag_base+'_data.fits')).squeeze()
+    moment_model = fits.getdata(os.path.join(dir_model, tag_base+'_model.fits')).squeeze()
 
     try:
         if args.smooth>0.0:
@@ -509,6 +539,14 @@ def load_moments(
 
     moment_data_unma = moment_data
     moment_model_unma = moment_model
+
+    if mask_comp is not None:
+        fitcomp = fits.getdata(f'fit_line_components_{kernel}_{args.kind}_data.fits').squeeze()
+        if len(mask)==0:
+            mask = fitcomp==mask_comp
+        else:
+            mask = mask | (fitcomp==mask_comp)
+            
     moment_data[mask] = np.nan
     moment_model[mask] = np.nan
     
@@ -528,6 +566,10 @@ def load_moments(
         
     residuals = moment_data - moment_model
 
+    if args.writefits:
+        header = fits.getheader(os.path.join(dir_data, tag_base+'_data.fits'))
+        fits.writeto(os.path.join(dir_model, tag_base+'_residuals.fits'), residuals, header=header, overwrite=True)
+        
     if args.surface in ['low', 'lower']:
         pass
         #from scipy.ndimage import gaussian_filter
@@ -537,6 +579,8 @@ def load_moments(
     return moment_data, moment_model, residuals, dict(surf = tag_surf,
                                                       ref_surf = ref_surf,
                                                       base = tag_base,
+                                                      dir_data = dir_data,
+                                                      dir_model = dir_model,
                                                       mask = np.isnan(moment_data),
                                                       data_unmasked = moment_data_unma,
                                                       model_unmasked = moment_model_unma)
@@ -563,6 +607,8 @@ def make_and_save_filaments(map2d,
                             model=None,
                             tag='',                            
                             writefits=True,
+                            filecolors='filaments_colors.json',
+                            writeobj=False,
                             return_all=False,
                             cmap='jet',
                             surface='upper'
@@ -605,6 +651,8 @@ def make_and_save_filaments(map2d,
         fil_i[fil.pixel_coords] = 1 
         fil_pos_list.append(fil_i)
 
+        if writeobj:
+            fil.to_pickle('filaments_pos%s_id%d.pkl'%(tag, i+1))
         
     for i,fil in enumerate(fil_neg.filaments):
         
@@ -617,6 +665,9 @@ def make_and_save_filaments(map2d,
         fil_i[fil.pixel_coords] = 1 
         fil_neg_list.append(fil_i)
 
+        if writeobj:
+            fil.to_pickle('filaments_neg%s_id%d.pkl'%(tag, i+1))
+            
     fil_pos.filaments = fil_pos_obj
     fil_neg.filaments = fil_neg_obj
     
@@ -636,7 +687,11 @@ def make_and_save_filaments(map2d,
     colors_dict = {}
     colors_dict.update({i+1: matplotlib.colors.to_hex(cmap(cpos[i])) for i in range(npos)})
     colors_dict.update({-i-1: matplotlib.colors.to_hex(cmap(cneg[i])) for i in range(nneg)})
-        
+
+    if len(colors_dict)>0:
+        with open(filecolors, 'w') as jsonfile:
+            json.dump(colors_dict, jsonfile, indent=4)
+            
     if return_all:
         return fil_pos, fil_neg, fil_pos_list, fil_neg_list, colors_dict       
 
@@ -715,13 +770,15 @@ def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', model
                 if args.projection=='cartesian':
                     xi, yi = xdisc, ydisc
                     ri = np.hypot(xdisc, ydisc)
-                    print (ri)
+                    phii = np.arctan2(ydisc, xdisc)
                     
                 elif args.projection=='polar':
                     phii = np.arctan2(ydisc, xdisc)
                     ri = np.hypot(xdisc, ydisc)
                     xi, yi = np.degrees(phii), ri
 
+                print ('Planet orbital radius and azmith in disc frame (au, deg):', ri, np.degrees(phii))
+                
             elif coords=='sky':
                 xi, yi = xsky, ysky
                 

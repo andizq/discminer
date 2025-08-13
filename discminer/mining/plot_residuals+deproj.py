@@ -110,7 +110,7 @@ R, phi, z = load_disc_grid()
 R_s = R[args.surface]*u.m.to('au')
 phi_s = phi[args.surface]
 
-noise_mean, mask = get_noise_mask(datacube, thres=2,
+noise_mean, mask = get_noise_mask(datacube, thres=args.sigma,
                                   mask_phi={'map2d': np.degrees(phi['upper']),
                                             'lims': args.mask_phi},
                                   mask_R={'map2d': R['upper']/au_to_m,
@@ -126,7 +126,7 @@ Yproj = R[args.surface]*np.sin(phi[args.surface])
 # Masked sections are visually drawn at the end
 moment_data, moment_model, residuals, mtags = load_moments(
     args,
-    #mask=mask, #fill masked cells with nans
+    mask=mask, #fill masked cells with nans
     clip_Rmin=0.0*u.au,
     clip_Rmax=Rmod_out*u.au,
     clip_Rgrid=R[args.surface]*u.m
@@ -223,7 +223,7 @@ elif args.projection=='polar':
 if len(args.mask_R)>0 or len(args.mask_phi)>0:
     make_masks(ax, args.mask_R, args.mask_phi, Rmax=Rmod_out, facecolor='k', alpha=0.3)
     
-mark_planet_location(ax, args, edgecolor='k', lw=3.5, s=550, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc)    
+mark_planet_location(ax, args, edgecolors='k', lw=3.5, s=550, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc)    
 ax.set_title(ctitle, fontsize=16, color='k')
 
 plt.savefig('residuals_deproj_%s_%s.png'%(mtags['base'], tag_figure), bbox_inches='tight', dpi=200)

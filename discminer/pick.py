@@ -82,7 +82,7 @@ class Pick(Rail):
         self.resid_list = copy.copy(resid)
         self.color_list = copy.copy(color)
 
-    def find_peaks(self, phi_min=-85, phi_max=85, detect_thres=3, clean_thres=np.inf, clean_histogram=True, fig_ax_histogram=None, av_global=np.median):
+    def find_peaks(self, phi_min=-85, phi_max=85, detect_thres=3, clean_thres=np.inf, clean_histogram=True, fig_ax_histogram=None, av_global=np.median, init_thres=5.0, init_std=0.2):
         len_res = len(self.resid_list)
         peak_angle = np.zeros(len_res)
         peak_resid = np.zeros(len_res)
@@ -115,13 +115,12 @@ class Pick(Rail):
 
                 yfunc = lambda x, A, sigma: _gauss(x, A, 0, sigma)
                 
-                peak_hist = peak_resid[peak_resid < 5] #Initial threshold of 5 km/s, not suited for folded intensities 
+                peak_hist = peak_resid[peak_resid < init_thres] #Initial threshold of 5 km/s, not suited for folded intensities
                 counts, bins = np.histogram(peak_hist, bins=4*int(round(len(peak_resid)**(1/3.)))-1 )
-                                
                 mbins = 0.5*(bins[1:] + bins[:-1])
                 
                 try:
-                    popt, pcov = curve_fit(yfunc, mbins, counts, p0=[np.max(counts), 0.2])
+                    popt, pcov = curve_fit(yfunc, mbins, counts, p0=[np.max(counts), init_std])
                     popt = np.abs(popt) #Make sure A and sigma are positive, as our residuals are
 
                     if fig_ax_histogram is not None:
@@ -141,7 +140,8 @@ class Pick(Rail):
                         ax.set_ylabel('Counts')
 
                     ii = peak_resid < clean_thres*popt[1]
-                    print ('Rejecting %d peak velocity residuals above %.3f km/s (%dsigma)'%(np.sum(~ii), clean_thres*popt[1], clean_thres))
+                    print ('Rejecting %d peak residuals above %.3f (%dsigma)'%(np.sum(~ii), clean_thres*popt[1], clean_thres))
+                    self.cutout_thres = clean_thres*popt[1]
                     
                 except RuntimeError as e:
                     print('RuntimeError:', e, '*******Rejection of points through histogram method failed. Trying median(peaks)+thres*sigma(peaks) rejection...')
@@ -151,7 +151,8 @@ class Pick(Rail):
                 rej_thresh = np.nanmedian(peak_resid) + clean_thres*np.nanstd(peak_resid)
                 ii = peak_resid < rej_thresh
                 print ('Rejecting %d peak velocity residuals above %.3f km/s (median+%dsigma)'%(np.sum(~ii), rej_thresh, clean_thres))
-
+                self.cutout_thres = rej_thresh
+                
             self.lev_list = self.lev_list[ii]
             self.color_list = self.color_list[ii]
             self.coord_list = self.coord_list[ii]
@@ -352,58 +353,75 @@ class Pick(Rail):
 
     def writetxt(self, filename='pick_summary.txt'):
 
-        arr_global_peak = [
-            [
-                self.peak_global_angle,
-                self.peak_global_radius,
-                self.peak_global_val*self.peak_global_sign,
-                self.peak_global_sigma,
-                self.peak_mean,
-                self.peak_std,
-                'global_peak'
-            ]
-        ]
-        
-        arr_clusters_phi = []        
-        for n, ind in enumerate(self.acc_peaks_phi):
-            arr_clusters_phi.append(
-                [
-                    self.kcent_sort_phi[ind],
-                    np.nan,
-                    self.var_y_sort_phi[ind],
-                    self.peak_variance_sigmas_phi[n],
-                    self.peak_variance_mean_phi,
-                    self.peak_variance_std_phi,
-                    'cluster_phi_%d'%n
-                ]
-            )
+        ncols = 7
 
-        arr_clusters_R = []            
-        for n, ind in enumerate(self.acc_peaks_R):
-            arr_clusters_R.append(
-                [                    
-                    np.nan,
-                    self.kcent_sort_R[ind],
-                    self.var_y_sort_R[ind],
-                    self.peak_variance_sigmas_R[n],
-                    self.peak_variance_mean_R,
-                    self.peak_variance_std_R,
-                    'cluster_R_%d'%n
+        #Global peak
+        try:
+            arr_global_peak = [
+                [
+                    self.peak_global_angle,
+                    self.peak_global_radius,
+                    self.peak_global_val*self.peak_global_sign,
+                    self.peak_global_sigma,
+                    self.peak_mean,
+                    self.peak_std,
+                    'global_peak'
                 ]
-            )
-            
-        arr_clusters_acc = [
-            [
-                self.acc_phi,
-                self.acc_R,
-                np.nan,
-                np.nan,
-                np.nan,
-                np.nan,                
-                'weighted_mean_centre_from_accepted_clusters'
             ]
-        ]
+        except AttributeError:
+            arr_global_peak = [[np.nan]*ncols]
+            print ('Writing .txt pick summary file without global peak information...')            
+
+        #Clusters
+        arr_clusters_phi = []
+        arr_clusters_R = []
+        arr_clusters_acc = []        
+        try:
+            for n, ind in enumerate(self.acc_peaks_phi):
+                arr_clusters_phi.append(
+                    [
+                        self.kcent_sort_phi[ind],
+                        np.nan,
+                        self.var_y_sort_phi[ind],
+                        self.peak_variance_sigmas_phi[n],
+                        self.peak_variance_mean_phi,
+                        self.peak_variance_std_phi,
+                        'cluster_phi_%d'%n
+                    ]
+                )
+
+
+            for n, ind in enumerate(self.acc_peaks_R):
+                arr_clusters_R.append(
+                    [                    
+                        np.nan,
+                        self.kcent_sort_R[ind],
+                        self.var_y_sort_R[ind],
+                        self.peak_variance_sigmas_R[n],
+                        self.peak_variance_mean_R,
+                        self.peak_variance_std_R,
+                        'cluster_R_%d'%n
+                    ]
+                )
             
+            arr_clusters_acc = [
+                [
+                    self.acc_phi,
+                    self.acc_R,
+                    np.nan,
+                    np.nan,
+                    np.nan,
+                    np.nan,                
+                    'weighted_mean_centre_from_accepted_clusters'
+                ]
+            ]
+        except AttributeError:
+            arr_clusters_phi.append([np.nan]*ncols)
+            arr_clusters_R.append([np.nan]*ncols)
+            arr_clusters_acc.append([np.nan]*ncols)
+            print ('Writing .txt pick summary file without cluster information...')
+
+        #Gather info
         arr_tot = np.asarray(arr_global_peak + arr_clusters_phi + arr_clusters_R + arr_clusters_acc, dtype=object).squeeze()
 
         np.savetxt(

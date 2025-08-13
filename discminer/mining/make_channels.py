@@ -37,10 +37,20 @@ au_to_m = u.au.to('m')
 
 dpc = meta['dpc']*u.pc
 
+if args.absolute_Rinner>=0:
+    Rmin = args.absolute_Rinner*u.au
+else:
+    Rmin = args.Rinner
+    
+if args.absolute_Router>=0:
+    Rmax = args.absolute_Router*u.au
+else:
+    Rmax = args.Router
+    
 #*******************
 #LOAD DATA AND MODEL
 #*******************
-datacube, model = init_data_and_model(Rmin=0, Rmax=1.2)
+datacube, model = init_data_and_model(Rmin=Rmin, Rmax=Rmax)
 vchannels = datacube.vchannels
 pix_downsamp = model.grid['step']*meta['downsamp_fit']/au_to_m
 
@@ -61,13 +71,15 @@ if args.make_beam==-1:
 else:
     modelcube = model.make_model(make_convolve=True*args.make_beam)     
 
-modelcube.filename = 'cube_model_%s.fits'%tag
-modelcube.writefits() #Jy/bm
-modelcube.convert_to_tb(writefits=True, planck=args.planck) #K
+if args.writefits:
+    modelcube.filename = 'cube_model_%s.fits'%tag
+    modelcube.writefits() #Jy/bm
+modelcube.convert_to_tb(writefits=args.writefits, planck=args.planck) #K
 
-datacube.filename = 'cube_data_%s.fits'%tag
-datacube.writefits()
-datacube.convert_to_tb(writefits=True, planck=args.planck)
+if args.writefits:
+    datacube.filename = 'cube_data_%s.fits'%tag
+    datacube.writefits()
+datacube.convert_to_tb(writefits=args.writefits, planck=args.planck)
 
 #**********************
 #VISUALISE CHANNEL MAPS
@@ -96,8 +108,10 @@ plt.close()
 noise_mean, mask = get_noise_mask(datacube)
 
 residualscube = Cube(datacube.data-modelcube.data, datacube.header, datacube.vchannels, dpc, beam=datacube.beam)
-residualscube.filename = 'cube_residuals_%s.fits'%tag
-residualscube.writefits() 
+
+if args.writefits:
+    residualscube.filename = 'cube_residuals_%s.fits'%tag
+    residualscube.writefits() 
 
 fig, ax, im, cbar = residualscube.make_channel_maps(channels={'indices': plot_channels}, ncols=5,
                                                     kind='residuals',

@@ -79,7 +79,7 @@ if meta['mol'] in ['13co', 'cs']:
 else:
     xlim = xmax/au_to_m
 """
-xlim = args.Router*Rout    
+xlim = np.min([xmax/au_to_m, args.Router*Rout])
 extent= np.array([-xmax, xmax, -xmax, xmax])/au_to_m
 
 #**************************
@@ -107,8 +107,8 @@ if 'sum' in meta['kind']:
     cmap = plt.get_cmap('cmr.rainforest_r')
 """
 idlim = int(0.5*chan_step*(nchans-1))
-plot_channels = np.linspace(-idlim,idlim,nchans) + np.argmin(np.abs(vchannels-best['velocity']['vsys'])) 
-plot_channels = np.append([0], plot_channels)
+plot_channels = np.linspace(-idlim,idlim,nchans) + np.argmin(np.abs(vchannels-best['velocity']['vsys']))
+plot_channels = np.append([0], plot_channels) #dummy ax to make room for peakintensity map later on
 
 kw_channels = dict(channels={'indices': plot_channels}, ncols=nchans+1,
                    xlims = (-xlim, xlim), ylims = (-xlim, xlim), show_beam=False,
@@ -123,7 +123,7 @@ plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.05, h
 #DATA CHANNELS
 levels=np.linspace(0*args.sigma*noise_mean, 3.5*custom['Ilim'], 32)
 
-fig, ax0, im0, cbar0 = datacube.make_channel_maps(fig=fig, ax=ax[0,:], levels=levels, extend='max', **kw_channels)
+fig, ax0, im0, cbar0 = datacube.make_channel_maps(fig=fig, ax=ax[0,:], levels=levels, extend='max', annotate_channels=False, **kw_channels)
 fig, ax1, im1, cbar1 = modelcube.make_channel_maps(fig=fig, ax=ax[1,:], levels=im0[0].levels, annotate_channels=False, cmap=cmap, extend='max', **kw_channels)
 cbar0.remove()
 

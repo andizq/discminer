@@ -64,7 +64,15 @@ def velocity_hydro2d(coord, func_interp_R=None, func_interp_phi=None, Mstar=1.0,
     vz = np.zeros_like(vR)
     
     return [vel_sign*(vphi), vR, 0]
-    
+
+#************
+#ORIENTATION
+#************
+def orientation_constant(coords, incl=np.pi/4, PA=0.0, xc=0.0, yc=0.0):
+    xc = xc*au_to_m
+    yc = yc*au_to_m
+    return incl, PA, xc, yc
+
 #******************
 #EMISSION SURFACES
 #******************
@@ -205,7 +213,8 @@ def intensity_powerlaw_rbreak_hydro(coord, I0=30.0, p0=-0.4, p1=-0.4, z0=100, q=
     Rbreak*=au_to_m
     A = I0*Rbreak**-p0*z0**-q
     B = I0*Rbreak**-p1*z0**-q
-    Ieff = np.where(R<=Rbreak, A*R**p0*np.abs(z)**q, B*R**p1*np.abs(z)**q)
+    Ieff = np.where(R<=Rbreak, A*R**p0*np.abs(z)**q, B*R**p1*np.abs(z)**q) * (sigma/np.max(sigma))**weight
+    #print (np.nanmax(sigma), np.nanmin(sigma))
     ind = R>Rout
     Ieff[ind] = 0.0
     return Ieff

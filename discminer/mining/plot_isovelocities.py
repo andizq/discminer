@@ -232,7 +232,7 @@ elif args.projection=='polar':
         
     make_substructures(ax, gaps=gaps, rings=rings, twodim=True, polar=True, label_rings=True)
 
-mark_planet_location(ax, args, edgecolor='limegreen', lw=4.5, s=650, alpha=0.8, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc)        
+mark_planet_location(ax, args, edgecolors='limegreen', lw=4.5, s=650, alpha=0.8, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc)        
 ax.set_title(ctitle, fontsize=16, color='k')
 
 plt.savefig('isovelocities_deproj_%s_%s.png'%(mtags['base'], tag_figure), bbox_inches='tight', dpi=200)
