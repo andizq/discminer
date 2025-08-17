@@ -218,9 +218,44 @@ def _mining_parfile(parserobj, prog='parfile', description='Make JSON parameter 
                         help="If (1) AND --overwrite, rewrite parfile.json. If (0) AND --overwrite, forward 'custom' dictionary, and rewrite metadata and model parameters only. DEFAULTS to 0.")
     parser.add_argument('-d', '--download_cube', default=0, type=int, help="Download reduced ready-to-use cube from the NRAO server (valid for exoALMA data). DEFAULTS to 0.")
     add_parser_args(parser)
+    return parser
 
+def _mining_prepare(parserobj, prog='prepare', description='Generate prepare_data.py + preview of suggested spatial and spectral clipping'):
+    parser = _check_and_return_parser(parserobj, prog=prog, description=description)
+    parser.add_argument("-f", "--file_data", required=True, help="Base path to the datacube") #Required
+    parser.add_argument("-dpc", "--dpc", type=float, required=True, help="Distance in parsecs") #Required
+
+    parser.add_argument("-p", "--prepare_data", default="prepare_data.py", help="Output prepare_data file name")
+    # A sigma=2 seems to be better at capturing the projected morphology of diffuse outer discs (e.g. HD163296 HCN 3-2)
+    parser.add_argument("-si", "--k-sigma-peak", type=float, default=2.0, help="Threshold strength for peak map mask")    
+    parser.add_argument("-isign", "--incl-sign", type=int, choices=[-1,1], default=1,
+                        help="Inclination sign. Positive means that the near side of the disc lies to the North on the sky, assuming the disc's major axis is aligned with the x-axis.")
+    parser.add_argument("-vsign", "--vel-sign", type=int, choices=[-1,1], default=1, help="Rotation direction. Positive means clockwise.")
+    
+    parser.add_argument("--clip-factor", type=float, default=1.5, help="× robust projected semi-axis for spatial half-size")
+    parser.add_argument("--spatial-multiple", type=int, default=30, help="Round half-size up to this multiple (px)")
+    parser.add_argument("--min-pixels", type=int, default=50, help="Min pixels to accept a footprint")
+    parser.add_argument("--extent-quantile", type=float, default=99, help="Percentile for semi-axes")
+    parser.add_argument("--winsor-top-pct", type=float, default=2.0, help="Upper-tail winsorization percent (0–10 recommended)")
+    parser.add_argument("--core-frac", type=float, default=0.90, help="Fraction of mask area to keep as interior core (0.8–0.95)")
+    parser.add_argument("--spectral-box-frac", type=float, default=0.25, help="Fraction of (2*npix) for the central spectral box width")
+    parser.add_argument("--snr-min-spec", type=float, default=3.0, help="SNR cutoff for spectral window detection (inside the box)")
+    parser.add_argument("--smooth-spec", type=int, default=5, help="Boxcar width for per-channel SNR smoothing")
+    parser.add_argument("--empty-pad", type=int, default=10, help="Desired empty channels at both spectral ends")
+    parser.add_argument("--preview", default="prepare_data_preview.png", help="Preview PNG file name")
+    parser.add_argument(
+        "--ds-choice",
+        choices=["largest", "smallest"],
+        default="largest",
+        help="When picking MCMC downsample factor (npix/ds with final size in [50,100]), choose the largest or smallest valid ds.",
+    )
+
+    add_parser_args(parser)
+    return parser
+    
 
 _mining_parser_func = {
+    'prepare': _mining_prepare,        
     'parfile': _mining_parfile,    
     'channels': _mining_channels,
     'moments1d': _mining_moments1d,
@@ -243,6 +278,7 @@ _mining_parser_func = {
 }
 
 scripts = {
+    'prepare': 'make_prepare_data.py',    
     'parfile': 'make_parfile.py',
     'channels': 'make_channels.py',
     'moments1d': 'make_single_moments.py',
