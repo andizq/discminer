@@ -97,7 +97,7 @@ class Cube(_JSON):
         }
         self._update_json_metadata()
         print (self.json_metadata)
-        
+
     @property
     def filename(self):        
         return self._filename
@@ -127,7 +127,7 @@ class Cube(_JSON):
         pix_au = (self.dpc*np.tan(pix_rad)).to(u.au)
         self.xsky = ((self.nx-1) * pix_au/2.0).value
         self.ysky = ((self.ny-1) * pix_au/2.0).value        
-        
+
     def _init_beam_kernel(self):
         """
         Initialise beam properties based on the input image header.
@@ -2033,6 +2033,9 @@ class Cube(_JSON):
         else:
             unit_coordinates = ' [%s]'%unit_coordinates
 
+        if moving_center:
+            xlist = np.linspace(-self.xsky, self.xsky, self.nx)
+            
         if cmap is None:
             cmap_chan = get_discminer_cmap(observable, kind=kind)
         else:
@@ -2069,7 +2072,8 @@ class Cube(_JSON):
         plot_data = self.data[idchan]
         plot_channels = self.vchannels[idchan]
         plot_nchan = len(plot_channels)
-
+        nx = self.header['NAXIS1']
+        
         if center_from is not None:
             plot_movcr = center_from[idchan]
             
@@ -2132,8 +2136,8 @@ class Cube(_JSON):
                         movcr_i = plot_movcr[ichan]
                         data_nonoise = np.where(movcr_i>0.01*movcr_i.max(), movcr_i, 0)
                     crow, ccol = tuple(np.int32(ndimage.center_of_mass(data_nonoise)))
-                    border_row = np.min([np.abs(crow-nx), crow])
-                    border_col = np.min([np.abs(ccol-nx), ccol])
+                    border_row = np.min([np.abs(crow-self.nx), crow])
+                    border_col = np.min([np.abs(ccol-self.nx), ccol])
                     border = int(zoom_factor*np.min([border_row, border_col]))
                     
                     x_i = xlist[ccol-border:ccol+border]
