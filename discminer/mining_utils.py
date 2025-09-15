@@ -756,7 +756,7 @@ def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', model
                 zp = zfunc({'R': rs[i]*u.au.to('m')}, **zpars)*u.m.to('au')
                 if midplane:
                     zp*=0
-                xi,yi,zi = GridTools.get_sky_from_disc_coords(rs[i], phii, zp, incl, PA, xc, yc) 
+                xi,yi,zi = GridTools.get_sky_from_disc_coords(rs[i], phii, zp, incl, PA, xc, yc, midplane=midplane) 
 
         elif args.input_coords=='sky':
             rsky = rs[i]*(dpc.to('pc')).value #Projected distance in au

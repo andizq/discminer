@@ -148,10 +148,13 @@ class GridTools:
         return x_pro, y_pro, z_pro
 
     @staticmethod
-    def get_sky_from_disc_coords(R, az, z, incl, PA, xc=0, yc=0):
+    def get_sky_from_disc_coords(R, az, z, incl, PA, xc=0, yc=0, midplane=False):
         xp = R*np.cos(az)
         yp = R*np.sin(az)
-        zp = z
+        if midplane:
+            zp = 0.0
+        else:
+            zp = z
         xp, yp, zp = GridTools._project_on_skyplane(xp, yp, zp, np.cos(incl), np.sin(incl))
         if len(np.atleast_1d(PA)) > 0:
             xp, yp = GridTools._rotate_sky_plane_ewise(xp, yp, PA)
@@ -171,8 +174,10 @@ class GridTools:
         sin_incl = np.sin(incl)
         def find_yd(yd):
             R = np.sqrt(xd**2+yd[0]**2)
-            if midplane: zd = 0
-            else: zd = z_func({'R': R*au_to_m}, **z_pars)/au_to_m
+            if midplane:
+                zd = 0.0
+            else:
+                zd = z_func({'R': R*au_to_m}, **z_pars)/au_to_m
             return yd[0]*cos_incl - zd*sin_incl - ys #see _project_on_skyplane() 
         yd = root(find_yd, [100], method='hybr')
         return xd, yd.x[0]

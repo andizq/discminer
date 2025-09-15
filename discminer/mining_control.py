@@ -45,7 +45,7 @@ def _mining_channels(parserobj, prog='channels', description='Make model channel
     parser.add_argument('-mb', '--make_beam', default=-1, choices=[-1,0,1], type=int,
                         help="Convolve by beam? Defaults to -1 (convolve if downsampling size used for fit < beam size)")
     #Define and parse additional arguments. 'True' means 'enable' the argument, they can default to different values; use -h for help.
-    add_parser_args(parser, planck=True, Rinner=0.0, Router=1.2, absolute_Rinner=True, absolute_Router=True, writefits=1) 
+    add_parser_args(parser, planck=True, Rinner=0.0, Router=1.0, absolute_Rinner=True, absolute_Router=True, writefits=1) 
     return parser
 
 def _mining_moments1d(parserobj, prog='moments1d', description='Make (gaussian, bell, or quadratic) moment maps and save output into .fits files'):
@@ -168,7 +168,7 @@ def _mining_channels_peakint(parserobj, prog='channels+peakint', description='Sh
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     parser.add_argument('-nc', '--nchans', default=5, type=int, help="Number of channels to plot")
     parser.add_argument('-st', '--step', default=4, type=int, help="Plot every #step channels")
-    add_parser_args(parser, sigma=3, moment='peakintensity', kernel=True, surface=True, smooth=True, Rinner=True, Router=1.1)
+    add_parser_args(parser, sigma=3, moment='peakintensity', kernel=True, surface=True, smooth=True, Rinner=True, Router=1.0)
     return parser
 
 def _mining_isovelocities(parserobj, prog='isovelocities', description='Show Data vs Model isovelocity contours'):
