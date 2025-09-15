@@ -65,22 +65,19 @@ except KeyError:
 #*******************
 #LOAD DATA AND MODEL
 #*******************
-datacube, model = init_data_and_model(Rmin=0, Rmax=1.0)
+datacube, model = init_data_and_model(Rmin=0, Rmax=1.6)
 noise_mean, mask = get_noise_mask(datacube, thres=args.sigma)
     
 vchannels = datacube.vchannels
 pix_downsamp = model.grid['step']*meta['downsamp_fit']/au_to_m
 
-#Useful definitions for plots
+#Some plot definitions
 xmax = model.skygrid['xmax'] 
-"""
-if meta['mol'] in ['13co', 'cs']:
-    xlim = 0.8*xmax/au_to_m
-else:
-    xlim = xmax/au_to_m
-"""
 xlim = np.min([xmax/au_to_m, args.Router*Rout])
 extent= np.array([-xmax, xmax, -xmax, xmax])/au_to_m
+
+beam_au = datacube.beam_size.to('au').value
+R_lev = np.linspace(args.Rinner, Rout, 4)*au_to_m
 
 #**************************
 #MAKE MODEL (2D ATTRIBUTES)
@@ -123,12 +120,14 @@ plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.05, h
 #DATA CHANNELS
 levels=np.linspace(0*args.sigma*noise_mean, 3.5*custom['Ilim'], 32)
 
-fig, ax0, im0, cbar0 = datacube.make_channel_maps(fig=fig, ax=ax[0,:], levels=levels, extend='max', annotate_channels=False, **kw_channels)
+fig, ax0, im0, cbar0 = datacube.make_channel_maps(fig=fig, ax=ax[0,:], levels=levels, extend='max', annotate_channels=True, **kw_channels)
 fig, ax1, im1, cbar1 = modelcube.make_channel_maps(fig=fig, ax=ax[1,:], levels=im0[0].levels, annotate_channels=False, cmap=cmap, extend='max', **kw_channels)
 cbar0.remove()
 
 #RESIDUAL CHANNELS
-kw_channels.update(dict(kwargs_contour = {}, contours_from=model))
+auxdata, auxmodel = init_data_and_model(Rmin=0, Rmax=1.0) #Just for overlaid contours, within Rout
+auxmodel.make_model(make_convolve=True)
+kw_channels.update(dict(kwargs_contour = {}, contours_from=auxmodel))
 
 residualscube = Cube(datacube.data-modelcube.data, datacube.header, datacube.vchannels, dpc, beam=datacube.beam)
 
@@ -147,7 +146,7 @@ for axi in ax[:-1,0]:
     axi.tick_params(labelleft=False, labelbottom=False)
 
 ax[0,0].set_title('Peak Intensity', color='0.6', fontsize=13, pad=8, loc='center')
-ax[0,0].set_ylabel(mol_tex_meta + ' Data', color='k', fontsize=13, labelpad=6)
+ax[0,0].set_ylabel(mol_tex_meta.upper() + ' Data', color='k', fontsize=13, labelpad=6)
 ax[1,0].set_ylabel('Model', color='k', fontsize=13, labelpad=4)
 
 #PLOT MOMENT MAP
@@ -157,7 +156,9 @@ for axi in ax[:,0]:
     for artist in axi.get_lines() + axi.collections + axi.texts:
         artist.remove()
 
-datacube.plot_beam(ax[0,0], fc='gold')        
+#PLOT BEAM
+for axi in ax[0,:]:
+    datacube.plot_beam(axi, fc='gold')        
         
 kwargs_im = dict(cmap=cmap_mom, extent=extent, levels=im0[0].levels[::1])
 
@@ -169,14 +170,19 @@ pm2 = ax[2,0].contourf(residuals, cmap=cmap_res, origin='lower', extend='both', 
 for axi in ax[:,0]:
     model.make_emission_surface(
         axi,
+        R_lev=R_lev,
         kwargs_R={'colors': '0.1', 'linewidths': 0.5},
         kwargs_phi={'colors': '0.1', 'linewidths': 0.4}
     )
-    model.make_disc_axes(axi)
+    model.make_disc_axes(axi, Rmax=1.2*Rout*u.au)
     for spine in ['left',  'top', 'right', 'bottom']:
         axi.spines[spine].set_color('0.8')        
     axi.tick_params(which='both', color='0.8')
     #axi.axis('off')
 
+for axrows in ax[:2]:    
+    for axi in axrows[1:]:
+        model.make_disc_axes(axi, Rmax=1.2*Rout*u.au)
+    
 plt.savefig('channel_maps_peakint_%s_%s.png'%(meta['disc'], meta['mol']), bbox_inches = 'tight', dpi=200)    
 show_output(args)

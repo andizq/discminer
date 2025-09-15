@@ -115,7 +115,8 @@ for axi in ax[1:]:
         axi.spines[side].set_capstyle('round')
     axi.grid(color='k', ls='--')
 
-R_lev = np.arange(25, Rmax_frac*Rout, 50)*u.au.to('m')
+#R_lev = np.arange(25, Rmax_frac*Rout, 50)*u.au.to('m')
+R_lev=np.linspace(0.1, 0.98, 10)*Rout*u.au.to('m')
 surf_color = edge_color = '0.1'
 
 for i,axi in enumerate([ax[0]]):
@@ -143,7 +144,7 @@ for i,axi in enumerate([ax[0]]):
         )
     
 
-model.make_disc_axes(ax[0], surface=args.surface)
+#model.make_disc_axes(ax[0], surface=args.surface)
     
 patch = Rectangle([-zoomwidth]*2, 2*zoomwidth, 2*zoomwidth, edgecolor=zoomcolor, facecolor='none',
                   lw=2.0, ls=(0, (1,1.5)), capstyle='round')
@@ -176,7 +177,7 @@ if args.show_continuum in ['all', 'band7']:
 #*************
 #MARK PLANETS
 #*************
-kwargs_sc = dict(s=700, lw=3.0, edgecolors='tomato')
+kwargs_sc = dict(s=700, lw=3.0, edgecolors='tomato', midplane=True)
 for axi in ax[1:]:
     mark_planet_location(axi, args, dpc=dpc, coords='sky', zfunc=model.z_upper_func, zpars=best['height_upper'], **best['orientation'], **kwargs_sc)
 

@@ -27,6 +27,7 @@ with open('parfile.json') as json_file:
 meta = pars['metadata']
 best = pars['best_fit']
 custom = pars['custom']
+Rout = best['intensity']['Rout']
 
 chan_step = custom['chan_step']
 nchans = custom['nchans']
@@ -45,7 +46,7 @@ else:
 if args.absolute_Router>=0:
     Rmax = args.absolute_Router*u.au
 else:
-    Rmax = args.Router
+    Rmax = 1.6*args.Router #Make sure no back side is clipped
     
 #*******************
 #LOAD DATA AND MODEL
@@ -58,7 +59,10 @@ pix_downsamp = model.grid['step']*meta['downsamp_fit']/au_to_m
 xmax = model.skygrid['xmax'] 
 xlim = 1.0*xmax/au_to_m
 extent= np.array([-xmax, xmax, -xmax, xmax])/au_to_m
-  
+
+beam_au = datacube.beam_size.to('au').value
+R_lev = np.linspace(args.Rinner, args.Router*Rout, 4)*au_to_m
+
 #**************************
 #MAKE MODEL (2D ATTRIBUTES)
 #**************************
@@ -85,8 +89,8 @@ datacube.convert_to_tb(writefits=args.writefits, planck=args.planck)
 #VISUALISE CHANNEL MAPS
 #**********************
 if args.show_output:
-    modelcube.show(compare_cubes=[datacube], extent=extent, int_unit='Intensity [K]', show_beam=True, surface_from=model)
-    modelcube.show_side_by_side(datacube, extent=extent, int_unit='Intensity [K]', show_beam=True,  surface_from=model)
+    modelcube.show(compare_cubes=[datacube], extent=extent, int_unit='Intensity [K]', show_beam=True, surface_from=model, kwargs_surface={'R_lev': R_lev})
+    modelcube.show_side_by_side(datacube, extent=extent, int_unit='Intensity [K]', show_beam=True,  surface_from=model, kwargs_surface={'R_lev': R_lev})
 
 #*****************
 #PLOT CHANNEL MAPS
@@ -129,6 +133,7 @@ fig, ax, im, cbar = residualscube.make_channel_maps(channels={'indices': plot_ch
 ic, jc = (np.asarray(np.shape(ax))/2).astype(int)
 model.make_emission_surface(
     ax[ic][jc],
+    R_lev = R_lev,
     kwargs_R={'colors': '0.4', 'linewidths': 0.4},
     kwargs_phi={'colors': '0.4', 'linewidths': 0.3}
 )
