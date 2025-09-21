@@ -109,15 +109,16 @@ elif args.surface in ['low', 'lower']:
 #*************************
 #LOAD MOMENT MAPS
 moment_data, moment_model, residuals, mtags = load_moments(args, mask=mask)
-    
+ref_surf = mtags['ref_surf']
+
 if args.moment=='velocity' and args.fold=='absolute':
     residuals = np.abs(moment_data-vsys) - np.abs(moment_model-vsys)
     residuals[mask] = np.nan
-    if args.percentage_kepler:
-        ref_surf = mtags['ref_surf']
-        coords = {'R': model.projected_coords['R']['upper']}
-        velocity_kepler = model.get_attribute_map(coords, 'velocity', surface=ref_surf) * vel_sign    
-        residuals = residuals/velocity_kepler
+    
+if args.moment=='velocity' and args.percentage_kepler:
+    coords = {'R': model.projected_coords['R']['upper']}
+    velocity_kepler = model.get_attribute_map(coords, 'velocity', surface=ref_surf) * vel_sign    
+    residuals = residuals/velocity_kepler
 
 #********************
 def get_sky_coords(rp, phip, midplane=True):
@@ -139,7 +140,7 @@ xlim0, xlim1 = 0.5*R_prof[0], 1.05*R_prof[-1]
 fig, ax = plt.subplots(ncols=2, nrows=1, figsize=(11,5))    
 ax_c = fig.add_axes([0.8,0.65,0.23*5/11,0.23]) #AxesSubplot for showing contour colours 
 
-pick = Pick(model, residuals, R_prof, fold=True, color_bounds = np.array([0.33, 0.66, 1.0])*Rmod_out, ax2=ax_c)
+pick = Pick(model, residuals, R_prof, fold=True, fold_func=args.fold_func, color_bounds = np.array([0.33, 0.66, 1.0])*Rmod_out, ax2=ax_c)
 xf, yf, folded_orig, folded_map = pick.make_2d_map(return_coords=True) #Map where peaks will be picked from
         
 figh, axh = plt.subplots(ncols=1, nrows=1, figsize=(9,6))    
@@ -179,7 +180,7 @@ ax[1].scatter(lev, peak_resid, **kwargs_sc)
 
 ax[0].axvline(pick.peak_global_angle, lw=3.5, c=color_global_peak, label='global peak', zorder=0)
 ax[1].axvline(pick.peak_global_radius, lw=3.5, c=color_global_peak, zorder=0) 
-ax[0].legend(frameon=False, fontsize=15, handlelength=1.0, loc='lower left', bbox_to_anchor=(-0.04, 0.98))
+ax[0].legend(frameon=False, fontsize=args.fontsize, handlelength=1.0, loc='lower left', bbox_to_anchor=(-0.04, 0.98))
 
 make_substructures(ax[1], gaps=gaps, rings=rings)
 append_sigma_panel(fig, ax, peak_resid, weights=pick.peak_weight, hist=True)
@@ -240,7 +241,17 @@ if args.projection=='cartesian':
                              make_cbar=args.colorbar, 
                              rings=rings,                             
                              mask_wedge=(90, 270)*u.deg,
-                             mask_inner=R_prof[0]*u.au)
+                             mask_inner=R_prof[0]*u.au,
+                             fontsize_azimuthal_grid=args.fontsize,
+                             fontsize_radial_grid=args.fontsize+3, 
+                             fontsize_cbar=args.fontsize+2,
+                             fontsize_xaxis=args.fontsize+3,
+                             fontsize_nskyaxis=args.fontsize+5,
+                             make_nskyaxis=args.show_nsky,
+                             make_Rout_proj=args.show_xaxis,
+                             make_xaxis=args.show_xaxis,
+    )
+    
     make_substructures(
         ax, gaps=gaps, rings=rings, twodim=True, label_rings=True,
     )#kwargs_rings={'lw': 0.6})
@@ -289,7 +300,7 @@ if args.projection=='cartesian':
     if len(args.rp)>0 and args.show_legend:
         make_1d_legend(ax, handlelength=1.5, loc='lower center', bbox_to_anchor=(0.5, 1.02))
         
-    ax.set_title('%s, folded map'%ctitle, fontsize=16, color='k')
+    ax.set_title('%s, folded map'%ctitle, fontsize=args.fontsize+1, color='k')
 
     
 elif args.projection=='polar': #Currently displaying folded map only
