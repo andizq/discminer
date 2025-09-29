@@ -1,4 +1,7 @@
 from discminer.mining_control import _mining_residuals_deproj
+import discminer.cart as cart
+from discminer.core import Data
+
 from discminer.mining_utils import (get_2d_plot_decorators,
                                     get_noise_mask,
                                     load_moments,
@@ -10,8 +13,6 @@ from discminer.mining_utils import (get_2d_plot_decorators,
                                     make_masks,
                                     show_output)
 
-import discminer.cart as cart
-from discminer.core import Data
 from discminer.plottools import (make_round_map,
                                  make_polar_map,
                                  make_substructures,
@@ -154,7 +155,7 @@ elif args.surface in ['low', 'lower']:
 
 #***********
 #MAKE PLOTS
-clabels = {
+clabels = { #ylabel for polar plots
     'linewidth': r'$\Delta$ Line width [km s$^{-1}$]',
     'lineslope': r'$\Delta$ Line slope',
     'velocity': r'$\Delta$ Centroid [km s$^{-1}$]',
@@ -173,7 +174,16 @@ if args.projection=='cartesian':
                              cmap=cmap_res, clabel=unit, fmt=cfmt,
                              gaps=gaps, rings=rings, kinks=kinks,
                              make_cbar=args.colorbar,
-                             mask_inner=Rmod_in*u.au)
+                             mask_inner=Rmod_in*u.au,
+                             fontsize_azimuthal_grid=args.fontsize,
+                             fontsize_radial_grid=args.fontsize+3, 
+                             fontsize_cbar=args.fontsize+2,
+                             fontsize_xaxis=args.fontsize+3,
+                             fontsize_nskyaxis=args.fontsize+5,
+                             make_nskyaxis=args.show_nsky,
+                             make_Rout_proj=args.show_xaxis,
+                             make_xaxis=args.show_xaxis,
+    )
 
     #SHOW FILAMENTS?
     if args.show_filaments:
@@ -208,11 +218,16 @@ if args.projection=='cartesian':
 
         
 elif args.projection=='polar':
+    try:
+        cplabel = clabels[args.moment]
+    except KeyError:
+        cplabel = args.moment
+        
     levels_resid = np.linspace(-clim, clim, 48)
     fig, ax, cbar = make_polar_map(residuals, levels_resid,
                                    R[args.surface]*u.m, phi[args.surface]*u.rad, Rmod_out*u.au,
                                    Rin=Rmod_in*u.au,
-                                   cmap=cmap_res, fmt=cfmt, clabel=clabels[args.moment])
+                                   cmap=cmap_res, fmt=cfmt, clabel=cplabel)
 
     if args.show_filaments:
         overlay_filaments(ax, np.degrees(phi[args.surface]), R[args.surface]/au_to_m,

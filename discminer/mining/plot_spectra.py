@@ -25,7 +25,6 @@ from astropy.io import fits
 
 import json
 import copy
-from argparse import ArgumentParser
 
 use_discminer_style()
 matplotlib.rcParams['hatch.linewidth'] = 1.3
