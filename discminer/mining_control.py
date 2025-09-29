@@ -78,6 +78,17 @@ def _mining_moments2d(parserobj, prog='moments2d', description='Make (double Gau
     add_parser_args(parser, kernel='doublebell', kind=True, planck=True, sigma=3)
     return parser
 
+def _mining_skewkurt(parserobj, prog='skewkurt', description='Make skewness and kurtosis maps, and save output into .fits files'):
+    parser = _check_and_return_parser(parserobj, prog=prog, description=description)
+    parser.add_argument('-fdata', '--fit_data', default=1, type=int,
+                        help="Fit datacube and save moments into .fits files? DEFAULTS to 1.")
+    parser.add_argument('-fmodel', '--fit_model', default=1, type=int,
+                        help="Fit modelcube and save moments into .fits files? DEFAULTS to 1.")
+    parser.add_argument('-mt', '--mtype', default='intensity', type=str,
+                        help="Use intensity or velocity distribution to calculate maps. DEFAULTS to 'intensity'.")    
+    add_parser_args(parser, sigma=3)
+    return parser
+
 def _mining_moment_residuals(parserobj, prog='moment+residuals', description='Show Data vs Model moment map and residuals'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     add_parser_args(parser, moment=True, kernel=True, kind=True, sigma=3, surface=True, smooth=True, mask_phi=True, mask_R=True, Router=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True)  
@@ -93,6 +104,9 @@ def _mining_moment_offset(parserobj, prog='moment+offset', description='Show mom
 
 def _mining_residuals_deproj(parserobj, prog='residuals+deproj', description='Show residuals from a moment map, deprojected onto the disc reference frame'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
+    parser.add_argument('-fontsize', '--fontsize', default=MEDIUM_SIZE, type=int, help="Smallest font size in figure. DEFAULTS to %d."%MEDIUM_SIZE)
+    parser.add_argument('-snsky', '--show_nsky', default=1, type=int, help="Overlay Nsky axis on round map? DEFAULTS to 1.")
+    parser.add_argument('-sxaxis', '--show_xaxis', default=1, type=int, help="Show reference xaxis below round map? DEFAULTS to 1.")        
     add_parser_args(
         parser,
         moment=True, kernel=True, kind=True, sigma=3, surface=True, projection=True, Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True, smooth=True,
@@ -169,6 +183,30 @@ def _mining_spectra(parserobj, prog='spectra', description='Extract and show lin
     parser.add_argument('-t', '--type', default='data', type=str, choices=['data', 'model'], help="Show line profiles from data or model? DEFAULTS to 'data'.")
     parser.add_argument('-scontours', '--show_contours', default=1, type=int, help="Overlay contours. DEFAULTS to 1.")    
     add_parser_args(parser, moment='peakintensity', kernel=True, kind=True, smooth=True, planck=True)
+    return parser
+
+def _mining_intensdistrib(parserobj, prog='intensdistrib', description='Extract and display the intensity distribution of pixels within selected radial regions'):
+    parser = _check_and_return_parser(parserobj, prog=prog, description=description)
+    parser.add_argument('-annuli', '--annuli', nargs='*', default=[90, 110], type=float,
+                        help='Radial boundaries of the annuli from which the intensity distribution will be extracted. USAGE: -annuli 0 40 70 90 defines two annuli with boundaries (0, 40) and (70, 90) au. DEFAULTS to [90, 110].')
+    parser.add_argument('-wedges', '--wedges', nargs='*', default=[], type=float, minimum=-180, maximum=180, action=Range,
+                        help="Azimuthal boundaries (per annulus). Define as many as there are annuli. If empty, takes full azimuth for all annuli. USAGE: -wedges 30 40 -60 -40 defines two wedges with boundaries (30, 40) and (-60, -40) deg. DEFAULTS to [].")
+    parser.add_argument('-r0', '--r0', nargs='*', default=[], type=float, help="Reference radial coordinate for annuli (in au), relative to the disc frame. If empty, take 0 for all annuli. DEFAULTS to [].")
+    parser.add_argument('-phi0', '--phi0', nargs='*', default=[], type=float, help="Reference azimuthal coordinate for annuli (in deg), relative to the disc frame. If empty, take 0 for all annuli. DEFAULTS to [].")
+    parser.add_argument('-colors', '--colors', nargs='*', default=[], type=str, help="Color of the plotted distribution, per annulus. If empty, take 'black' for all annuli. DEFAULTS to [].")
+    parser.add_argument('-lw', '--linewidths', nargs='*', default=[], type=float, help="Linewidth of the distribution curve, per annulus. If empty, take '1.5' for all annuli. DEFAULTS to [].")    
+
+    parser.add_argument('-clim', '--clim', default=0, type=int, help="Colorbar max limit for reference moment map in m/s. If 0, take parfile.json custom limit. DEFAULTS to 0.")
+    parser.add_argument('-fontsize', '--fontsize', default=MEDIUM_SIZE, type=int, help="Smallest font size in figure. DEFAULTS to %d."%MEDIUM_SIZE)
+    parser.add_argument('-snsky', '--show_nsky', default=1, type=int, help="Overlay Nsky axis on round map? DEFAULTS to 1.")
+    parser.add_argument('-sxaxis', '--show_xaxis', default=1, type=int, help="Show reference xaxis below round map? DEFAULTS to 1.")        
+    
+    add_parser_args(
+        parser,
+        sigma=4, moment='velocity', kernel=True, surface=True, projection=True, smooth=True,
+        Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True,
+        colorbar=True, mask_R=True, mask_phi=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True
+    )
     return parser
 
 def _mining_channels_peakint(parserobj, prog='channels+peakint', description='Show Data vs Model channel maps, peak intensities, and residuals'):
@@ -282,6 +320,8 @@ _mining_parser_func = {
     'gradient': _mining_gradient,
     'isovelocities': _mining_isovelocities,
     'pv': _mining_pv_diagram,
+    'skewkurt': _mining_skewkurt,
+    'intensdistrib': _mining_intensdistrib,        
 }
 
 scripts = {
@@ -305,6 +345,8 @@ scripts = {
     'gradient': 'plot_gradient.py',
     'isovelocities': 'plot_isovelocities.py',
     'pv': 'plot_pv_diagram.py',
+    'skewkurt': 'make_skewkurt_moments.py',
+    'intensdistrib': 'plot_intensity_distribution.py',    
 }
 
 #<----------------------
@@ -364,7 +406,7 @@ def add_parser_args(parser,
     if moment is not False:
         d0 = set_default(moment, 'velocity')
         parser.add_argument('-m', '--moment', default=d0, type=str,
-                            choices=['velocity', 'linewidth', 'lineslope', 'peakint', 'peakintensity', 'v0r', 'v0phi', 'v0z', 'vr_leftover', 'delta_velocity', 'delta_linewidth', 'delta_peakintensity', 'reducedchi2'],
+                            choices=['velocity', 'linewidth', 'lineslope', 'peakint', 'peakintensity', 'v0r', 'v0phi', 'v0z', 'vr_leftover', 'delta_velocity', 'delta_linewidth', 'delta_peakintensity', 'reducedchi2', 'skewness', 'kurtosis', 'skewkurt'],
                             help="Type of moment map to be analysed. DEFAULTS to '%s'."%d0)
 
     if kernel is not False:

@@ -210,6 +210,17 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
     except KeyError:
         ctitle = meta['disc']+' '+meta['mol']
 
+    if moment in ['skewness', 'kurtosis', 'skewkurt']:
+        clim = custom['Ilim']
+        fclim = float(clim)
+        unit = ''
+        if unit_simple: unit = ''        
+        clabel = moment.capitalize()
+        cmap_mom = matplotlib.pyplot.get_cmap('nipy_spectral')
+        cmap_res = get_discminer_cmap('intensity_2', kind='residuals') 
+        levels_im = np.linspace(0.2*fclim, fclim, 64)
+        levels_cc = np.linspace(0.2*fclim, fclim, 4)
+        
     if moment=='delta_velocity':
         clim = custom['vlim']
         fclim = float(clim)*1000
@@ -227,7 +238,7 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         unit = '[m s$^{-1}$]'
         if unit_simple: unit = 'm/s'        
         clabel = r'$\Delta$ Line width %s'%unit
-        cmap_mom = 'magma' #get_discminer_cmap('linewidth')
+        cmap_mom = matplotlib.pyplot.get_cmap('magma')
         cmap_res = cmap_mom #get_discminer_cmap('linewidth', kind='residuals')
         levels_im = np.linspace(0.0, fclim, 64)
         levels_cc = np.linspace(0.2*fclim, fclim, 4)
@@ -238,7 +249,7 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         unit = '[K]'
         if unit_simple: unit = 'K'        
         clabel = r'$\Delta$ Peak Intensity %s'%unit
-        cmap_mom = 'magma' #get_discminer_cmap('intensity_2')
+        cmap_mom = matplotlib.pyplot.get_cmap('magma') #get_discminer_cmap('intensity_2')
         cmap_res = cmap_mom #get_discminer_cmap('intensity_2', kind='residuals')
         levels_im = np.linspace(0.0, fclim, 64)
         levels_cc = np.linspace(0.2*fclim, fclim, 4)
@@ -249,7 +260,7 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         unit = '[R-Chi2]'
         if unit_simple: unit = 'R-Chi2'        
         clabel = r'Reduced $X^2$'
-        cmap_mom = 'magma'
+        cmap_mom = matplotlib.pyplot.get_cmap('magma')
         cmap_res = cmap_mom 
         levels_im = np.linspace(0.0, fclim, 64)
         levels_cc = np.linspace(0.2*fclim, fclim, 4)
@@ -699,8 +710,8 @@ def make_and_save_filaments(map2d,
         return fil_pos_list, fil_neg_list, colors_dict
 
 
-def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', model=None, zfunc=None, zpars=None, incl=None, PA=None, xc=None, yc=None, dpc=None, midplane=True, kwargs_text={}, **kwargs_scatter):
-
+def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', model=None, zfunc=None, zpars=None, incl=None, PA=None, xc=None, yc=None, dpc=None, midplane=False, kwargs_text={}, **kwargs_scatter):
+    #midplane: only relevant for input_coords='disc' and coords='sky' for output. If True, return the sky coords of the point in the disc midplane; otherwise, project it onto the disc model surface.
     kwargs_sc = dict(edgecolors='gold', facecolors='none', marker='o', s=450, lw=4.5, alpha=1.0, label=None, zorder=22)
     kwargs_sc.update(kwargs_scatter)
 
@@ -754,8 +765,6 @@ def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', model
             elif coords=='sky':
                 phii = np.radians(phis[i])
                 zp = zfunc({'R': rs[i]*u.au.to('m')}, **zpars)*u.m.to('au')
-                if midplane:
-                    zp*=0
                 xi,yi,zi = GridTools.get_sky_from_disc_coords(rs[i], phii, zp, incl, PA, xc, yc, midplane=midplane) 
 
         elif args.input_coords=='sky':
@@ -765,7 +774,7 @@ def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', model
             ysky = rsky*np.cos(phisky)
             
             if coords=='disc':
-                xdisc, ydisc = GridTools.get_disc_from_sky_coords(xsky, ysky, zfunc, zpars, incl, PA, xc=xc, yc=yc, midplane=midplane)
+                xdisc, ydisc = GridTools.get_disc_from_sky_coords(xsky, ysky, zfunc, zpars, incl, PA, xc=xc, yc=yc)
                 
                 if args.projection=='cartesian':
                     xi, yi = xdisc, ydisc
@@ -777,7 +786,7 @@ def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', model
                     ri = np.hypot(xdisc, ydisc)
                     xi, yi = np.degrees(phii), ri
 
-                print ('Planet orbital radius and azmith in disc frame (au, deg):', ri, np.degrees(phii))
+                print ('Planet orbital radius and azimuth in disc frame (au, deg):', ri, np.degrees(phii))
                 
             elif coords=='sky':
                 xi, yi = xsky, ysky

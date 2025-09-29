@@ -96,7 +96,7 @@ class Cube(_JSON):
             'clipped': False
         }
         self._update_json_metadata()
-        print (self.json_metadata)
+        #print (self.json_metadata)
 
     @property
     def filename(self):        
@@ -694,8 +694,99 @@ class Cube(_JSON):
             fits.writeto('fit_line_components'+'_%s_%s%s.fits'%(method, kind, tag), n_fit, **kwargs)        
 
         return moments #A1, c1, lw1, [Ls1], dA1, dc1, dlw1, [dLs1], A2, c2, lw2, [Ls2], dA2, dc2, dlw2, [dLs2]
+    
+    def make_skewkurt(self, mtype='intensity', writefits=True, overwrite=True, tag="", kwargs_skew={}, kwargs_kurt={}):
+        """
+        Calculate skewness and (excess)kurtosis, and write fits files of them.
+
+        Skewness properties:
+  
+            * Normal distribution --> 0.
+            * Positive skewness --> right-skewed (long tail to the right).
+            * Negative skewness --> left-skewed (long tail to the left).
+
+        Excess kurtosis properties:
+         
+            * Normal distribution --> 0.
+            * Positive kurtosis --> Heavy tails and/or sharper central peak than Gaussian.
+            * Negative kurtosis --> Flatter top, lighter tails than Gaussian. Outliers are less likely.
+
+        Parameters
+        ----------
+        mtype : str, optional ['intensity', 'velocity']
+                      
+            * If 'intensity', use all intensities as they are. This is applied on the intensity distribution per pixel, and is thus agnostic of the velocity component that each intensity represents.
+            * If 'velocity', use intensity-weighted velocities. This allows to quantify line morphology anomalies in velocity but is usually very sensitive to outliers and noise.
+
+        """
+        from scipy.stats import skew, kurtosis
+
+        kwargs_sk={'nan_policy': 'omit'}
+        kwargs_ku={'nan_policy': 'omit'}
+        kwargs_sk.update(kwargs_skew)
+        kwargs_ku.update(kwargs_kurt)        
+        
+        if len(tag)>0:
+            if tag[0]!='_':
+                tag = '_'+tag
+        
+        hdr_s = copy.copy(self.header)
+        hdr_k = copy.copy(self.header)
+        hdr_p = copy.copy(self.header)                        
+
+        hdr_s["BUNIT"] = ""
+        hdr_s["BTYPE"] = "Skewness"
+        hdr_k["BUNIT"] = ""
+        hdr_k["BTYPE"] = "Kurtosis"
+        hdr_p["BUNIT"] = ""
+        hdr_p["BTYPE"] = "Skewness*Kurtosis"
 
         
+        kwargs_io_s = dict(overwrite=overwrite, header=hdr_s)
+        kwargs_io_k = dict(overwrite=overwrite, header=hdr_k)
+        kwargs_io_p = dict(overwrite=overwrite, header=hdr_p)                
+        
+        if mtype=='intensity':
+            skew_map = skew(self.data, axis=0, **kwargs_sk)
+            kurt_map = kurtosis(self.data, axis=0, **kwargs_ku)
+
+        elif mtype=='velocity':
+            eps = 1e-12
+            dv = np.append(self.vchannels[1]-self.vchannels[0], self.vchannels[1:]-self.vchannels[:-1])
+            v3  = self.vchannels[:, None, None]
+            dv3 = dv[:, None, None]
+            
+            I = data.copy()
+            I[I < 0] = 0.0 #Zero-out tiny negatives from noise
+            
+            w = I * dv3  #weights
+     
+            M0 = np.nansum(w, axis=0)  #(nx, ny)
+            mu = np.nansum(w * v3, axis=0) / np.clip(M0, eps, None)
+ 
+            dv_rel = v3 - mu[None, :, :]  #broadcast centroid
+            mu2 = np.nansum(w * dv_rel**2, axis=0) / np.clip(M0, eps, None)
+            mu3 = np.nansum(w * dv_rel**3, axis=0) / np.clip(M0, eps, None)
+            mu4 = np.nansum(w * dv_rel**4, axis=0) / np.clip(M0, eps, None)
+            
+            with np.errstate(divide='ignore', invalid='ignore'):
+                skew_map = mu3 / np.power(mu2, 1.5)
+                kurt_map = mu4 / (mu2**2) - 3.0 #excess kurtosis: centred around zero
+ 
+            #clean impossible values (e.g. where M0-->0 or mu2-->0)
+            skew_map[~np.isfinite(skew_map)] = np.nan
+            kurt_map[~np.isfinite(kurt_map)] = np.nan
+
+        else:
+            raise InputError(mtype, "mtype must be either 'intensity' or 'velocity'")
+
+        if writefits:
+            fits.writeto('skewness_%s%s.fits'%('gaussian', tag), skew_map, **kwargs_io_s)
+            fits.writeto('kurtosis_%s%s.fits'%('gaussian', tag), kurt_map, **kwargs_io_k)
+            fits.writeto('skewkurt_%s%s.fits'%('gaussian', tag), skew_map*kurt_map, **kwargs_io_p)
+            
+        return skew_map, kurt_map
+    
     # *********************************
     # FUNCTIONS FOR INTERACTIVE WINDOWS
     # *********************************
