@@ -239,7 +239,7 @@ if len(args.mask_R)>0 or len(args.mask_phi)>0:
     make_masks(ax, args.mask_R, args.mask_phi, Rmax=Rmod_out, facecolor='k', alpha=0.3)
     
 mark_planet_location(ax, args, edgecolors='k', lw=3.5, s=550, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc)    
-ax.set_title(ctitle, fontsize=16, color='k')
+ax.set_title(ctitle, fontsize=args.fontsize+1, color='k')
 
 plt.savefig('residuals_deproj_%s_%s.png'%(mtags['base'], tag_figure), bbox_inches='tight', dpi=200)
 show_output(args)

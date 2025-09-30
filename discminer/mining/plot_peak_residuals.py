@@ -144,7 +144,7 @@ pick = Pick(model, residuals, R_prof, fold=True, fold_func=args.fold_func, color
 xf, yf, folded_orig, folded_map = pick.make_2d_map(return_coords=True) #Map where peaks will be picked from
         
 figh, axh = plt.subplots(ncols=1, nrows=1, figsize=(9,6))    
-pick.find_peaks(clean_thres=args.clean_thres, fig_ax_histogram=(figh, axh), clean_histogram=True)
+pick.find_peaks(clean_thres=args.clean_thres, phi_min=args.phimin, phi_max=args.phimax, fig_ax_histogram=(figh, axh), clean_histogram=True)
 figh.savefig('histogram_peak_residuals_%s.png'%mtags['base'], bbox_inches='tight', dpi=200)
 
 lev = pick.lev_list
