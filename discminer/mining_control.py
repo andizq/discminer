@@ -106,7 +106,8 @@ def _mining_residuals_deproj(parserobj, prog='residuals+deproj', description='Sh
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     parser.add_argument('-fontsize', '--fontsize', default=MEDIUM_SIZE, type=int, help="Smallest font size in figure. DEFAULTS to %d."%MEDIUM_SIZE)
     parser.add_argument('-snsky', '--show_nsky', default=1, type=int, help="Overlay Nsky axis on round map? DEFAULTS to 1.")
-    parser.add_argument('-sxaxis', '--show_xaxis', default=1, type=int, help="Show reference xaxis below round map? DEFAULTS to 1.")        
+    parser.add_argument('-sxaxis', '--show_xaxis', default=1, type=int, help="Show reference xaxis below round map? DEFAULTS to 1.")
+    parser.add_argument('-stitle', '--show_title', default=1, type=int, help="Show title at the top of the map? DEFAULTS to 1.")            
     add_parser_args(
         parser,
         moment=True, kernel=True, kind=True, sigma=3, surface=True, projection=True, Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True, smooth=True,
@@ -194,8 +195,11 @@ def _mining_intensdistrib(parserobj, prog='intensdistrib', description='Extract 
                         help='Radial boundaries of the annuli from which the intensity distribution will be extracted. USAGE: -annuli 0 40 70 90 defines two annuli with boundaries (0, 40) and (70, 90) au. DEFAULTS to [90, 110].')
     parser.add_argument('-wedges', '--wedges', nargs='*', default=[], type=float, minimum=-180, maximum=180, action=Range,
                         help="Azimuthal boundaries (per annulus). Define as many as there are annuli. If empty, takes full azimuth for all annuli. USAGE: -wedges 30 40 -60 -40 defines two wedges with boundaries (30, 40) and (-60, -40) deg. DEFAULTS to [].")
-    parser.add_argument('-r0', '--r0', nargs='*', default=[], type=float, help="Reference radial coordinate for annuli (in au), relative to the disc frame. If empty, take 0 for all annuli. DEFAULTS to [].")
+    parser.add_argument('-r0', '--r0', nargs='*', default=[], type=float, help="Reference radial coordinate for annuli (in au), relative to the disc frame. If empty, take 0 for all annuli. DEFAULTS to [].")    
     parser.add_argument('-phi0', '--phi0', nargs='*', default=[], type=float, help="Reference azimuthal coordinate for annuli (in deg), relative to the disc frame. If empty, take 0 for all annuli. DEFAULTS to [].")
+    parser.add_argument('-spectra', '--spectra', nargs='*', default=[], type=float, help="Ids of spectra to be plotted in a separate subpanel, corresponding to the input analysis regions. DEFAULTS to [].")
+    parser.add_argument('-ndraws', '--ndraws', default=500, type=int, help="Number of random spectra selected from each region for plotting. DEFAULTS to 500.")
+    
     parser.add_argument('-colors', '--colors', nargs='*', default=[], type=str, help="Color of the plotted distribution, per annulus. If empty, take 'black' for all annuli. DEFAULTS to [].")
     parser.add_argument('-lw', '--linewidths', nargs='*', default=[], type=float, help="Linewidth of the distribution curve, per annulus. If empty, take '1.5' for all annuli. DEFAULTS to [].")    
 

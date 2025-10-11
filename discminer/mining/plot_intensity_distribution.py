@@ -16,6 +16,7 @@ from discminer.plottools import (make_up_ax,
                                  use_discminer_style)
 
 import json
+import random
 import numpy as np
 from astropy import units as u
 import matplotlib.pyplot as plt
@@ -193,7 +194,15 @@ def make_pdf(maski):
     Igrid = np.linspace(np.nanmin(intensities), np.nanmax(intensities), 300)
     pdf = kde(Igrid)
     return Igrid, pdf
-    
+
+def make_spectra(maski):
+    intensities = datapdf[:, maski]
+    return intensities.T
+
+def select_spectra(spectra, n):
+    inds = random.sample(range(0, len(spectra)), n)
+    return spectra[inds]
+
 #**************
 #MAKE PLT AXES
 #**************
@@ -206,12 +215,41 @@ axr = fig.add_axes([0.05, 0.05, 0.9/x2y, 0.9])
 axp0 = 0.05+0.9/x2y+0.03
 axp = fig.add_axes([axp0, 0.14, 0.95-axp0, 0.72])
 
+if len(args.spectra)>0:
+    axs = fig.add_axes([0.99, 0.22, 0.4, 0.56])
+    spectra, draws = [], []
+    zup, vphi, vcent = [], [], []
+
 for i in range(nmasks):
     Igrid, pdf = make_pdf(masks[i])
     #print (i, skew(pdf), kurtosis(pdf))
     axp.plot(Igrid, pdf, color=colors[i], lw=lws[i], zorder=50-i)
     axp.fill_between(Igrid, pdf, color='k', lw=0, alpha=0.05)    
 
+    if len(args.spectra)>0:    
+        if i in args.spectra:
+            spectrai = make_spectra(masks[i])
+            spectra.append(spectrai)
+            
+            if len(spectrai) > args.ndraws:
+                drawsi = random.sample(range(0, len(spectrai)), args.ndraws)
+            else:
+                drawsi = range(0, len(spectrai))
+
+            draws.append(drawsi)
+            zupi = model.z_upper_func({'R': Rgrid[masks[i]]*au_to_m}, **best['height_upper'])
+            vphii = model.velocity_func({'R': Rgrid[masks[i]]*au_to_m, 'z': zupi}, **best['velocity'])
+            vcenti = vsys + vphii * np.sin(incl) * np.cos(np.radians(phigrid[masks[i]]))            
+            zup.append(zupi)
+            vphi.append(vphii)
+            vcent.append(vcenti)
+            
+            for j in drawsi:
+                spec = spectrai[j]
+                peak = np.nanmax(spec)
+                axs.plot(datacube.vchannels-vcenti[j], spec/peak, lw=0.1, color=colors[i], alpha=0.2, zorder=50-i)
+            #specmed = np.median(spectrai)
+    
 make_up_ax(axp, labelleft=False, labelright=True, labeltop=False, labelbottom=True, labelsize=16)
 axp.set_xticks([0.0, 0.5, 1.0])
 axp.set_yticks([0, 1, 2])
@@ -224,6 +262,24 @@ axp.yaxis.set_label_position("right")
 #axp.set_ylabel('Probability density', fontsize=14, labelpad=15)
 axp.set_xlim(0, 1)
 axp.set_ylim(0, None)
+
+
+if len(args.spectra)>0:    
+    make_up_ax(axs, labelleft=False, labelright=True, labeltop=False, labelbottom=True, labelsize=14)
+    axs.tick_params(axis='y', pad=-80, labelcolor='k')
+    axs.axvline(0, dash_capstyle='round', dashes=(3.0, 2.5), color='k', zorder=0)
+    axs.axhline(0.5, xmin=0.5, dash_capstyle='round', dashes=(0.5, 1.5), color='k', zorder=0)
+    axs.axhline(1.0, xmin=0.5, dash_capstyle='round', dashes=(0.5, 1.5), color='k', zorder=0)
+    axs.set_yticks([0.5, 1.0])
+    axs.set_yticklabels([r'0.5I$_{\rm peak}$', r'I$_{\rm peak}$'])
+    
+    bbox = dict(boxstyle="round", ec="w", fc="w", alpha=1)
+    plt.setp(axs.get_yticklabels(), bbox=bbox)
+
+    axs.set_xticks([-0.5, 0.0, 0.5])
+    axs.set_xlabel('Stacked velocities [km/s]')
+    axs.set_xlim(-1.1, 1.1)
+    axs.set_ylim(0, 1.07)
 
 #***************
 #MAKE ROUND MAP
