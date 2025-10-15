@@ -336,7 +336,7 @@ def _make_text_1D_substructures(ax, gaps=[], rings=[], kinks=[],
     if label_rings: text_it(rings, r'B%d')
     if label_kinks: text_it(kinks, r'K%d')
 
-def _make_radial_grid_2D(ax, Rout, gaps=[], rings=[], kinks=[], make_labels=True, label_freq=2, fontsize=MEDIUM_SIZE+3):
+def _make_radial_grid_2D(ax, Rout, gaps=[], rings=[], kinks=[], make_labels=True, label_freq=2, make_lines=True, fontsize=MEDIUM_SIZE+3):
     get_intdigits = lambda n: len(str(n).split('.')[0])
     
     angs = np.linspace(0, 2*np.pi, 100)
@@ -353,13 +353,14 @@ def _make_radial_grid_2D(ax, Rout, gaps=[], rings=[], kinks=[], make_labels=True
     R_after_ref = 10**(Rref_digits-1)*ceil(Rref/(10**(Rref_digits-1)))
     Rgrid_polar = np.arange(R_after_ref, Rout, 50)
 
-    for j,Ri in enumerate(Rgrid_polar[0:-1:2]):
-        if Ri == Rref: continue
-        ax.plot(Ri*cos_angs, Ri*sin_angs, color='k', lw=1.2, alpha=0.5,
-                dash_capstyle='round', dashes=(0.5, 3.5)) 
-
-    for j,Ri in enumerate(Rgrid_polar[1::2]):
-        ax.plot(Ri*cos_angs, Ri*sin_angs, color='k', ls=':', lw=0.4, alpha=1.0)
+    if make_lines:
+        for j,Ri in enumerate(Rgrid_polar[0:-1:2]):
+            if Ri == Rref: continue
+            ax.plot(Ri*cos_angs, Ri*sin_angs, color='k', lw=1.2, alpha=0.5,
+                    dash_capstyle='round', dashes=(0.5, 3.5)) 
+            
+        for j,Ri in enumerate(Rgrid_polar[1::2]):
+            ax.plot(Ri*cos_angs, Ri*sin_angs, color='k', ls=':', lw=0.4, alpha=1.0)
 
     if make_labels:
         _make_text_2D(ax, Rgrid_polar[1::label_freq], sposy=-1, fmt='%d',
@@ -371,9 +372,10 @@ def _make_radial_grid_2D(ax, Rout, gaps=[], rings=[], kinks=[], make_labels=True
     ax.plot(0.99*Rout*cos_angs, 0.99*Rout*sin_angs, color='0.2', ls='-', lw=3.0, alpha=1.0)
     ax.plot(1.00*Rout*cos_angs, 1.00*Rout*sin_angs, color='0.0', ls='-', lw=3.0, alpha=1.0)
     
-def _make_azimuthal_grid_2D(ax, Rout, ticks=np.linspace(0, 90, 4), fontsize=MEDIUM_SIZE):
-    for j, phii in enumerate(np.arange(0, 2*np.pi, np.pi/6)):
-        ax.plot([0, Rout*np.cos(phii)], [0, Rout*np.sin(phii)], color='k', ls=':', lw=0.4, alpha=1.0)
+def _make_azimuthal_grid_2D(ax, Rout, make_lines=True, ticks=np.linspace(0, 90, 4), fontsize=MEDIUM_SIZE):
+    if make_lines:
+        for j, phii in enumerate(np.arange(0, 2*np.pi, np.pi/6)):
+            ax.plot([0, Rout*np.cos(phii)], [0, Rout*np.sin(phii)], color='k', ls=':', lw=0.4, alpha=1.0)
 
     for deg in ticks:
         deg_rad = np.radians(deg)
@@ -548,7 +550,10 @@ def make_round_map(
         fontsize_azimuthal_grid=MEDIUM_SIZE, fontsize_radial_grid=MEDIUM_SIZE+3, 
         fontsize_cbar=MEDIUM_SIZE+2, fontsize_xaxis=MEDIUM_SIZE+3, fontsize_nskyaxis=MEDIUM_SIZE+5, 
         rwidth=0.06, cmap=get_discminer_cmap('velocity'), clabel='km/s', fmt='%5.2f', quadrant=None, #cbar kwargs
-        make_cbar=True, make_radial_grid=True, make_azimuthal_grid=True, make_Rout_proj=True, make_xaxis=True, make_nskyaxis=True,
+        make_cbar=True,
+        make_radial_grid=True, make_radial_lines=True,
+        make_azimuthal_grid=True, make_azimuthal_lines=True,
+        make_Rout_proj=True, make_xaxis=True, make_nskyaxis=True,
         make_contourf=True, make_contour=False,        
         gaps=[], rings=[], kinks=[],        
         mask_wedge=None, mask_inner=None,
@@ -589,7 +594,7 @@ def make_round_map(
 
     if make_radial_grid:
         #RADIAL GRID
-        _make_radial_grid_2D(ax, Rout, gaps=gaps, rings=rings, kinks=kinks, label_freq=2, fontsize=fontsize_radial_grid)    
+        _make_radial_grid_2D(ax, Rout, gaps=gaps, rings=rings, kinks=kinks, label_freq=2, make_lines=make_radial_lines, fontsize=fontsize_radial_grid)    
     else:
         angs = np.linspace(0, 2*np.pi, 100)
         cos_angs = np.cos(angs)
@@ -599,7 +604,7 @@ def make_round_map(
         ax.plot(1.00*Rout*cos_angs, 1.00*Rout*sin_angs, color='0.0', ls='-', lw=3.0, alpha=1.0)
 
     if make_azimuthal_grid:
-        _make_azimuthal_grid_2D(ax, Rout, ticks=ticks_phi, fontsize=fontsize_azimuthal_grid)
+        _make_azimuthal_grid_2D(ax, Rout, make_lines=make_azimuthal_lines, ticks=ticks_phi, fontsize=fontsize_azimuthal_grid)
     
     #SKY AXIS
     xni, yni = None, None    
@@ -888,7 +893,7 @@ def make_pie_map(
         else:
             cbar.ax.yaxis.set_label_position('left')
             
-    _make_radial_grid_2D(ax, Rout, gaps=gaps, rings=rings, kinks=kinks, make_labels=True, label_freq=2)
+    _make_radial_grid_2D(ax, Rout, gaps=gaps, rings=rings, kinks=kinks, make_lines=True, make_labels=True, label_freq=2)
 
     for side in ['left','top','right']: ax.spines[side].set_visible(False)
     for side in ['left']: ax.spines[side].set_linewidth(3.5)

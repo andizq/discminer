@@ -242,8 +242,8 @@ if args.projection=='cartesian':
                              rings=rings,                             
                              mask_wedge=(90, 270)*u.deg,
                              mask_inner=R_prof[0]*u.au,
-                             fontsize_azimuthal_grid=args.fontsize,
-                             fontsize_radial_grid=args.fontsize+3, 
+                             fontsize_azimuthal_grid=args.azlabels*args.fontsize,
+                             fontsize_radial_grid=args.rlabels*(args.fontsize+3), 
                              fontsize_cbar=args.fontsize+2,
                              fontsize_xaxis=args.fontsize+3,
                              fontsize_nskyaxis=args.fontsize+5,
@@ -299,8 +299,9 @@ if args.projection=='cartesian':
             
     if len(args.rp)>0 and args.show_legend:
         make_1d_legend(ax, handlelength=1.5, loc='lower center', bbox_to_anchor=(0.5, 1.02))
-        
-    ax.set_title('%s, folded map'%ctitle, fontsize=args.fontsize+1, color='k')
+
+    if args.show_title:
+        ax.set_title('%s, folded map'%ctitle, fontsize=args.fontsize+1, color='k')
 
     
 elif args.projection=='polar': #Currently displaying folded map only
