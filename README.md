@@ -81,8 +81,10 @@ pip install -U discminer
 
 - [termplotlib](https://pypi.org/project/termplotlib)
 - [FilFinder](https://pypi.org/project/fil-finder)
+- [bettermoments](https://bettermoments.readthedocs.io/en/latest/)
 - [schwimmbad](https://pypi.org/project/schwimmbad)
 - [ipython](https://ipython.readthedocs.io/en/stable)
+
 
 ## How to use
 

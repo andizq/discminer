@@ -109,7 +109,9 @@ def _mining_residuals_deproj(parserobj, prog='residuals+deproj', description='Sh
     parser.add_argument('-sxaxis', '--show_xaxis', default=1, type=int, help="Show reference xaxis below round map? DEFAULTS to 1.")
     parser.add_argument('-stitle', '--show_title', default=1, type=int, help="Show title at the top of the map? DEFAULTS to 1.")
     parser.add_argument('-rlabels', '--rlabels', default=1, type=int, help="Show radial labels on the map? DEFAULTS to 1.")
-    parser.add_argument('-azlabels', '--azlabels', default=1, type=int, help="Show azimuthal labels on the map? DEFAULTS to 1.")                
+    parser.add_argument('-azlabels', '--azlabels', default=1, type=int, help="Show azimuthal labels on the map? DEFAULTS to 1.")
+    parser.add_argument('-qcbar', '--quadrant_cbar', default=0, type=int, help="Quadrant for round colorbar. If 0, infer best quadrant. DEFAULTS to 0.")
+    
     add_parser_args(
         parser,
         moment=True, kernel=True, kind=True, sigma=3, surface=True, projection=True, Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True, smooth=True,
@@ -143,7 +145,8 @@ def _mining_pick(parserobj, prog='pick', description='Use Pick tools. Fold resid
     parser.add_argument('-stitle', '--show_title', default=1, type=int, help="Show title at the top of the map? DEFAULTS to 1.")
     parser.add_argument('-rlabels', '--rlabels', default=1, type=int, help="Show radial labels on the map? DEFAULTS to 1.")
     parser.add_argument('-azlabels', '--azlabels', default=1, type=int, help="Show azimuthal labels on the map? DEFAULTS to 1.")                
-
+    parser.add_argument('-qcbar', '--quadrant_cbar', default=0, type=int, help="Quadrant for round colorbar. If 0, infer best quadrant. DEFAULTS to 0.")
+    
     add_parser_args(
         parser,
         moment=True, kernel=True, kind=True, surface=True, fold=True, fold_func=True, projection=True, Rinner=3.0, Router=0.9, absolute_Rinner=True, absolute_Router=True,
@@ -212,7 +215,8 @@ def _mining_intensdistrib(parserobj, prog='intensdistrib', description='Extract 
     parser.add_argument('-clim', '--clim', default=0, type=int, help="Colorbar max limit for reference moment map in m/s. If 0, take parfile.json custom limit. DEFAULTS to 0.")
     parser.add_argument('-fontsize', '--fontsize', default=MEDIUM_SIZE, type=int, help="Smallest font size in figure. DEFAULTS to %d."%MEDIUM_SIZE)
     parser.add_argument('-snsky', '--show_nsky', default=1, type=int, help="Overlay Nsky axis on round map? DEFAULTS to 1.")
-    parser.add_argument('-sxaxis', '--show_xaxis', default=1, type=int, help="Show reference xaxis below round map? DEFAULTS to 1.")        
+    parser.add_argument('-sxaxis', '--show_xaxis', default=1, type=int, help="Show reference xaxis below round map? DEFAULTS to 1.")
+    parser.add_argument('-stitle', '--show_title', default=1, type=int, help="Show title at the top of the map? DEFAULTS to 1.")    
     
     add_parser_args(
         parser,
@@ -419,7 +423,7 @@ def add_parser_args(parser,
     if moment is not False:
         d0 = set_default(moment, 'velocity')
         parser.add_argument('-m', '--moment', default=d0, type=str,
-                            choices=['velocity', 'linewidth', 'lineslope', 'peakint', 'peakintensity', 'v0r', 'v0phi', 'v0z', 'vr_leftover', 'delta_velocity', 'delta_linewidth', 'delta_peakintensity', 'reducedchi2', 'skewness', 'kurtosis', 'skewkurt'],
+                            choices=['velocity', 'linewidth', 'lineslope', 'peakint', 'peakintensity', 'v0r', 'v0phi', 'v0z', 'vr_leftover', 'delta_velocity', 'delta_meanvelocity', 'delta_medianvelocity', 'delta_linewidth', 'delta_peakintensity', 'reducedchi2', 'skewness', 'kurtosis', 'skewkurt', 'bluewidth', 'redwidth', 'bluered', 'continuum'],
                             help="Type of moment map to be analysed. DEFAULTS to '%s'."%d0)
 
     if kernel is not False:

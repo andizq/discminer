@@ -210,6 +210,28 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
     except KeyError:
         ctitle = meta['disc']+' '+meta['mol']
 
+    if moment in ['bluewidth', 'redwidth', 'bluered']:
+        clim = custom['Llim']
+        fclim = float(clim)
+        unit = '[km s$^{-1}$]'
+        if unit_simple: unit = 'km/s'        
+        clabel = r'%s %s'%(moment, unit)
+        cmap_mom = get_discminer_cmap('linewidth')
+        cmap_res = get_discminer_cmap('linewidth', kind='residuals')
+        levels_im = np.linspace(0.0, L_res2abs*fclim, 64)
+        levels_cc = np.linspace(0.2, 0.8, 4)
+        
+    if moment in ['continuum']:
+        clim = custom['Ilim']
+        fclim = float(clim)
+        unit = '[K]'
+        if unit_simple: unit = 'K'        
+        clabel = r'Peak Intensity %s'%unit
+        cmap_mom = matplotlib.pyplot.get_cmap('pink_r')    
+        cmap_res = get_discminer_cmap('intensity_2', kind='residuals')
+        levels_im = np.linspace(0.0, I_res2abs*fclim, 64)
+        levels_cc = np.linspace(10, 50, 5)
+    
     if moment in ['skewness', 'kurtosis', 'skewkurt']:
         clim = custom['Ilim']
         fclim = float(clim)
@@ -221,14 +243,14 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         levels_im = np.linspace(0.2*fclim, fclim, 64)
         levels_cc = np.linspace(0.2*fclim, fclim, 4)
         
-    if moment=='delta_velocity':
+    if moment in ['delta_velocity', 'delta_meanvelocity', 'delta_medianvelocity']:
         clim = custom['vlim']
         fclim = float(clim)*1000
         unit = '[m s$^{-1}$]'
         if unit_simple: unit = 'm/s'        
         clabel = r'$\Delta$ Velocity %s'%unit
         cmap_mom = matplotlib.pyplot.get_cmap('magma')
-        cmap_res = cmap_mom 
+        cmap_res = get_discminer_cmap('delta', kind='residuals') #cmap_mom 
         levels_im = np.linspace(0.2*fclim, fclim, 64)
         levels_cc = np.linspace(0.2*fclim, fclim, 4)
 
@@ -265,7 +287,7 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         levels_im = np.linspace(0.0, fclim, 64)
         levels_cc = np.linspace(0.2*fclim, fclim, 4)
         
-    if moment in ['velocity', 'v0phi', 'v0r', 'v0z', 'vr_leftover']:
+    if moment in ['velocity', 'v0phi', 'v0r', 'v0z', 'vr_leftover', 'meanvelocity', 'medianvelocity']:
         clim = custom['vlim']
         fclim = float(clim)        
         unit = '[km s$^{-1}$]'
@@ -319,9 +341,9 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         ndigs = len(sp_dec[0])
         cfmt = '%'+'%d.1f'%(ndigs+1+1+nsign) #ndigs + . + 1f + nsign
 
-    if 'delta' in moment:
+    if 'delta' in moment or moment in ['peakintensity']:
         cfmt = '%d'
-        
+
     return ctitle, clabel, fclim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit
 
 def get_1d_plot_decorators(moment, parfile='parfile.json', tag=''):
@@ -336,8 +358,63 @@ def get_1d_plot_decorators(moment, parfile='parfile.json', tag=''):
     meta = pars['metadata']
 
     if len(tag)>0: tag = tag+' '
+
+    if moment in ['bluewidth', 'redwidth', 'bluered']:
+        clim0_res = -custom['Llim']
+        clim1_res = custom['Llim']
+        clim0, clim1 = 0, L_res2abs*clim1_res
+        unit = '[km/s]' #'[km s$^{-1}$]'
+        clabel = r'%s %s'%(moment, unit)
+        clabel_res = r'%s residuals %s'%(moment, unit)
+    
+    if moment in ['continuum']:
+        clim0_res = -custom['Ilim']
+        clim1_res = custom['Ilim']
+        clim0, clim1 = 0.0, I_res2abs*clim1_res
+        unit = '[K]'
+        clabel = r'Cont. Intensity %s%s'%(tag, unit)
+        clabel_res = r'Cont. Int. residuals %s'%unit    
+    
+    if moment in ['skewness', 'kurtosis', 'skewkurt']:
+        clim0_res = -custom['Ilim']
+        clim1_res = custom['Ilim']
+        clim0, clim1 = I_res2abs*clim0_res, I_res2abs*clim1_res
+        unit = ''
+        clabel = r'%s'%moment
+        clabel_res = r'%s residuals'%moment
         
-    if moment in ['velocity', 'v0phi', 'v0r', 'v0z', 'vr_leftover']:
+    if moment in ['delta_velocity', 'delta_meanvelocity', 'delta_medianvelocity']:
+        unit = '[km/s]'
+        clim0_res = -custom['vlim']
+        clim1_res = custom['vlim']    
+        clim0, clim1 = 0.0, v_res2abs*clim1_res
+        clabel = clabel_res = None #Modified within each script
+
+    if moment=='delta_linewidth':
+        clim0_res = -custom['Llim']
+        clim1_res = custom['Llim']
+        clim0, clim1 = 0, L_res2abs*clim1_res
+        unit = '[km/s]' #'[km s$^{-1}$]'
+        clabel = r'$\Delta$ Line width %s%s'%(tag, unit)
+        clabel_res = r'$\Delta$ L. width residuals %s'%unit    
+
+    if moment=='delta_peakintensity':
+        clim0_res = -custom['Ilim']
+        clim1_res = custom['Ilim']
+        clim0, clim1 = 0.0, I_res2abs*clim1_res
+        unit = '[K]'
+        clabel = r'$\Delta$ Peak Intensity %s%s'%(tag, unit)
+        clabel_res = r'\Delta$ Peak Int. residuals %s'%unit    
+        
+    if moment=='reducedchi2':
+        clim0_res = -custom['Ilim']
+        clim1_res = custom['Ilim']
+        clim0, clim1 = 0.0, I_res2abs*clim1_res
+        unit = ''
+        clabel = r'Reduced $X^2$'
+        clabel_res = r'Reduced $X^2$ residuals'
+    
+    if moment in ['velocity', 'v0phi', 'v0r', 'v0z', 'vr_leftover', 'meanvelocity', 'medianvelocity']:
         unit = '[km/s]' #'[km s$^{-1}$]'
         clim0_res = -custom['vlim']
         clim1_res = custom['vlim']    
@@ -463,7 +540,10 @@ def make_masks(ax, mask_R, mask_phi, Rmax=1000, **kwargs_mask):
             
 def get_noise_mask(
         datacube,
-        thres=4, return_mean=True,
+        thres=4,
+        return_mean=True,
+        return_std=False,
+        nchanfree=5,
         mask_phi={'map2d': None,
                   'lims': [] #List of limits
         },
@@ -472,12 +552,16 @@ def get_noise_mask(
         }        
 ):    
     #std from line-free channels, per pixel
-    data = datacube.data    
-    noise = np.std( np.append(data[:5,:,:], data[-5:,:,:], axis=0), axis=0)
+    data = datacube.data
+    linefree = np.append(data[:nchanfree,:,:], data[-nchanfree:,:,:], axis=0)
+    noise = np.std(linefree, axis=0) 
 
     if return_mean:
         noise = np.nanmean(noise)
 
+    elif return_std:
+        noise = np.std(linefree) #global rms
+        
     mask = np.nanmax(data, axis=0) < thres*noise
     mask_sec = _merge_R_phi_mask(mask_R, mask_phi)
     mask = mask | mask_sec

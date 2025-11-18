@@ -1554,7 +1554,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                 for prop in props:
                     for i in range(self.subpixels_sq): #Subpixels are projected on the same plane where true grid is projected
                         if not isinstance(prop[i][side], numbers.Number):
-                            prop[i][side] =  griddata_diff(props[i][side]) #griddata((x_pro, y_pro), prop[i][side], (self.mesh[0], self.mesh[1]), method='linear')
+                            prop[i][side] =  griddata_diff(prop[i][side]) #griddata((x_pro, y_pro), prop[i][side], (self.mesh[0], self.mesh[1]), method='linear')
                         if self.Rmax_m is not None:
                             prop[i][side] = np.where(np.logical_and(R_grid<self.Rmax_m, R_grid>self.Rmin_m), prop[i][side], np.nan)
 

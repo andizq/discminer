@@ -39,7 +39,12 @@ if __name__ == '__main__':
 #**********************
 #JSON AND PARSER STUFF
 #**********************
-with open('parfile.json') as json_file:
+if args.moment=='continuum':
+    parfile = 'parfile_band7.json'
+else:
+    parfile = 'parfile.json'
+    
+with open(parfile) as json_file:
     pars = json.load(json_file)
 
 meta = pars['metadata']
@@ -54,10 +59,7 @@ PA = best['orientation']['PA']
 xc = best['orientation']['xc']
 yc = best['orientation']['yc']
 
-gaps = custom['gaps']
-rings = custom['rings']
-
-ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get_2d_plot_decorators(args.moment, unit_simple=True, fmt_vertical=True)
+ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get_2d_plot_decorators(args.moment, parfile=parfile, unit_simple=True, fmt_vertical=True)
 
 #****************
 #SOME DEFINITIONS
@@ -71,7 +73,12 @@ dpc = meta['dpc']*u.pc
 #*******************
 #LOAD DATA AND MODEL
 #*******************
-datacube, model = init_data_and_model()
+if args.moment=='continuum':
+    datacube, model = init_data_and_model(parfile=parfile, twodim=True, write_extent=True)
+    datacube.convert_to_tb(writefits=False, planck=False)
+else:
+    datacube, model = init_data_and_model(parfile=parfile)
+    
 vchannels = datacube.vchannels
 model.make_model()
 
@@ -85,6 +92,11 @@ if args.absolute_Router>=0:
     Rmod_out = args.absolute_Router
 else:
     Rmod_out = args.Router*Rout
+
+gaps = np.array(custom['gaps'])
+rings = np.array(custom['rings'])
+gaps = gaps[gaps<Rmod_out]
+rings = rings[rings<Rmod_out]
 
 Rmax = 1.1*Rmod_out*u.au #Max window extent, 10% larger than disc Rout
 
@@ -108,8 +120,12 @@ elif args.surface in ['low', 'lower']:
 
 #*************************
 #LOAD MOMENT MAPS
-moment_data, moment_model, residuals, mtags = load_moments(args, mask=mask)
-ref_surf = mtags['ref_surf']
+if args.moment=='continuum':
+    residuals = datacube.data[0]
+    mtags = dict(dir_model=meta['dir_model'], base=f'{args.moment}')
+else:
+    moment_data, moment_model, residuals, mtags = load_moments(args, mask=mask)
+    ref_surf = mtags['ref_surf']
 
 if args.moment=='velocity' and args.fold=='absolute':
     residuals = np.abs(moment_data-vsys) - np.abs(moment_model-vsys)
@@ -119,7 +135,7 @@ if args.moment=='velocity' and args.percentage_kepler:
     coords = {'R': model.projected_coords['R']['upper']}
     velocity_kepler = model.get_attribute_map(coords, 'velocity', surface=ref_surf) * vel_sign    
     residuals = residuals/velocity_kepler
-
+    
 #********************
 def get_sky_coords(rp, phip, midplane=True):
     phii = np.radians(phip)
@@ -159,16 +175,16 @@ ax_c.axis('off')
 #*******************
 #SHOW PEAK RESIDUALS
 #*******************
-kwargs_sc = dict(facecolors=color, edgecolors='0.1', lw=0.7, alpha=0.7, zorder=10)
+kwargs_sc = dict(facecolors=color, edgecolors='0.1', lw=1.2, alpha=0.7, s=70, zorder=10)
 color_global_peak = 'lime'
 color_cluster_peak = 'lime'
 
-ax[0].set_xlabel(r'Azimuth [deg]')
-ax[0].set_ylabel('Peak residual [%s]'%unit)
-ax[1].set_xlabel('Radius [au]')
+ax[0].set_xlabel(r'Azimuth [deg]', fontsize=args.fontsize-4)
+ax[0].set_ylabel('Peak residual [%s]'%unit, fontsize=args.fontsize-4)
+ax[1].set_xlabel('Radius [au]', fontsize=args.fontsize-4)
 
 for axi in ax: 
-    axi.tick_params(labelbottom=True, top=True, right=True, which='both', direction='in')    
+    axi.tick_params(labelbottom=True, top=True, right=True, which='both', direction='in', labelsize=args.fontsize-6)    
     mod_major_ticks(axi, nbins=8)
     mod_minor_ticks(axi)
 ax[0].set_xlim(-95,95)
@@ -180,7 +196,7 @@ ax[1].scatter(lev, peak_resid, **kwargs_sc)
 
 ax[0].axvline(pick.peak_global_angle, lw=3.5, c=color_global_peak, label='global peak', zorder=0)
 ax[1].axvline(pick.peak_global_radius, lw=3.5, c=color_global_peak, zorder=0) 
-ax[0].legend(frameon=False, fontsize=args.fontsize, handlelength=1.0, loc='lower left', bbox_to_anchor=(-0.04, 0.98))
+ax[0].legend(frameon=False, fontsize=args.fontsize-2, handlelength=1.0, loc='lower left', bbox_to_anchor=(-0.04, 0.98))
 
 make_substructures(ax[1], gaps=gaps, rings=rings)
 append_sigma_panel(fig, ax, peak_resid, weights=pick.peak_weight, hist=True)
@@ -234,6 +250,7 @@ sin_peak = np.sin(np.radians(peak_angle))
 
 if args.projection=='cartesian':
     levels_resid = np.linspace(-clim, clim, 32)
+    qcbar = None if args.quadrant_cbar==0 else args.quadrant_cbar
         
     fig, ax = make_round_map(folded_map, levels_resid, pick.X*u.au, pick.Y*u.au, R_prof[-1]*u.au,
                              z_func=z_func, z_pars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc,
@@ -244,12 +261,13 @@ if args.projection=='cartesian':
                              mask_inner=R_prof[0]*u.au,
                              fontsize_azimuthal_grid=args.azlabels*args.fontsize,
                              fontsize_radial_grid=args.rlabels*(args.fontsize+3), 
-                             fontsize_cbar=args.fontsize+2,
+                             fontsize_cbar=args.fontsize+0,
                              fontsize_xaxis=args.fontsize+3,
                              fontsize_nskyaxis=args.fontsize+5,
                              make_nskyaxis=args.show_nsky,
                              make_Rout_proj=args.show_xaxis,
                              make_xaxis=args.show_xaxis,
+                             quadrant=qcbar
     )
     
     make_substructures(
@@ -268,7 +286,7 @@ if args.projection=='cartesian':
     if args.show_global:
         ax.scatter(pick.peak_global_radius*np.cos(np.radians(pick.peak_global_angle)),
                    pick.peak_global_radius*np.sin(np.radians(pick.peak_global_angle)),
-                   s=sb+250, zorder=21, **kwargs_global)
+                   s=sb+350, zorder=21, **kwargs_global)
                
         ax.scatter(None, None, label='Global peak', s=sb, **kwargs_global) #for legend
     
@@ -282,7 +300,7 @@ if args.projection=='cartesian':
             kwargs_cluster = dict(edgecolors='k', facecolors=color_cluster_peak, marker='X', lw=2.5, alpha=0.7)
             ax.scatter(pick.acc_R*np.cos(np.radians(pick.acc_phi)),
                        pick.acc_R*np.sin(np.radians(pick.acc_phi)),                       
-                       s=sb+250, zorder=21, **kwargs_cluster)
+                       s=sb+350, zorder=21, **kwargs_cluster)
 
             ax.scatter(None, None, label='Cluster peak', s=sb, **kwargs_cluster) #for legend
             
@@ -292,7 +310,7 @@ if args.projection=='cartesian':
     #Mark planet location if passed as an arg
     kwargs_planet = dict(edgecolors='gold', facecolors='none', marker='o', lw=4.5, alpha=1.0, zorder=22)    
 
-    mark_planet_location(ax, args, edgecolors='k', lw=3.5, s=sb+200, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc)    
+    mark_planet_location(ax, args, edgecolors='k', lw=3.5, s=sb+300, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc)    
     
     #mark_planet_location(ax, args, s=sb+200, **kwargs_planet)
     ax.scatter(None, None, label='Planet', s=sb, **kwargs_planet) #for legend
