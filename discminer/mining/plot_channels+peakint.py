@@ -36,6 +36,7 @@ meta = pars['metadata']
 best = pars['best_fit']
 custom = pars['custom']
 Rout = best['intensity']['Rout']
+vsys = best['velocity']['vsys']
 
 nchans = args.nchans
 chan_step = args.step
@@ -67,7 +68,7 @@ except KeyError:
 #*******************
 datacube, model = init_data_and_model(Rmin=0, Rmax=1.6)
 noise_mean, mask = get_noise_mask(datacube, thres=args.sigma)
-    
+
 vchannels = datacube.vchannels
 pix_downsamp = model.grid['step']*meta['downsamp_fit']/au_to_m
 
@@ -104,8 +105,8 @@ if 'sum' in meta['kind']:
     cmap = plt.get_cmap('cmr.rainforest_r')
 """
 idlim = int(0.5*chan_step*(nchans-1))
-plot_channels = np.linspace(-idlim,idlim,nchans) + np.argmin(np.abs(vchannels-best['velocity']['vsys']))
-plot_channels = np.append([0], plot_channels) #dummy ax to make room for peakintensity map later on
+plot_channels = np.linspace(-idlim,idlim,nchans) + np.argmin(np.abs(vchannels-vsys))
+plot_channels = np.append([0], plot_channels).astype(int) #dummy chan to make room for peakintensity map later on at ax[0]
 
 kw_channels = dict(channels={'indices': plot_channels}, ncols=nchans+1,
                    xlims = (-xlim, xlim), ylims = (-xlim, xlim), show_beam=False,

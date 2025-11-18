@@ -29,7 +29,8 @@ _residuals_colors = {
     'linewidth': ["#"+tmp for tmp in ["000b14","036407","81ae71","fff7db","ff5a47","cc0033","140200"]],
     'intensity': ["#"+tmp for tmp in ["000b14","382406","6a593c","fff7db","ff5a47","cc0033","140200"]],
     'peakintensity': ["#"+tmp for tmp in ["000b14","382406","6a593c","fff7db","ff5a47","cc0033","140200"]],    
-    'intensity_2': ["#"+tmp for tmp in ["000b14","382406","6a593c","fff7db","ff5a47","cc0033","140200"]]    
+    'intensity_2': ["#"+tmp for tmp in ["000b14","382406","6a593c","fff7db","ff5a47","cc0033","140200"]],
+    'delta': ["#"+tmp for tmp in ["8FA1C7", "ABC3F6", "7CF4FF","fff7db","ff5a47","cc0033","140200"]]
 }
 
 _residuals_cranges = {
@@ -37,7 +38,8 @@ _residuals_cranges = {
     'linewidth': None,
     'intensity': None,
     'peakintensity': None,
-    'intensity_2': None,    
+    'intensity_2': None,
+    'delta': None
 }
 
 _attribute_colors = {
@@ -58,7 +60,8 @@ _attribute_cranges = {
     'linewidth': [0, 0.1, 0.25, 0.6, 1.0],
     'intensity': "matplotlib",
     'peakintensity': [0, 0.1, 0.25, 0.6, 1.0],
-    'intensity_2': [0, 0.1, 0.25, 0.6, 1.0]
+    'intensity_2': [0, 0.1, 0.25, 0.6, 1.0],
+    'delta': [0, 0.1, 0.25, 0.6, 1.0]    
 }
 
 def use_discminer_style():

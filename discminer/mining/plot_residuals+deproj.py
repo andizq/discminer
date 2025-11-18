@@ -168,7 +168,8 @@ clabels = { #ylabel for polar plots
 
 if args.projection=='cartesian':
     levels_resid = np.linspace(-clim, clim, 32)
-        
+    qcbar = None if args.quadrant_cbar==0 else args.quadrant_cbar
+    
     fig, ax = make_round_map(residuals, levels_resid, Xproj*u.m, Yproj*u.m, Rmod_out*u.au,
                              z_func=z_func, z_pars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc,
                              cmap=cmap_res, clabel=unit, fmt=cfmt,
@@ -177,12 +178,13 @@ if args.projection=='cartesian':
                              mask_inner=Rmod_in*u.au,
                              fontsize_azimuthal_grid=args.azlabels*args.fontsize,
                              fontsize_radial_grid=args.rlabels*(args.fontsize+3), 
-                             fontsize_cbar=args.fontsize+2,
+                             fontsize_cbar=args.fontsize+0,
                              fontsize_xaxis=args.fontsize+3,
                              fontsize_nskyaxis=args.fontsize+5,
                              make_nskyaxis=args.show_nsky,
                              make_Rout_proj=args.show_xaxis,
                              make_xaxis=args.show_xaxis,
+                             quadrant=qcbar
     )
 
     #SHOW FILAMENTS?

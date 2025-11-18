@@ -42,10 +42,11 @@ class ReferenceModel(Cube):
                 pa=0*u.deg
             ),
             init_params = {},
+            reset_params = False,
             init_funcs = {},
             init_header = {},
             filename = 'referencecube.fits',
-            parfile = None
+            parfile = None,
     ): 
         """
         Initialise ReferenceModel. Inherits `~discminer.disc2d.Cube` properties and methods.
@@ -114,8 +115,12 @@ class ReferenceModel(Cube):
         }
 
         #Update dicts based on input kwargs
-        for key in init_params:
-            self.params[key].update(init_params[key])
+        if reset_params: #overwrite
+            for key in init_params:
+                self.params[key] = init_params[key]
+        else: #update input pars, keep defaults
+            for key in init_params:
+                self.params[key].update(init_params[key])
 
         self.funcs.update(init_funcs)
             

@@ -194,9 +194,9 @@ class ModelGrid():
         
         xsky = ysky = ((nx-1) * dpix_au/2.0) # Sky maximum extent
         # dpix_au*nx = np.abs(-xsky - dpix_au/2) + (xsky + dpix_au/2) --> xsky is referred
-        #  to the centre of the left/rightmost pixel. To recover the full extent of the sky,
-        #   which should be equal to dpix_au*nx, one has to add twice half the pixel size to
-        #    account for the total extent of the border pixels.
+        #  to the centre of the left/rightmost pixel (in agreement with the mpl definition of 'extent').
+        #   To recover the full extent of the sky, which should be equal to dpix_au*nx, one would need
+        #    to add twice half the pixel size to account for the missing width of the pixels at the edges.
         grid = dgrid(xsky, nx) #Transforms xsky from au to metres and computes Cartesian grid
         self.skygrid = grid
 
