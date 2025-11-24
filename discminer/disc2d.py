@@ -21,6 +21,7 @@ import numpy as np
 
 from astropy.convolution import Gaussian2DKernel, convolve
 from astropy import units as u
+from radio_beam import Beam
 from matplotlib import ticker
 from scipy.integrate import quad
 from scipy.interpolate import interp1d    
@@ -33,7 +34,7 @@ from .core import ModelGrid
 from .cube import Cube
 from .rail import Contours
 from .grid import GridTools
-from .cart import orientation_constant
+from . import cart
 
 from .diff_interp import get_griddata_sparse as get_griddata
 
@@ -658,7 +659,65 @@ class Intensity:
     def line_uplow_mask(Iup, Ilow):
         #velocity nans might differ from Int nans when a z surf is zero and SG is active, nanmax must be used
         return np.nanmax([Iup, Ilow], axis=0)
-    
+
+    def update_beam_from_params(self):
+        """
+        Update the model beam kernel & area from MCMC beam parameters.
+        All are interpreted as FWHM (not sigma).
+        """
+        #'params' only exists once a model has been initialised
+        if not hasattr(self, "params"):
+            return
+
+        beam_pars = self.params.get("beam", {})
+
+        bmaj = beam_pars.get("bmaj", None)
+        bmin = beam_pars.get("bmin", None)
+        bpa  = beam_pars.get("bpa", None)
+
+        #Only proceed if bmaj is a numeric value (i.e. currently being set by a model)
+        def _is_num(x):
+            return isinstance(x, numbers.Number) and not isinstance(x, bool)
+
+        if not _is_num(bmaj):
+            #Beam not being fitted/modelled, continue and assume beam_model=beam_data
+            return
+
+        if not _is_num(bmin):
+            bmin = bmaj #Default circular if bmaj is num and bmin not set
+
+        if not _is_num(bpa):
+            bpa = 0.0
+
+        bmaj_q = bmaj * u.arcsec
+        bmin_q = bmin * u.arcsec
+        bpa_q  = bpa  * u.deg
+
+        #FWHM -> sigma
+        sigma2fwhm = np.sqrt(8.0 * np.log(2.0))
+        x_stddev = ((bmaj_q / self.pix_size) / sigma2fwhm).decompose().value
+        y_stddev = ((bmin_q / self.pix_size) / sigma2fwhm).decompose().value
+
+        #Match radio_beam / Cube convention: theta = pi/2 - PA
+        theta = (0.5 * np.pi * u.rad - bpa_q.to(u.rad))
+
+        #Update the kernel used in get_channel / get_cube
+        self.beam_kernel = Gaussian2DKernel(x_stddev, y_stddev, theta=theta)
+
+        #Beam area in arcsec^2 (Gaussian)
+        self.beam_area_arcsecs = 2.0 * np.pi * (bmaj_q.value * bmin_q.value) / sigma2fwhm**2
+
+        #Convert to pixels^2 and get physical size
+        pix_arcsec = self.pix_size.to(u.arcsec).value
+        self.beam_area = self.beam_area_arcsecs / pix_arcsec**2
+        self.beam_size = bmaj_q * self.dpc.to("pc").value * u.au
+
+        #Overwrite values
+        self.bmaj = bmaj_q
+        self.bmin = bmin_q
+        self.bpa  = bpa_q
+        self.beam = self.beam_info = Beam(major=bmaj_q, minor=bmin_q, pa=bpa_q)
+        
     def get_line_profile(self, v_chan, vel2d, int2d, linew2d, lineb2d, **kwargs):
         if self.subpixels:
             int2d_near, int2d_far = [], []
@@ -876,7 +935,7 @@ class Mcmc:
         for i in range(self.mc_nparams):
             if not (self.mc_boundaries_list[i][0] < new_params[i] < self.mc_boundaries_list[i][1]): return -np.inf
             else: self.params[self.mc_kind[i]][self.mc_header[i]] = new_params[i]
-
+            
         vel2d, int2d, linew2d, lineb2d = self.make_model(**kwargs)
 
         lnx2=0    
@@ -932,7 +991,6 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         """
         
         FrontendUtils._print_logo()        
-
         
         self.prototype = prototype
         self.verbose = verbose
@@ -953,17 +1011,23 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         self.nchan = len(mgrid.vchannels)
         self.header = mgrid.header
         self.dpc = mgrid.dpc
-        
+
+        self.pix_size = datacube.pix_size
+
+        self.bmaj = datacube.bmaj
+        self.bmin = datacube.bmin
+        self.bpa = datacube.bpa                
         self.beam = datacube.beam
         self.beam_info = datacube.beam
+        self.beam_kernel = datacube.beam_kernel        
         self.beam_size = datacube.beam_size        
         self.beam_area = datacube.beam_area
-        self.beam_kernel = datacube.beam_kernel
+        self.beam_area_arcsecs = datacube.beam_area_arcsecs
 
-        self.orientation_func = orientation_constant
-        self._z_upper_func = Model.z_cone
-        self._z_lower_func = Model.z_cone_neg
-        self._velocity_func = Model.keplerian
+        self.orientation_func = cart.orientation_constant
+        self._z_upper_func = cart.z_upper_exp_tapered
+        self._z_lower_func = cart.z_upper_exp_tapered
+        self._velocity_func = cart.keplerian_vertical
         self._intensity_func = Model.intensity_powerlaw
         self._linewidth_func = Model.linewidth_powerlaw
         self._lineslope_func = Model.lineslope_powerlaw
@@ -1006,10 +1070,20 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             self.sub_centre_id = centre_sq
             self.subpixels = subpixels
             self.subpixels_sq = subpixels**2
-        else: self.subpixels=False
+        else:
+            self.subpixels=False
 
         #Initialise and print default parameters for default functions
-        self.categories = ['velocity', 'orientation', 'intensity', 'linewidth', 'lineslope', 'height_upper', 'height_lower']
+        self.categories = [
+            'velocity',
+            'orientation',
+            'intensity',
+            'linewidth',
+            'lineslope',
+            'height_upper',
+            'height_lower',
+            'beam'
+        ]
 
         self.mc_params = {'velocity': {'Mstar': True, 
                                        'vel_sign': 1,
@@ -1027,33 +1101,43 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                           'lineslope': {'Ls': False, 
                                         'p': False, 
                                         'q': False},
-                          'height_upper': {'psi': True},
-                          'height_lower': {'psi': True},
-                          }
+                          'height_upper': {'z0': True, 'p': True, 'Rb': True, 'q': True},
+                          'height_lower': {'z0': True, 'p': True, 'Rb': True, 'q': True},
+                          'beam': {'bmaj': False, 'bmin': False, 'bpa':  False},
+        }
         
-        self.mc_boundaries = {'velocity': {'Mstar': [0.05, 5.0],
-                                           'vsys': [-10, 10],
+        self.mc_boundaries = {'velocity': {'Mstar': [0.05, 5.0], #Msun
+                                           'vsys': [-10, 10], #km/s
                                            'Ec': [0, 300],
                                            'Rc': [50, 300],
                                            'gamma': [0.5, 2.0],
                                            'beta': [0, 1.0],
                                            'H0': [0.1, 20]},
-                              'orientation': {'incl': [-np.pi/3, np.pi/3], 
-                                              'PA': [-np.pi, np.pi],
-                                              'xc': [-50, 50],
-                                              'yc': [-50, 50]},
-                              'intensity': {'I0': [0, 1000], 
-                                            'p': [-10.0, 10.0], 
+                              'orientation': {'incl': [-np.pi/3, np.pi/3], #rad
+                                              'PA': [-np.pi, np.pi], #rad
+                                              'xc': [-50, 50], #au
+                                              'yc': [-50, 50]}, #au
+                              'intensity': {'I0': [0, 5], #Jy/pixel
+                                            'p': [-5.0, 5.0], 
                                             'q': [0, 5.0]},
-                              'linewidth': {'L0': [0.005, 5.0], 
+                              'linewidth': {'L0': [0.005, 5.0], #km/s
                                             'p': [-5.0, 5.0], 
                                             'q': [-5.0, 5.0]},
                               'lineslope': {'Ls': [0.005, 20], 
                                             'p': [-5.0, 5.0], 
                                             'q': [-5.0, 5.0]},
-                              'height_upper': {'psi': [0, np.pi/2]},
-                              'height_lower': {'psi': [0, np.pi/2]}
-                              }
+                              'height_upper': {'z0': [0, 100], #au
+                                               'p': [0, 5],
+                                               'Rb': [0, 1000],
+                                               'q': [0, 10]},
+                              'height_lower': {'z0': [0, 100],
+                                               'p': [0, 5],
+                                               'Rb': [0, 1000],
+                                               'q': [0, 10]},
+                              'beam': {'bmaj': [0.01, 1.0], #arcsec
+                                       'bmin': [0.01, 1.0],
+                                       'bpa':  [-180.0, 180.0]}, #deg
+        }
          
         if prototype and verbose:
             self.params = {}
@@ -1458,9 +1542,10 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         vel_kwargs = self.params['velocity']
         lw_kwargs = self.params['linewidth']
         ls_kwargs = self.params['lineslope']
-
+        self.update_beam_from_params() #update beam info if relevant; convolution happens in get_cube or get_channel
+        
         cos_incl, sin_incl = np.cos(incl), np.sin(incl)
-
+        
         #*******************************************
         #MAKE TRUE GRID FOR UPPER AND LOWER SURFACES
         z_true = self.z_upper_func({'R': self.R_true, 'phi': self.phi_true}, **self.params['height_upper'])
@@ -1567,7 +1652,6 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         if self.prototype:
             self.get_projected_coords(z_mirror=z_mirror) #TODO: enable kwargs for this method
             self.props = props
-            #Rail.__init__(self, self.projected_coords, self.skygrid)
             return self.get_cube(self.vchannels, *props, header=self.header, dpc=self.dpc, disc=self.datacube.disc, mol=self.datacube.mol, kind=self.datacube.kind, **kwargs_line_profile)
         else:
             return props

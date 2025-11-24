@@ -111,7 +111,12 @@ class ReferenceModel(Cube):
                 'p': 1.0,
                 'Rb': 500,
                 'q': 2.0
-            }
+            },
+            'beam': {
+                'bmaj': None,
+                'bmin': None,
+                'bpa': None
+            },
         }
 
         #Update dicts based on input kwargs
@@ -182,10 +187,10 @@ class ReferenceModel(Cube):
         hdu.header.update(header)        
         data = np.zeros((nchan, npix, npix))
         
-        Cube.__init__(self, data, hdu.header, vchannels, dpc, beam=beam, filename=filename, disc=disc, mol=mol, kind=kind, parfile=parfile)
+        Cube.__init__(self, data, hdu.header, vchannels, dpc, beam=beam, filename=filename, disc=disc, mol=mol, kind=kind, parfile=parfile) #Empty datacube
         
         #Init model
-        model = Model(self, Rmax=Rmax, Rmin=Rmin, write_extent=write_extent, prototype=True, subpixels=subpixels) 
+        model = Model(self, Rmax=Rmax, Rmin=Rmin, write_extent=write_extent, prototype=True, subpixels=subpixels) #Self is the simulated datacube
         
         model.velocity_func = self.funcs['velocity']
         model.z_upper_func = self.funcs['z_upper']
@@ -198,10 +203,20 @@ class ReferenceModel(Cube):
 
         model.params = copy.copy(self.params)
         
-        #UPDATE DATACUBE VALUES
+        #UPDATE DATACUBE IMAGE VALUES
         self.data = model.make_model(make_convolve=True, return_data_only=True)        
         self.model = model
 
+        #UPDATE DATACUBE BEAM IN CASE BEAM MODEL PARAMS EXIST
+        self.bmaj = model.bmaj
+        self.bmin = model.bmin
+        self.bpa  = model.bpa
+        self.beam = self.beam_info = model.beam
+        self.beam_kernel = model.beam_kernel
+        self.beam_area_arcsecs = model.beam_area_arcsecs
+        self.beam_area = model.beam_area
+        self.beam_size = model.beam_size
+        
         #UPDATE JSON INFO
         self.json_metadata = {            
             'Rmin': self.model.Rmin,
@@ -210,7 +225,7 @@ class ReferenceModel(Cube):
 
         self.json_params = self.params
         self.json_funcs = self.funcs
-
+        
         if filename is not None:
             self.writefits()
 
