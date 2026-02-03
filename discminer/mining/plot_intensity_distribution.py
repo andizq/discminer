@@ -193,9 +193,9 @@ for i in range(nmasks):
 #*********
 #MAKE PDF
 #*********
-chanwidth = np.median(np.diff(datacube.vchannels))
+chanwidth = np.abs(np.median(np.diff(datacube.vchannels)))
 dv_native = 0.5*chanwidth
-# deprojected velocities you'll report/plot on:
+
 vmin = -5*dv_native + np.min(datacube.vchannels)   # generous margins
 vmax =  5*dv_native + np.max(datacube.vchannels)
 bins   = np.arange(vmin, vmax + dv_native, dv_native)
@@ -230,7 +230,7 @@ def thick_gaussian(v, sigma, tau=0.0, noise_mean=0.05, seed=10): #SNR 20 at plan
     if tau == 0.0:
         I = G.copy()
     else:
-        # Radiative transfer form: (1 - exp(-τ(v))) normalized to the line center
+        # Radiative transfer form: (1 - exp(-tau(v))) normalized to the line center
         I = (1.0 - np.exp(-tau * G)) / (1.0 - np.exp(-tau))
 
     # Add Gaussian-distributed random noise

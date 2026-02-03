@@ -187,13 +187,25 @@ class Pick(Rail):
         self.peak_mean = peak_mean
         self.peak_std = peak_std
         
-        #Global peak into
+        #Global peak info
         ind_max = np.argmax(peak_resid[ind_global_peak])
         self.peak_global_val = peak_resid[ind_global_peak][ind_max]
         self.peak_global_sign = peak_sign[ind_global_peak][ind_max]
         self.peak_global_angle = peak_angle[ind_global_peak][ind_max]
         self.peak_global_radius = self.lev_list[ind_global_peak][ind_max]
         self.peak_global_sigma = (self.peak_global_val-peak_mean)/peak_std
+
+        #MAD metric
+        def mad_sigma(x):
+            x = np.asarray(x)
+            medval = np.nanmedian(x)
+            mad = np.nanmedian(np.abs(x - medval))
+            return 1.4826 * mad
+
+        self.peak_median_mad = np.nanmedian(peak_resid)
+        self.peak_std_mad = mad_sigma(peak_resid)
+        self.peak_global_val_mad = np.nanmax(peak_resid)
+        self.peak_global_sigma_mad = (self.peak_global_val_mad-self.peak_median_mad)/self.peak_std_mad
         
         #Location, amplitude and other properties, for all points
         nonan = ~np.isnan(peak_resid)
@@ -208,7 +220,7 @@ class Pick(Rail):
         self.color_list = self.color_list[nonan]
         self.coord_list = self.coord_list[nonan]
         self.resid_list = self.resid_list[nonan]
-        
+
 
     def _make_clusters(self, n_clusters, axis='phi'): 
 
@@ -372,6 +384,23 @@ class Pick(Rail):
             arr_global_peak = [[np.nan]*ncols]
             print ('Writing .txt pick summary file without global peak information...')            
 
+        #MAD metrics
+        try:
+            arr_mad_metrics = [
+                [
+                    self.peak_global_angle,
+                    self.peak_global_radius,
+                    self.peak_global_val_mad*self.peak_global_sign,
+                    self.peak_global_sigma_mad,
+                    self.peak_median_mad,
+                    self.peak_std_mad,
+                    'mad_metrics'
+                ]
+            ]
+        except AttributeError:
+            arr_mad_metrics = [[np.nan]*ncols]
+            print ('Writing .txt pick summary file without MAD metrics information...')            
+            
         #Clusters
         arr_clusters_phi = []
         arr_clusters_R = []
@@ -422,13 +451,13 @@ class Pick(Rail):
             print ('Writing .txt pick summary file without cluster information...')
 
         #Gather info
-        arr_tot = np.asarray(arr_global_peak + arr_clusters_phi + arr_clusters_R + arr_clusters_acc, dtype=object).squeeze()
+        arr_tot = np.asarray(arr_global_peak + arr_mad_metrics + arr_clusters_phi + arr_clusters_R + arr_clusters_acc, dtype=object).squeeze()
 
         np.savetxt(
             filename,
             arr_tot,
             fmt=('%.2f %.2f %.2e %.2f %.2e %.2e %s').split(),
-            header='phi[deg]\tR[au]\tvalue\tsigma\tmean_bckg\tstd_bckg\tcomments',
+            header='phi[deg]\tR[au]\tvalue\tsignificance\tmean_bckg\tstd_bckg\tcomments',
             delimiter='\t'
         )
         

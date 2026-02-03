@@ -147,6 +147,7 @@ def get_sky_coords(rp, phip, midplane=True):
     rsky = np.hypot(xi-xc, yi-yc)/dpc.value
     return rsky, np.degrees(PAsky)
 
+
 #*******************
 #FIND PEAK RESIDUALS
 #*******************
@@ -205,6 +206,23 @@ fig.savefig('peak_residuals_%s.png'%mtags['base'], bbox_inches='tight', dpi=200)
 plt.close()
 
 #sys.exit()
+
+def mad_sigma(x):
+    x = np.asarray(x)
+    med = np.median(x)
+    mad = np.median(np.abs(x - med))
+    return 1.4826 * mad
+
+median_bg = np.median(peak_resid)
+sigma_bg  = mad_sigma(peak_resid)
+
+global_peak = np.max(peak_resid)
+significance = (global_peak - median_bg) / sigma_bg
+
+print ('MAD:', median_bg)
+print ('sigma:', sigma_bg)
+print ('Global peak:', global_peak)
+print ('Significance:', significance)
 
 #*************
 #FIND CLUSTERS
@@ -308,15 +326,15 @@ if args.projection=='cartesian':
             print ('Cluster in sky coords, R=%.3f arcsec, PA=%.1f deg...'%get_sky_coords(pick.acc_R, pick.acc_phi))
             
     #Mark planet location if passed as an arg
-    kwargs_planet = dict(edgecolors='gold', facecolors='none', marker='o', lw=4.5, alpha=1.0, zorder=22)    
+    kwargs_planet = dict(edgecolors='k', facecolors='none', marker='o', lw=4.5, alpha=1.0, zorder=22)    
 
-    mark_planet_location(ax, args, edgecolors='k', lw=3.5, s=sb+300, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc)    
+    mark_planet_location(ax, args, s=sb+300, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc, **kwargs_planet)    
     
     #mark_planet_location(ax, args, s=sb+200, **kwargs_planet)
     ax.scatter(None, None, label='Planet', s=sb, **kwargs_planet) #for legend
             
     if len(args.rp)>0 and args.show_legend:
-        make_1d_legend(ax, handlelength=1.5, loc='lower center', bbox_to_anchor=(0.5, 1.02))
+        make_1d_legend(ax, handlelength=1.5, loc='lower center', bbox_to_anchor=(0.5, 1.02), fontsize=args.fontsize)
 
     if args.show_title:
         ax.set_title('%s, folded map'%ctitle, fontsize=args.fontsize+1, color='k')
