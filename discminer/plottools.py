@@ -441,7 +441,7 @@ def make_substructures(ax, gaps=[], rings=[], kinks=[],
                        coords='disc', polar=False,
                        model=None, surface='upper', #relevant if coords='sky'
                        make_legend=False,                       
-                       label_gaps=False, label_rings=False, label_kinks=False, sposy=-1.0, fontsize=MEDIUM_SIZE+1,
+                       label_gaps=False, label_rings=False, label_kinks=False, sposy=-1.15, fontsize=MEDIUM_SIZE+1, #-1.15
                        kwargs_gaps={}, kwargs_rings={}, kwargs_kinks={}, kwargs_text1d={}, func1d='axvline'):
     
     '''Overlay ring-like (if twodim) or vertical lines (if not twodim) to illustrate the radial location of substructures in the disc'''
@@ -920,7 +920,7 @@ def make_pie_map(
 #***************************
 #PEAK RESIDUALS AND CLUSTERS
 #***************************
-def append_sigma_panel(fig, ax, values, ax_std=None, weights=None, hist=False, fit_gauss_hist=False): #attach sigma panel to AxesSubplot, based on input values
+def append_sigma_panel(fig, ax, values, ax_std=None, weights=None, hist=False, fit_gauss_hist=False, linecolor='limegreen'): #attach sigma panel to AxesSubplot, based on input values
     ax = np.atleast_1d(ax)
 
     if ax_std is None:
@@ -964,7 +964,7 @@ def append_sigma_panel(fig, ax, values, ax_std=None, weights=None, hist=False, f
     values_x = np.linspace(values_mean-4*values_std, values_mean+4*values_std, 100)
     values_pars =  [max_y, values_mean, values_std]
     values_y = _gauss(values_x, *values_pars)
-    ax[-1].plot(values_y, values_x, color='limegreen', lw=3.5)
+    ax[-1].plot(values_y, values_x, color=linecolor, lw=3.5)
     ax[-1].set_xlim(-0.2*max_y, 1.2*max_y)
 
     for i in range(0,4): 

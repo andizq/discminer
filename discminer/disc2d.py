@@ -1459,14 +1459,10 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             
             griddata_diff = get_griddata((x_pro, y_pro), (self.mesh[0], self.mesh[1]))
                         
-            #R[side] = griddata((x_pro, y_pro), self.R_true, (self.mesh[0], self.mesh[1]), method='linear')
             R[side] = griddata_diff(self.R_true)
-            #x_grid = griddata((x_pro, y_pro), xt, (self.mesh[0], self.mesh[1]), method='linear')
             x_grid = griddata_diff(xt)
-            #y_grid = griddata((x_pro, y_pro), yt, (self.mesh[0], self.mesh[1]), method='linear')
             y_grid = griddata_diff(yt)
             phi[side] = np.arctan2(y_grid, x_grid) #-np.pi, np.pi output for user 
-            #z[side] = griddata((x_pro, y_pro), z_true[side], (self.mesh[0], self.mesh[1]), method='linear')
             z[side] = griddata_diff( z_true[side])
             #r[side] = hypot_func(R[side], z[side])
             if self.Rmax_m is not None: 
@@ -1496,6 +1492,65 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         }
 
         return R, phi, z, R_nonan, phi_nonan, z_nonan
+
+
+    def get_sky_offset(self, Rcoord, phicoord, relative_to="disc", midplane=True):
+        """
+        Convert disc-frame (R, phi) coordinates to sky-frame (r_sky, PA_sky).
+
+        Parameters
+        ----------
+        Rcoord : astropy.units.Quantity
+            Radial separation in the disc frame (e.g., au).
+        phicoord : astropy.units.Quantity
+            Azimuth in the disc frame (e.g., deg or rad).
+        relative_to : {"disc", "image"}
+            - "disc": return offsets relative to the disc center (xc=yc=0).
+            - "image": return offsets relative to the image center (includes xc,yc).
+        midplane : bool
+            If True, treat the point as lying in the midplane. If False, project it
+            onto the emission surface (z_upper here).
+
+        Returns
+        -------
+        rsky : astropy.units.Quantity
+            Projected angular separation on sky (arcsec).
+        PAsky : astropy.units.Quantity
+            Position angle on sky (deg).
+        """
+
+        rel = str(relative_to).strip().lower()
+        if rel not in ("disc", "image"):
+            raise ValueError(f"relative_to must be 'disc' or 'image', got {relative_to!r}")
+
+        Rm = Rcoord.to_value(u.m)
+        Rau = Rcoord.to_value(u.au)
+        phirad = phicoord.to_value(u.rad)
+
+        incl, PA, xc, yc = self.orientation_func({'R': Rm}, **self.params['orientation'])
+
+        zp_m = self.z_upper_func({'R': Rm, 'phi': phirad}, **self.params['height_upper']) * u.m
+        zp_au = zp_m.to_value(u.au)
+
+        # If relative to disc center, remove image-center offsets
+        if rel == "disc":
+            xc = 0.0
+            yc = 0.0
+
+        ri_au, pi_rad = GridTools.get_sky_from_disc_coords(
+            Rau, phirad, zp_au,
+            incl, PA,
+            xc=xc, yc=yc,
+            midplane=midplane,
+            return_rpa=True
+        ) # not astropy quantities
+
+        rsky = np.arctan((ri_au * u.au / self.dpc).decompose().value) * u.rad
+        rsky = rsky.to(u.arcsec)
+        PAsky = (pi_rad * u.rad).to(u.deg)
+
+        return rsky, PAsky
+
 
     def make_disc_axes(self, ax, Rmax=None, surface='upper', **kwargs_plot): 
         if Rmax is None:

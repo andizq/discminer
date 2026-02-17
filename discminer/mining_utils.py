@@ -794,6 +794,12 @@ def make_and_save_filaments(map2d,
         return fil_pos_list, fil_neg_list, colors_dict
 
 
+def format_sky_coords(rsky, PAsky):
+    return (
+        f"R={rsky.to(u.arcsec):.3f}, "
+        f"PA={PAsky.to(u.deg):.1f}..."
+    )
+
 def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', model=None, zfunc=None, zpars=None, incl=None, PA=None, xc=None, yc=None, dpc=None, midplane=False, kwargs_text={}, **kwargs_scatter):
     #midplane: only relevant for input_coords='disc' and coords='sky' for output. If True, return the sky coords of the point in the disc midplane; otherwise, project it onto the disc model surface.
     kwargs_sc = dict(edgecolors='gold', facecolors='none', marker='o', s=450, lw=4.5, alpha=1.0, label=None, zorder=22)
@@ -818,7 +824,7 @@ def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', model
         labels = labels*npoints
 
     #Fetch orientation and surface parameters from model obj if passed
-    if (coords=='sky' or args.input_coords=='sky') and model is not None:
+    if model is not None:
 
         dpc = model.dpc
         orientation = model.params['orientation']
@@ -849,13 +855,16 @@ def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', model
             elif coords=='sky':
                 phii = np.radians(phis[i])
                 zp = zfunc({'R': rs[i]*u.au.to('m')}, **zpars)*u.m.to('au')
-                xi,yi,zi = GridTools.get_sky_from_disc_coords(rs[i], phii, zp, incl, PA, xc, yc, midplane=midplane) 
+                xi,yi,zi = GridTools.get_sky_from_disc_coords(rs[i], phii, zp, incl, PA, xc, yc, midplane=midplane)
+            if model is not None:
+                rsky, PAsky = model.get_sky_offset(rs[i]*u.au, phis[i]*u.deg, relative_to='disc', midplane=True)
+                print (f'Marker in disc frame R={rs[i]:.1f} au, phi={phis[i]:.1f} deg --> sky offset', format_sky_coords(rsky, PAsky), 'relative to disc center and midplane.')
 
         elif args.input_coords=='sky':
             rsky = rs[i]*(dpc.to('pc')).value #Projected distance in au
-            phisky = np.radians(phis[i]) #Position angle, measured from the North
-            xsky = -rsky*np.sin(phisky)
-            ysky = rsky*np.cos(phisky)
+            PAsky = np.radians(phis[i]) #Position angle, measured from the North
+            xsky = -rsky*np.sin(PAsky)
+            ysky = rsky*np.cos(PAsky)
             
             if coords=='disc':
                 xdisc, ydisc = GridTools.get_disc_from_sky_coords(xsky, ysky, zfunc, zpars, incl, PA, xc=xc, yc=yc)

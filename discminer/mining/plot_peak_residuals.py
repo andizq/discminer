@@ -6,6 +6,7 @@ from discminer.mining_utils import (init_data_and_model,
                                     load_disc_grid,
                                     mark_planet_location,
                                     make_masks,
+                                    format_sky_coords,
                                     show_output)
 from discminer.pick import Pick
 from discminer.grid import GridTools
@@ -137,16 +138,6 @@ if args.moment=='velocity' and args.percentage_kepler:
     residuals = residuals/velocity_kepler
     
 #********************
-def get_sky_coords(rp, phip, midplane=True):
-    phii = np.radians(phip)
-    zp = z_func({'R': rp*u.au.to('m')}, **z_pars)*u.m.to('au')
-    if midplane:
-        zp *= 0
-    xi,yi,zi = GridTools.get_sky_from_disc_coords(rp, phii, zp, incl, PA, xc, yc)
-    PAsky = np.arctan2(yi, xi) - np.pi/2
-    rsky = np.hypot(xi-xc, yi-yc)/dpc.value
-    return rsky, np.degrees(PAsky)
-
 
 #*******************
 #FIND PEAK RESIDUALS
@@ -172,7 +163,24 @@ peak_angle = pick.peak_angle
 model.make_emission_surface(ax_c)
 model.make_disc_axes(ax_c)
 ax_c.axis('off')
-    
+
+def mad_sigma(x):
+    x = np.asarray(x)
+    med = np.median(x)
+    mad = np.median(np.abs(x - med))
+    return 1.4826 * mad
+
+median_bg = np.median(peak_resid)
+sigma_bg  = mad_sigma(peak_resid)
+
+global_peak = np.max(peak_resid)
+significance = (global_peak - median_bg) / sigma_bg
+
+print ('MAD:', median_bg)
+print ('sigma:', sigma_bg)
+print ('Global peak:', global_peak)
+print ('Significance:', significance)
+
 #*******************
 #SHOW PEAK RESIDUALS
 #*******************
@@ -195,34 +203,20 @@ ax[1].tick_params(labelleft=False)
 ax[0].scatter(peak_angle, peak_resid, **kwargs_sc)
 ax[1].scatter(lev, peak_resid, **kwargs_sc)
 
-ax[0].axvline(pick.peak_global_angle, lw=3.5, c=color_global_peak, label='global peak', zorder=0)
+ax[0].axvline(pick.peak_global_angle, lw=3.5, c=color_global_peak, label='global', zorder=0) #label = 'global peak'
 ax[1].axvline(pick.peak_global_radius, lw=3.5, c=color_global_peak, zorder=0) 
-ax[0].legend(frameon=False, fontsize=args.fontsize-2, handlelength=1.0, loc='lower left', bbox_to_anchor=(-0.04, 0.98))
+
+for axi in ax:
+    axi.axhline(median_bg+3*sigma_bg, color='magenta', ls='--', lw=2.2, dash_capstyle='round', dashes=(3.0, 2.5), alpha=1.0)
+
+ax[0].legend(frameon=False, fontsize=args.fontsize-2, handlelength=0.8, columnspacing=1.0, handletextpad=0.35, loc='lower left', bbox_to_anchor=(-0.04, 0.98), ncols=2)
 
 make_substructures(ax[1], gaps=gaps, rings=rings)
-append_sigma_panel(fig, ax, peak_resid, weights=pick.peak_weight, hist=True)
+append_sigma_panel(fig, ax, peak_resid, weights=pick.peak_weight, hist=True, linecolor='0.8')
 fig.savefig('peak_residuals_%s.png'%mtags['base'], bbox_inches='tight', dpi=200)
 #plt.show()
 plt.close()
 
-#sys.exit()
-
-def mad_sigma(x):
-    x = np.asarray(x)
-    med = np.median(x)
-    mad = np.median(np.abs(x - med))
-    return 1.4826 * mad
-
-median_bg = np.median(peak_resid)
-sigma_bg  = mad_sigma(peak_resid)
-
-global_peak = np.max(peak_resid)
-significance = (global_peak - median_bg) / sigma_bg
-
-print ('MAD:', median_bg)
-print ('sigma:', sigma_bg)
-print ('Global peak:', global_peak)
-print ('Significance:', significance)
 
 #*************
 #FIND CLUSTERS
@@ -307,9 +301,10 @@ if args.projection=='cartesian':
                    s=sb+350, zorder=21, **kwargs_global)
                
         ax.scatter(None, None, label='Global peak', s=sb, **kwargs_global) #for legend
-    
+
+    peak_global_rsky, peak_global_PAsky = model.get_sky_offset(pick.peak_global_radius*u.au, pick.peak_global_angle*u.deg, relative_to='disc', midplane=True)        
     print ('Global peak residual found at R=%.1f au, phi=%.1f deg, in disc frame coordinates...'%(pick.peak_global_radius, pick.peak_global_angle))
-    print ('Global peak in sky coords, R=%.3f arcsec, PA=%.1f deg...'%get_sky_coords(pick.peak_global_radius, pick.peak_global_angle))
+    print ('Global peak in sky coords,', format_sky_coords(peak_global_rsky, peak_global_PAsky))
     
     if found_clusters and args.clusters:
         
@@ -321,9 +316,10 @@ if args.projection=='cartesian':
                        s=sb+350, zorder=21, **kwargs_cluster)
 
             ax.scatter(None, None, label='Cluster peak', s=sb, **kwargs_cluster) #for legend
-            
+
+            acc_R_rsky,  acc_phi_PAsky = model.get_sky_offset(pick.acc_R*u.au, pick.acc_phi*u.deg, relative_to='disc', midplane=True) 
             print ('Weighted centre of accepted clusters found at R=%.1f au, phi=%.1f deg, in disc frame coordinates...'%(pick.acc_R, pick.acc_phi))
-            print ('Cluster in sky coords, R=%.3f arcsec, PA=%.1f deg...'%get_sky_coords(pick.acc_R, pick.acc_phi))
+            print ('Cluster in sky coords,', format_sky_coords(acc_R_rsky, acc_phi_PAsky))
             
     #Mark planet location if passed as an arg
     kwargs_planet = dict(edgecolors='k', facecolors='none', marker='o', lw=4.5, alpha=1.0, zorder=22)    

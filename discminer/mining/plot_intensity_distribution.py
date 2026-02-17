@@ -592,7 +592,7 @@ for i in np.arange(0, len(masks))[::-1]:
 if len(args.mask_R)>0 or len(args.mask_phi)>0:
     make_masks(axr, args.mask_R, args.mask_phi, Rmax=Rmod_out)
     
-mark_planet_location(axr, args, edgecolors='k', lw=0, s=550, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc)    
+mark_planet_location(axr, args, edgecolors='k', lw=0, s=550, coords='disc', model=model)    
 
 plt.savefig('intensity_distribution_%s_%s.png'%(meta['disc'], meta['mol']), bbox_inches='tight', dpi=200)    
 show_output(args)
