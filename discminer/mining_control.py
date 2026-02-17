@@ -84,6 +84,8 @@ def _mining_skewkurt(parserobj, prog='skewkurt', description='Make skewness and 
                         help="Fit datacube and save moments into .fits files? DEFAULTS to 1.")
     parser.add_argument('-fmodel', '--fit_model', default=1, type=int,
                         help="Fit modelcube and save moments into .fits files? DEFAULTS to 1.")
+    parser.add_argument('-mirror', '--mirror', default=1, type=int,
+                        help="Mirror the blue- and red-width metrics across the disc minor axis? DEFAULTS to 1.")
     parser.add_argument('-mt', '--mtype', default='intensity', type=str,
                         help="Use intensity or velocity distribution to calculate maps. DEFAULTS to 'intensity'.")    
     add_parser_args(parser, sigma=3)
