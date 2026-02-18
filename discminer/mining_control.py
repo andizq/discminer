@@ -200,6 +200,18 @@ def _mining_spectra(parserobj, prog='spectra', description='Extract and show lin
     add_parser_args(parser, moment='peakintensity', kernel=True, kind=True, smooth=True, planck=True)
     return parser
 
+def _mining_mirror_spectra(parserobj, prog='mirrorspectra', description='Extract and show line profiles around a pixel and from the mirror location on the other side of the disc'):
+    parser = _check_and_return_parser(parserobj, prog=prog, description=description)
+    parser.add_argument('-dpix', '--dpix', default=1, type=int, help="Number of pixels around the central one to get spectra. Defaults to 1, i.e. 3x3 window.")
+    parser.add_argument('-ch', '--channel_id', default=0, type=int, help="Id of intensity channel map to show. DEFAULTS to 0.")
+    parser.add_argument('-u', '--units', default='K', type=str, choices=['K', 'Jy'],
+                        help="Intensity units of the input cube; relevant for figure labels and scale. Defaults to 'K'.")
+    add_parser_args(
+        parser,
+        moment='peakintensity', kernel=True, surface=True, Rinner=True, Router=0.95, mask_R=True, mask_phi=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True
+    )
+    return parser
+
 def _mining_intensdistrib(parserobj, prog='intensdistrib', description='Extract and display the intensity distribution of pixels within selected radial regions'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     parser.add_argument('-annuli', '--annuli', nargs='*', default=[90, 110], type=float,
@@ -330,7 +342,8 @@ _mining_parser_func = {
     'radprof': _mining_radial_profiles,
     'radprof+wedge': _mining_radial_profiles_wedge,    
     'azimprof': _mining_azimuthal_profiles,    
-    'spectra': _mining_spectra,    
+    'spectra': _mining_spectra,
+    'mirrorspectra': _mining_mirror_spectra,        
     'moment+residuals': _mining_moment_residuals,
     'moment+offset': _mining_moment_offset,
     'residuals+deproj': _mining_residuals_deproj,
@@ -355,7 +368,8 @@ scripts = {
     'radprof': 'plot_radial_profiles.py',
     'radprof+wedge': 'plot_radial_profiles+wedge.py',    
     'azimprof': 'plot_azimuthal_profiles.py',    
-    'spectra': 'plot_spectra.py',    
+    'spectra': 'plot_spectra.py',
+    'mirrorspectra': 'plot_mirror_spectra.py',        
     'moment+residuals': 'plot_moment+residuals.py',
     'moment+offset': 'plot_moment+offset.py',
     'residuals+deproj': 'plot_residuals+deproj.py',
