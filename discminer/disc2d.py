@@ -19,7 +19,7 @@ import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 
-from astropy.convolution import Gaussian2DKernel, convolve
+from astropy.convolution import Gaussian2DKernel, convolve, convolve_fft
 from astropy import units as u
 from radio_beam import Beam
 from matplotlib import ticker
@@ -27,6 +27,7 @@ from scipy.integrate import quad
 from scipy.interpolate import interp1d    
 from scipy.optimize import curve_fit
 from scipy.special import ellipe, ellipk
+from scipy.signal import convolve2d, fftconvolve
 from .tools.utils import FrontendUtils, InputError, _get_beam_from, hypot_func
 from . import constants as sfc
 from . import units as sfu
@@ -748,7 +749,7 @@ class Intensity:
         int2d_full = self.line_uplow(int2d_near, int2d_far)
         
         if self.beam_kernel is not None:
-            int2d_full = self.beam_area*convolve(np.nan_to_num(int2d_full), self.beam_kernel, preserve_nan=False)
+            int2d_full = self.beam_area*self.beam_convolve_func(np.nan_to_num(int2d_full), self.beam_kernel)
 
         return int2d_full
 
@@ -800,7 +801,7 @@ class Intensity:
             if self.beam_kernel is not None:
                 if make_convolve:
                     int2d_full[np.isnan(int2d_full)] = noise
-                    int2d_full = self.beam_area*convolve(int2d_full, self.beam_kernel, preserve_nan=False)
+                    int2d_full = self.beam_area*self.beam_convolve_func(int2d_full, self.beam_kernel)
                 else:
                     int2d_full *= self.beam_area
                     int2d_full[~np.isfinite(int2d_full)] = noise
@@ -955,7 +956,7 @@ class Mcmc:
 
 class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
     
-    def __init__(self, datacube, Rmax, Rmin=1.0, prototype=False, subpixels=False, write_extent=True, init_params={}, init_funcs={}, verbose=True):        
+    def __init__(self, datacube, Rmax, Rmin=1.0, prototype=False, subpixels=False, write_extent=True, convolve_func="scipy_fft", init_params={}, init_funcs={}, verbose=True):        
         """
         Initialise discminer model object.
 
@@ -1023,6 +1024,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         self.beam_size = datacube.beam_size        
         self.beam_area = datacube.beam_area
         self.beam_area_arcsecs = datacube.beam_area_arcsecs
+        self.beam_convolve_func = self._get_beam_convolve_func(convolve_func)
 
         self.orientation_func = cart.orientation_constant
         self._z_upper_func = cart.z_upper_exp_tapered
@@ -1148,6 +1150,37 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             #print ('Default parameter header for mcmc fitting:', self.mc_header)
             #print ('Default parameters to fit and fixed parameters:', self.mc_params)
 
+    def _get_beam_convolve_func(self, convolve_func):
+
+        def astropy_conv(image, kernel):
+            return convolve(image, kernel, nan_treatment="fill", fill_value=0.0)
+
+        def astropy_fft_conv(image, kernel):
+            return convolve_fft(image, kernel, nan_treatment="fill", fill_value=0.0)
+
+        def scipy_conv(image, kernel):
+            k = kernel.array if hasattr(kernel, "array") else kernel
+            return convolve2d(image, k, mode="same", boundary="fill", fillvalue=0.0)
+
+        def scipy_fft_conv(image, kernel):
+            k = kernel.array if hasattr(kernel, "array") else kernel
+            return fftconvolve(image, k, mode="same")
+
+        backend_dict = {
+            "astropy": astropy_conv,
+            "astropy_fft": astropy_fft_conv,
+            "scipy": scipy_conv,
+            "scipy_fft": scipy_fft_conv,
+        }
+
+        if convolve_func not in backend_dict:
+            raise ValueError(
+                f"Invalid convolve_func '{convolve_func}'. "
+                "Options are: astropy, astropy_fft, scipy, scipy_fft"
+            )
+
+        return backend_dict[convolve_func]
+            
     def plot_quick_attributes(self, R_in=10, R_out=300, surface='upper', fig_width=80, fig_height=25,
                               height=True, velocity=True, linewidth=True, peakintensity=True, **kwargs_plot):                              
         import termplotlib as tpl  # pip install termplotlib. Requires gnuplot: brew install gnuplot (for OSX users)

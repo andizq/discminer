@@ -155,10 +155,10 @@ class Cube(_JSON):
             self.bmaj = self.beam.major.to(u.arcsecond)
             self.bmin = self.beam.minor.to(u.arcsecond)
             self.bpa = self.beam.pa.to(u.deg)
-
-        elif self.beam is None:
             
-            if self.header['BUNIT'] in ['Jy/arcsec^2', 'Jy / arcsec^2' , 'arcsec-2 Jy', 'Jy arcsec-2']:
+        elif self.beam is None:
+
+            if self.header.get('BUNIT') in ['Jy/arcsec^2', 'Jy / arcsec^2' , 'arcsec-2 Jy', 'Jy arcsec-2']:
                 self.beam_kernel = None
                 self.beam_size = 15*u.au #Arbitrary scale, useful for analysis scripts
                 #self.beam_size = 1 * self.dpc.to('pc').value * u.au                 
@@ -740,7 +740,6 @@ class Cube(_JSON):
         hdr_k["BTYPE"] = "Kurtosis"
         hdr_p["BUNIT"] = ""
         hdr_p["BTYPE"] = "Skewness*Kurtosis"
-
         
         kwargs_io_s = dict(overwrite=overwrite, header=hdr_s)
         kwargs_io_k = dict(overwrite=overwrite, header=hdr_k)
@@ -2258,7 +2257,7 @@ class Cube(_JSON):
                             axji.contour(cci, levels=[plot_channels[ichan]], linestyles='-', **kwargs_cc)
             
                 if annotate_channels:
-                    axji.text(0.05,0.95, fmt_channels%plot_channels[ichan]+r'$^{\rm km/s}$', va='top', fontsize=SMALL_SIZE+2, transform=axji.transAxes)
+                    axji.text(0.02,0.98, fmt_channels%(plot_channels[ichan])+r'$^{\rm km/s}$', va='top', fontsize=SMALL_SIZE+2, transform=axji.transAxes)
                                                     
                 if j==nrows-1 and i==0:
                     labelbottom, labelleft = True, True
@@ -2323,8 +2322,8 @@ class Cube(_JSON):
             clabel = observable.split('_')[0].capitalize()+'%s'%unit_intensity
         elif kind=='residuals':
             clabel = kind.capitalize()+'%s'%unit_intensity
-        cbar.set_label(clabel, fontsize=SMALL_SIZE+0, rotation=-90, labelpad=20)
-        cbar.ax.tick_params(which='major', direction='in', width=1.7, size=3.8, pad=2, labelsize=SMALL_SIZE-1)
+        cbar.set_label(clabel, fontsize=SMALL_SIZE+4, rotation=-90, labelpad=20) #+1
+        cbar.ax.tick_params(which='major', direction='in', width=1.7, size=3.8, pad=1, labelsize=SMALL_SIZE+3) #+1
         cbar.ax.tick_params(which='minor', direction='in', width=1.7, size=2.3)
         mod_minor_ticks(cbar.ax)
         cbar.outline.set_linewidth(2) #Polygon patch; modifying cbar.ax spines does not work

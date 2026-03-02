@@ -74,9 +74,10 @@ def use_discminer_style():
 #*************
 def mod_nticks_cbars(cbars, nbins=5):
     for cb in cbars:
-        cb.locator = matplotlib.ticker.MaxNLocator(nbins=nbins)
-        cb.update_ticks()
-        
+        vmin, vmax = cb.mappable.get_clim()
+        ticks = np.linspace(vmin, vmax, nbins)
+        cb.set_ticks(ticks)
+                
 def mod_major_ticks(ax, axis='both', nbins=6):
     ax.locator_params(axis=axis, nbins=nbins)
     
