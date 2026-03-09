@@ -87,6 +87,23 @@ def _compute_prop_mirror(grid, prop_funcs, prop_kwargs):
                 props[i][side] = prop_funcs[i](coord, **pkw)                
     return props
 
+#***********
+#Convolution
+#***********
+def _astropy_conv(image, kernel):
+    return convolve(image, kernel, nan_treatment="fill", fill_value=0.0)
+
+def _astropy_fft_conv(image, kernel):
+    return convolve_fft(image, kernel, nan_treatment="fill", fill_value=0.0)
+
+def _scipy_conv(image, kernel):
+    k = kernel.array if hasattr(kernel, "array") else kernel
+    return convolve2d(image, k, mode="same", boundary="fill", fillvalue=0.0)
+
+def _scipy_fft_conv(image, kernel):
+    k = kernel.array if hasattr(kernel, "array") else kernel
+    return fftconvolve(image, k, mode="same")
+
 #********************
 #Discminer Attributes
 #********************
@@ -1152,25 +1169,11 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
 
     def _get_beam_convolve_func(self, convolve_func):
 
-        def astropy_conv(image, kernel):
-            return convolve(image, kernel, nan_treatment="fill", fill_value=0.0)
-
-        def astropy_fft_conv(image, kernel):
-            return convolve_fft(image, kernel, nan_treatment="fill", fill_value=0.0)
-
-        def scipy_conv(image, kernel):
-            k = kernel.array if hasattr(kernel, "array") else kernel
-            return convolve2d(image, k, mode="same", boundary="fill", fillvalue=0.0)
-
-        def scipy_fft_conv(image, kernel):
-            k = kernel.array if hasattr(kernel, "array") else kernel
-            return fftconvolve(image, k, mode="same")
-
         backend_dict = {
-            "astropy": astropy_conv,
-            "astropy_fft": astropy_fft_conv,
-            "scipy": scipy_conv,
-            "scipy_fft": scipy_fft_conv,
+            "astropy": _astropy_conv,
+            "astropy_fft": _astropy_fft_conv,
+            "scipy": _scipy_conv,
+            "scipy_fft": _scipy_fft_conv,
         }
 
         if convolve_func not in backend_dict:

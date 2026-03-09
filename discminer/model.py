@@ -41,6 +41,7 @@ class ReferenceModel(Cube):
                 minor=0.15*u.arcsec,
                 pa=0*u.deg
             ),
+            convolve_func = 'scipy_fft',
             init_params = {},
             reset_params = False,
             init_funcs = {},
@@ -190,7 +191,7 @@ class ReferenceModel(Cube):
         Cube.__init__(self, data, hdu.header, vchannels, dpc, beam=beam, filename=filename, disc=disc, mol=mol, kind=kind, parfile=parfile) #Empty datacube
         
         #Init model
-        model = Model(self, Rmax=Rmax, Rmin=Rmin, write_extent=write_extent, prototype=True, subpixels=subpixels) #Self is the simulated datacube
+        model = Model(self, Rmax=Rmax, Rmin=Rmin, write_extent=write_extent, prototype=True, subpixels=subpixels, convolve_func=convolve_func) #Self is the simulated datacube
         
         model.velocity_func = self.funcs['velocity']
         model.z_upper_func = self.funcs['z_upper']
