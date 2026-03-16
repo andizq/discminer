@@ -85,8 +85,9 @@ lws = [0.4, 0.6, 0.4]
 
 rail = Rail(model, map2d, R_prof)
 
-fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(14,6))
-ax2 = fig.add_axes([0.85,0.6,0.3*6/14,0.3])
+figx, figy = 14, 4
+fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(figx, figy))
+ax2 = fig.add_axes([0.85,0.6,0.3*figy/figx,0.3])
 
 R_list, phi_list, resid_list, color_list = rail.prop_along_coords(coord_ref=args.radius, surface=args.surface,
                                                                   color_bounds=color_bounds, lws=lws,

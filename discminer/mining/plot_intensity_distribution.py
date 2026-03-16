@@ -97,8 +97,6 @@ au_to_m = u.au.to('m')
 
 dpc = meta['dpc']*u.pc
 
-R_lev = np.arange(25, 0.98*Rout, 50)*au_to_m
-
 #*******************
 #LOAD DATA AND MODEL
 #*******************
@@ -341,10 +339,6 @@ def make_pdf(maski):
 def make_spectra(maski):
     intensities = datapdf[:, maski]
     return intensities.T
-
-def select_spectra(spectra, n):
-    inds = random.sample(range(0, len(spectra)), n)
-    return spectra[inds]
 
 #**************
 #MAKE PLT AXES

@@ -177,9 +177,9 @@ global_peak = np.max(peak_resid)
 significance = (global_peak - median_bg) / sigma_bg
 
 print ('MAD:', median_bg)
-print ('sigma:', sigma_bg)
+print ('sigma(MAD):', sigma_bg)
 print ('Global peak:', global_peak)
-print ('Significance:', significance)
+print ('Significance(MAD):', significance)
 
 #*******************
 #SHOW PEAK RESIDUALS
@@ -324,7 +324,7 @@ if args.projection=='cartesian':
     #Mark planet location if passed as an arg
     kwargs_planet = dict(edgecolors='k', facecolors='none', marker='o', lw=4.5, alpha=1.0, zorder=22)    
 
-    mark_planet_location(ax, args, s=sb+300, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc, **kwargs_planet)    
+    mark_planet_location(ax, args, s=sb+300, coords='disc', model=model, **kwargs_planet)    
     
     #mark_planet_location(ax, args, s=sb+200, **kwargs_planet)
     ax.scatter(None, None, label='Planet', s=sb, **kwargs_planet) #for legend
