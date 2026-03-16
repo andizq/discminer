@@ -447,11 +447,14 @@ def get_1d_plot_decorators(moment, parfile='parfile.json', tag=''):
     
     return clabel, clabel_res, clim0, clim0_res, clim1, clim1_res, unit
 
-def _get_mask_tuples(lims):
-    mask_tup = []
-    for i in range(len(lims[::2])):
-        mask_tup.append(lims[i*2:i*2+2])
-    return mask_tup
+def _get_mask_tuples(lims, consecutive=False):
+    if consecutive: #Consecutive pairs with overlap (e.g. 10,20,30 --> [[10,20], [20,30]])
+        return list(zip(lims[:-1], lims[1:]))
+    else: #Assumes the list contains pairs already (e.g. 10,20,30,40 --> [[10,20], [30,40]])
+        mask_tup = []
+        for i in range(len(lims[::2])):
+            mask_tup.append(lims[i*2:i*2+2])
+        return mask_tup
 
 def _merge_R_phi_mask(mask_R, mask_phi):
     #Mask and merge azimuthal+radial sections

@@ -240,6 +240,31 @@ def _mining_intensdistrib(parserobj, prog='intensdistrib', description='Extract 
     )
     return parser
 
+def _mining_stack(parserobj, prog='stack', description='Azimuthally stack line profiles across the disc radial extent'):
+    parser = _check_and_return_parser(parserobj, prog=prog, description=description)
+    parser.add_argument('-spectra', '--spectra', nargs='*', default=[], type=int, help="Ids of spectra to be plotted in a separate subpanel, corresponding to the input analysis regions. DEFAULTS to [].")
+    parser.add_argument('-ndraws', '--ndraws', default=-1, type=int, help="Number of random spectra selected from each bin. DEFAULTS to -1 (i.e. consider all spectra within the bin).")
+    parser.add_argument('-binsperbeam', '--binsperbeam', default=4, type=float, help="Number of bins per beam size for radial line stacking. DEFAULTS to 4.")
+    parser.add_argument('-binsperchan', '--binsperchan', default=2, type=float, help="Number of bins per channel width for spectral binning. DEFAULTS to 2.")    
+    parser.add_argument('-keplerian', '--keplerian', default=0, type=int, help="Use pure Keplerian profile to stack the lines? DEFAULTS to 0.")
+    parser.add_argument('-stat', '--stat', default='nanmedian', type=str, help="Statistic used to stack the line profiles (e.g. median, mean, max, nanmedian). DEFAULTS to 'nanmedian'")
+    parser.add_argument('-vlim', '--vlim', default=4.1, type=float, help="Velocity xlim in km/s. DEFAULTS to 4.1.")
+    
+    parser.add_argument('-cmap', '--cmap', default='cividis', type=str, help="Colormap for the radial coordinate of the stacked spectra. DEFAULTS to 'cividis'.")    
+    parser.add_argument('-clim', '--clim', default=150, type=int, help="Colorbar max limit for reference moment map in m/s. If 0, take parfile.json custom limit. DEFAULTS to 0.")
+    parser.add_argument('-fontsize', '--fontsize', default=MEDIUM_SIZE, type=int, help="Smallest font size in figure. DEFAULTS to %d."%MEDIUM_SIZE)
+    parser.add_argument('-snsky', '--show_nsky', default=1, type=int, help="Overlay Nsky axis on round map? DEFAULTS to 1.")
+    parser.add_argument('-sxaxis', '--show_xaxis', default=1, type=int, help="Show reference xaxis below round map? DEFAULTS to 1.")
+    parser.add_argument('-stitle', '--show_title', default=1, type=int, help="Show title at the top of the map? DEFAULTS to 1.")    
+    
+    add_parser_args(
+        parser,
+        sigma=4, moment='velocity', kernel=True, surface=True, projection=True, smooth=True,
+        Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True,
+        colorbar=True, mask_R=True, mask_phi=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True
+    )
+    return parser
+
 def _mining_channels_peakint(parserobj, prog='channels+peakint', description='Show Data vs Model channel maps, peak intensities, and residuals'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     parser.add_argument('-nc', '--nchans', default=5, type=int, help="Number of channels to plot")
@@ -272,6 +297,8 @@ def _mining_gradient(parserobj, prog='gradient', description='Show peak, radial 
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     parser.add_argument('-gt', '--threshold', default=2, type=float, help="Minimum gradient value a peak must have to be taken into account. DEFAULTS to 2 (m/s/au).")
     parser.add_argument('-sleg', '--show_legend', default=0, type=int, help="Show markers legend. DEFAULTS to 0.")
+    parser.add_argument('-fontsize', '--fontsize', default=MEDIUM_SIZE, type=int, help="Smallest font size in figure. DEFAULTS to %d."%MEDIUM_SIZE)
+    parser.add_argument('-stitle', '--show_title', default=1, type=int, help="Show title at the top of the map? DEFAULTS to 1.")    
     add_parser_args(parser, moment=True, kernel=True, kind=True, surface=True, Rinner=True, absolute_Rinner=True, Router=True, absolute_Router=True,
                     gradient=True, smooth=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords='disc')
     return parser
@@ -353,7 +380,8 @@ _mining_parser_func = {
     'isovelocities': _mining_isovelocities,
     'pv': _mining_pv_diagram,
     'skewkurt': _mining_skewkurt,
-    'intensdistrib': _mining_intensdistrib,        
+    'intensdistrib': _mining_intensdistrib,
+    'stack': _mining_stack
 }
 
 scripts = {
@@ -379,7 +407,8 @@ scripts = {
     'isovelocities': 'plot_isovelocities.py',
     'pv': 'plot_pv_diagram.py',
     'skewkurt': 'make_skewkurt_moments.py',
-    'intensdistrib': 'plot_intensity_distribution.py',    
+    'intensdistrib': 'plot_intensity_distribution.py',
+    'stack': 'plot_stack.py',        
 }
 
 #<----------------------
