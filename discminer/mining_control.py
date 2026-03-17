@@ -250,8 +250,7 @@ def _mining_stack(parserobj, prog='stack', description='Azimuthally stack line p
     parser.add_argument('-stat', '--stat', default='nanmedian', type=str, help="Statistic used to stack the line profiles (e.g. median, mean, max, nanmedian). DEFAULTS to 'nanmedian'")
     parser.add_argument('-vlim', '--vlim', default=4.1, type=float, help="Velocity xlim in km/s. DEFAULTS to 4.1.")
     
-    parser.add_argument('-cmap', '--cmap', default='cividis', type=str, help="Colormap for the radial coordinate of the stacked spectra. DEFAULTS to 'cividis'.")    
-    parser.add_argument('-clim', '--clim', default=150, type=int, help="Colorbar max limit for reference moment map in m/s. If 0, take parfile.json custom limit. DEFAULTS to 0.")
+    parser.add_argument('-cmap', '--cmap', default='cmr.rainforest', type=str, help="Colormap for the radial coordinate of the stacked spectra. DEFAULTS to 'cmr.rainforest'.")    
     parser.add_argument('-fontsize', '--fontsize', default=MEDIUM_SIZE, type=int, help="Smallest font size in figure. DEFAULTS to %d."%MEDIUM_SIZE)
     parser.add_argument('-snsky', '--show_nsky', default=1, type=int, help="Overlay Nsky axis on round map? DEFAULTS to 1.")
     parser.add_argument('-sxaxis', '--show_xaxis', default=1, type=int, help="Show reference xaxis below round map? DEFAULTS to 1.")

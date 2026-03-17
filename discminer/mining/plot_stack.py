@@ -47,6 +47,7 @@ vel_sign = best['velocity']['vel_sign']
 vsys = best['velocity']['vsys']
 Rout = best['intensity']['Rout']
 incl = best['orientation']['incl']
+abs_incl = np.abs(incl)
 PA = best['orientation']['PA']
 xc = best['orientation']['xc']
 yc = best['orientation']['yc']
@@ -58,10 +59,7 @@ try:
 except KeyError:
     kinks = []
 
-ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get_2d_plot_decorators(args.moment)
-
-if args.clim!=0:
-    clim = args.clim
+ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get_2d_plot_decorators(args.moment, unit_simple=True, fmt_vertical=True)
     
 #****************
 #SOME DEFINITIONS
@@ -77,7 +75,6 @@ dpc = meta['dpc']*u.pc
 #*******************
 datacube, model = init_data_and_model(Rmin=0, Rmax=1.6)
 noise_mean, mask = get_noise_mask(datacube, thres=3)
-modelcube = Data('cube_model_%s.fits'%tag, dpc)
 
 datapdf = np.where(mask[None, :, :], np.nan, datacube.data)
 
@@ -207,9 +204,10 @@ if not args.keplerian:
 chanwidth = np.abs(np.median(np.diff(datacube.vchannels)))
 dv_native = chanwidth/args.binsperchan
 
-vmin = -10*dv_native + np.min(datacube.vchannels)   # generous margins
-vmax =  10*dv_native + np.max(datacube.vchannels)
-bins   = np.arange(vmin, vmax + dv_native, dv_native)
+vel_range = np.max(datacube.vchannels) - np.min(datacube.vchannels)
+vmin = -0.5*vel_range 
+vmax = 0.5*vel_range 
+bins   = np.arange(vmin, vmax + 0.1*dv_native, dv_native)
 vcenters = 0.5*(bins[:-1] + bins[1:])
 
 def bin_add(v_dep, y, perbin):
@@ -281,7 +279,7 @@ for i in range(nmasks):
     if args.keplerian:
         vphii = model.velocity_func({'R': Rmask_au*au_to_m, 'z': zupi}, **best['velocity'])
     else:
-        vphii = vphi_interp(Rmask_au)
+        vphii = vel_sign * vphi_interp(Rmask_au)
         
     vcenti = vsys + vphii * np.sin(incl) * np.cos(np.radians(phigrid[masks[i]])) #Line centroid
     
@@ -317,9 +315,11 @@ for i in range(nmasks):
 
     stacked_profiles.append(stat_i)
     
-    axs[i].scatter(vcenters, stat_i, lw=1.0, ec='k', color=colors[i], s=15, zorder=100-i)
+    axs[i].scatter(vcenters, stat_i, lw=0.3, ec='k', color=colors[i], s=15, zorder=100-i)
     axs[i].text(0.07, 0.93, '%d au'%bincenters[i], fontsize=10, ha='left', va='top', color=colors[i], transform=axs[i].transAxes)
     axs[i].text(0.07, 0.81, "$%.2f''$"%bincenters_arcsec[i], fontsize=10, ha='left', va='top', color=colors[i], transform=axs[i].transAxes)     
+
+peakmax = np.nanmax(stacked_profiles)
 
 #***************
 #IMPROVE LAYOUT
@@ -345,7 +345,8 @@ for i, axi in enumerate(axs):
 
     axi.set_xticks(np.linspace(-np.floor(args.vlim), np.floor(args.vlim), 5).astype(int))
     axi.set_xlim(-args.vlim, args.vlim)
-
+    axi.set_ylim(-0.2*peakmax, 2*peakmax)
+    
     if not is_bottom:
         axi.tick_params(labelbottom=False)
         
@@ -353,8 +354,8 @@ for i, axi in enumerate(axs):
         axi.tick_params(labelright=False, right=True)
 
 axs[-1].set_xlabel('Stacked velocities [km/s]', fontsize=12)
-axs[-3].yaxis.set_label_position("right")
-axs[-3].set_ylabel('[mJy/beam]', fontsize=12, labelpad=15, rotation=270)
+axs[-1].yaxis.set_label_position("right")
+axs[-1].set_ylabel('[mJy/beam]', fontsize=12, labelpad=15, rotation=270)
 
 #*************
 #WRITE OUTPUT
@@ -384,12 +385,12 @@ elif args.surface in ['low', 'lower']:
     z_pars = best['height_lower']
 
 levels_resid = np.linspace(-clim, clim, 32)
-        
-fig, axr = make_round_map(1000*residuals, levels_resid, Xproj*u.au, Yproj*u.au, Rmod_out*u.au,
+
+fig, axr = make_round_map(residuals, levels_resid, Xproj*u.au, Yproj*u.au, Rmod_out*u.au,
                           fig=fig, ax=axr,
                           kwargs_contourf=dict(cmap=cmap_res), #Skip set_under, set_over by overwriting cmap
                           z_func=z_func, z_pars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc,
-                          cmap=cmap_res, clabel='m/s', fmt='%d',
+                          cmap=cmap_res, clabel=unit, fmt=cfmt,
                           gaps=gaps, rings=rings, kinks=kinks,
                           make_cbar=args.colorbar,                         
                           mask_inner=Rmod_in*u.au,
