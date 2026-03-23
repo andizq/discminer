@@ -10,9 +10,6 @@ from discminer.mining_utils import (load_disc_grid,
 import discminer.cart as cart
 from discminer.plottools import (make_polar_map,
                                  make_substructures,
-                                 make_up_ax,
-                                 mod_major_ticks,
-                                 mod_nticks_cbars,
                                  make_1d_legend,
                                  use_discminer_style)
 
@@ -53,7 +50,7 @@ ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get
 
 levels_resid = np.linspace(-clim, clim, 48)
 
-clim_grad = 0.04*clim #For gradient: dv/dR [unit/au]
+clim_grad = 0.02*clim #For gradient: dv/dR [unit/au]
 cmap_grad = plt.get_cmap('nipy_spectral')
 cmap_grad_r = plt.get_cmap('nipy_spectral_r')
 
@@ -125,7 +122,7 @@ elif args.surface in ['low', 'lower']:
 if args.moment in ['velocity', 'v0phi', 'v0r', 'v0z', 'vr_leftover', 'linewidth']:
     unit = 'm/s'
     ufac = u.Unit('km/s').to(unit)
-    dfmt = '%3d'
+    dfmt = '%4d'
 elif args.moment=='peakintensity':
     unit = 'K'
     ufac = 1
@@ -166,6 +163,13 @@ if args.gradient=='peak':
 else:
     fig, ax = plt.subplots(ncols=1, nrows=3, figsize=(12, 10))
 
+kwargs_fontsize =  dict(fontsize_axticks=args.fontsize-4,
+                        fontsize_xaxis=args.fontsize,
+                        fontsize_yaxis=args.fontsize,
+                        fontsize_cbar=12,
+                        fontsize_cbarticks=args.fontsize-5
+)
+    
 #Positive gradient    
 _, _, cbar = make_polar_map(ufac*residuals, ufac*levels_grad,
                             R[args.surface]*u.m, phi[args.surface]*u.rad, Rout_plt,
@@ -173,7 +177,7 @@ _, _, cbar = make_polar_map(ufac*residuals, ufac*levels_grad,
                             Rin=Rin_plt, gradient=args.gradient,
                             kwargs_gradient_peaks={'threshold': args.threshold},
                             findpeaks='pos', filepeaks='phi_gradient_peaks_%s_positive.txt'%mtags['base'],
-                            cmap=cmap_grad, fmt=dfmt, clabel=clabels_grad[args.gradient])
+                            cmap=cmap_grad, fmt=dfmt, clabel=clabels_grad[args.gradient], **kwargs_fontsize)
 if args.gradient!='peak':
     #Negative gradient
     _, _, cbar = make_polar_map(ufac*residuals, ufac*np.sort(-levels_grad),
@@ -182,14 +186,14 @@ if args.gradient!='peak':
                                 Rin=Rin_plt, gradient=args.gradient,
                                 kwargs_gradient_peaks={'threshold': args.threshold},                                
                                 findpeaks='neg', filepeaks='phi_gradient_peaks_%s_negative.txt'%mtags['base'],
-                                cmap=cmap_grad_r, fmt=dfmt, clabel=clabels_grad[args.gradient])
+                                cmap=cmap_grad_r, fmt=dfmt, clabel=clabels_grad[args.gradient], **kwargs_fontsize)
 
 #REFERENCE MAP
 _, _, cbar = make_polar_map(ufac*residuals, ufac*levels_resid,
                             R[args.surface]*u.m, phi[args.surface]*u.rad, Rout_plt,
                             fig=fig, ax=ax[-1],
                             Rin=Rin_plt, gradient=0,
-                            cmap=cmap_res, fmt='%4d', clabel=clabels[args.moment])
+                            cmap=cmap_res, fmt='%4d', clabel=clabels[args.moment], **kwargs_fontsize)
 
 
 if args.moment in ['velocity', 'linewidth']:
@@ -205,9 +209,6 @@ if args.moment in ['velocity', 'linewidth']:
             
     except FileNotFoundError:
         pass
-
-if args.show_legend:
-    make_1d_legend(ax[0], handlelength=1.5, loc='lower center', bbox_to_anchor=(0.5, 1.2))
     
 for axi in ax:
     if axi!=ax[-1]:
@@ -226,9 +227,23 @@ for axi in ax:
         label_rings = False
 
     make_substructures(axi, gaps=gaps, rings=rings, twodim=True, polar=True, label_rings=label_rings, kwargs_gaps=kc, kwargs_rings=kc)
-    
-mark_planet_location(ax[-1], args, edgecolors='k', lw=3.5, s=550, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc)    
-ax[0].set_title(ctitle, fontsize=16, color='k')
+
+kwargs_planet = dict(edgecolors='k', facecolors='none', lw=3.5) 
+mark_planet_location(ax[-1], args, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc, s=550, **kwargs_planet)    
+
+if args.show_title:
+    ax[0].set_title(ctitle, fontsize=args.fontsize+1, color='k')
+
+if args.show_legend:
+                    
+    if len(args.rp)>0:
+        ax[0].scatter(None, None, label='Planet', s=400, **kwargs_planet) #for legend
+
+    if args.show_title:
+        make_1d_legend(ax[0], handlelength=1.5, loc='lower center', bbox_to_anchor=(0.5, 1.2), fontsize=args.fontsize-3)
+    else:
+        make_1d_legend(ax[0], handlelength=1.5, loc='lower center', bbox_to_anchor=(0.5, 1.1), fontsize=args.fontsize-3)
+
 
 plt.savefig('gradient_residuals_deproj_%s_d%s_polar.png'%(mtags['base'], args.gradient), bbox_inches='tight', dpi=200)
 show_output(args)

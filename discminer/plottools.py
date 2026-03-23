@@ -702,6 +702,11 @@ def make_polar_map(
         make_cbar=True, clabel=None,
         make_contourf=True, make_contour=False, #Only one working right now
         gradient=0, findpeaks='pos', filepeaks=None,
+        fontsize_axticks=SMALL_SIZE+1,
+        fontsize_xaxis=MEDIUM_SIZE,
+        fontsize_yaxis=MEDIUM_SIZE,
+        fontsize_cbar=SMALL_SIZE,
+        fontsize_cbarticks=SMALL_SIZE,        
         kwargs_gradient_peaks = {},
         kwargs_contourf = {},
         kwargs_contour = {},        
@@ -807,19 +812,19 @@ def make_polar_map(
     ax.axvline(90, ls=':', lw=2.5, color='0.3', dash_capstyle='round')
     ax.axvline(0, ls=':', lw=2.5, color='0.3', dash_capstyle='round')
 
-    make_up_ax(ax, labelbottom=True, labeltop=False, labelsize=SMALL_SIZE+1,
+    make_up_ax(ax, labelbottom=True, labeltop=False, labelsize=fontsize_axticks,
                xlims=(-180.1, 180.1), ylims=(1.02*Rin, 0.98*Rout))
     ax.set_xticks(np.linspace(-180, 180, 13))
-    ax.set_xlabel('Azimuth [deg]', fontsize=MEDIUM_SIZE)
-    ax.set_ylabel('Radius [au]', fontsize=MEDIUM_SIZE)
-    mod_major_ticks(ax, axis='y', nbins=10)
+    ax.set_xlabel('Azimuth [deg]', fontsize=fontsize_xaxis)
+    ax.set_ylabel('Radius [au]', fontsize=fontsize_yaxis)
+    mod_major_ticks(ax, axis='y', nbins=6)
 
     if make_cbar:
         cax = add_cbar_ax(fig, ax, **kwargs_cb)
         cbar = plt.colorbar(im, cax=cax, format=fmt, orientation='vertical', ticks=np.linspace(levels.min(), levels.max(), 5))
-        cbar.ax.tick_params(which='major', direction='in', width=2.7, size=4.8, pad=4, labelsize=SMALL_SIZE)
+        cbar.ax.tick_params(which='major', direction='in', width=2.7, size=4.8, pad=4, labelsize=fontsize_cbarticks)
         cbar.ax.tick_params(which='minor', direction='in', width=2.7, size=3.3)
-        cbar.set_label(clabel, fontsize=SMALL_SIZE, labelpad=20, rotation=270)
+        cbar.set_label(clabel, fontsize=fontsize_cbar, labelpad=30, rotation=270)
         mod_minor_ticks(cbar.ax)
     else:
         cbar = None
