@@ -242,10 +242,9 @@ def _mining_intensdistrib(parserobj, prog='intensdistrib', description='Extract 
 
 def _mining_stack(parserobj, prog='stack', description='Azimuthally stack line profiles across the disc radial extent'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
-    parser.add_argument('-spectra', '--spectra', nargs='*', default=[], type=int, help="Ids of spectra to be plotted in a separate subpanel, corresponding to the input analysis regions. DEFAULTS to [].")
-    parser.add_argument('-ndraws', '--ndraws', default=-1, type=int, help="Number of random spectra selected from each bin. DEFAULTS to -1 (i.e. consider all spectra within the bin).")
     parser.add_argument('-binsperbeam', '--binsperbeam', default=4, type=float, help="Number of bins per beam size for radial line stacking. DEFAULTS to 4.")
     parser.add_argument('-binsperchan', '--binsperchan', default=2, type=float, help="Number of bins per channel width for spectral binning. DEFAULTS to 2.")    
+    parser.add_argument('-ndraws', '--ndraws', default=-1, type=int, help="Number of random spectra selected from each bin. DEFAULTS to -1 (i.e. consider all spectra within the bin).")
     parser.add_argument('-keplerian', '--keplerian', default=0, type=int, help="Use pure Keplerian profile to stack the lines? DEFAULTS to 0.")
     parser.add_argument('-stat', '--stat', default='nanmedian', type=str, help="Statistic used to stack the line profiles (e.g. median, mean, max, nanmedian). DEFAULTS to 'nanmedian'")
     parser.add_argument('-vlim', '--vlim', default=4.1, type=float, help="Velocity xlim in km/s. DEFAULTS to 4.1.")

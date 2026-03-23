@@ -47,7 +47,6 @@ vel_sign = best['velocity']['vel_sign']
 vsys = best['velocity']['vsys']
 Rout = best['intensity']['Rout']
 incl = best['orientation']['incl']
-abs_incl = np.abs(incl)
 PA = best['orientation']['PA']
 xc = best['orientation']['xc']
 yc = best['orientation']['yc']
