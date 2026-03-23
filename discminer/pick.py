@@ -337,22 +337,24 @@ class Pick(Rail):
         #**************************
         self.acc_peaks_phi = acc_peaks_phi
         self.acc_peaks_R = acc_peaks_R
-        
+
+        self.kc_indsort_phi = kc_indsort_phi
         self.kcent_sort_phi = kcent_sort_phi
         self.var_y_sort_phi = var_y_sort_phi
 
+        self.kc_indsort_R = kc_indsort_R
         self.kcent_sort_R = kcent_sort_R
         self.var_y_sort_R = var_y_sort_R
 
+        self.ind_variance_peak_phi = ind_variance_peak_phi        
+        self.ind_variance_peak_R = ind_variance_peak_R
+        
         self.var_colors_phi = var_colors_phi
         self.var_colors_R = var_colors_R
 
-        self.kc_indsort_phi = kc_indsort_phi
-        self.kc_indsort_R = kc_indsort_R
-
-        self.kcent_sort_vel_R = kcent_sort_vel_R
         self.kcent_sort_vel_phi = kcent_sort_vel_phi
-
+        self.kcent_sort_vel_R = kcent_sort_vel_R
+        
         #Background properties
         self.peak_variance_std_R = peak_variance_std_R
         self.peak_variance_mean_R = peak_variance_mean_R

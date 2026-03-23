@@ -803,7 +803,7 @@ def format_sky_coords(rsky, PAsky):
         f"PA={PAsky.to(u.deg):.1f}..."
     )
 
-def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', model=None, zfunc=None, zpars=None, incl=None, PA=None, xc=None, yc=None, dpc=None, midplane=False, kwargs_text={}, **kwargs_scatter):
+def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', projection='cartesian', return_phiunit='degrees', model=None, zfunc=None, zpars=None, incl=None, PA=None, xc=None, yc=None, dpc=None, midplane=False, kwargs_text={}, **kwargs_scatter):
     #midplane: only relevant for input_coords='disc' and coords='sky' for output. If True, return the sky coords of the point in the disc midplane; otherwise, project it onto the disc model surface.
     kwargs_sc = dict(edgecolors='gold', facecolors='none', marker='o', s=450, lw=4.5, alpha=1.0, label=None, zorder=22)
     kwargs_sc.update(kwargs_scatter)
@@ -848,13 +848,16 @@ def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', model
 
         if args.input_coords in ['disc', 'disk']:
             if coords=='disc': #Coordinate system for the planet marker
-                if args.projection=='cartesian':
+                if projection=='cartesian':
                     phii = np.radians(phis[i])
                     xi, yi = rs[i]*np.cos(phii), rs[i]*np.sin(phii)
             
-                elif args.projection=='polar':
-                    xi, yi = phis[i], rs[i]
-
+                elif projection=='polar':
+                    if return_phiunit=='degrees':
+                        xi, yi = phis[i], rs[i]
+                    elif return_phiunit=='radians':
+                        xi, yi = np.radians(phis[i]), rs[i]
+                        
             elif coords=='sky':
                 phii = np.radians(phis[i])
                 zp = zfunc({'R': rs[i]*u.au.to('m')}, **zpars)*u.m.to('au')
@@ -872,21 +875,24 @@ def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', model
             if coords=='disc':
                 xdisc, ydisc = GridTools.get_disc_from_sky_coords(xsky, ysky, zfunc, zpars, incl, PA, xc=xc, yc=yc)
                 
-                if args.projection=='cartesian':
+                if projection=='cartesian':
                     xi, yi = xdisc, ydisc
                     ri = np.hypot(xdisc, ydisc)
                     phii = np.arctan2(ydisc, xdisc)
                     
-                elif args.projection=='polar':
+                elif projection=='polar':
                     phii = np.arctan2(ydisc, xdisc)
                     ri = np.hypot(xdisc, ydisc)
-                    xi, yi = np.degrees(phii), ri
-
+                    if return_phiunit=='degrees':
+                        xi, yi = np.degrees(phii), ri
+                    elif return_phiunit=='radians':
+                        xi, yi = phii, ri
+                        
                 print ('Planet orbital radius and azimuth in disc frame (au, deg):', ri, np.degrees(phii))
                 
             elif coords=='sky':
                 xi, yi = xsky, ysky
-                
+
         ax.scatter(xi, yi, **kwargs_sc)
         
         if len(labels)>0:

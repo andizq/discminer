@@ -25,9 +25,11 @@ from discminer.plottools import (get_discminer_cmap,
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FormatStrFormatter
 from astropy import units as u
 from astropy.io import fits
 
+from functools import reduce
 import json
 import os
 
@@ -159,6 +161,7 @@ lev = pick.lev_list
 color = pick.color_list
 peak_resid = pick.peak_resid
 peak_angle = pick.peak_angle
+npeaks = len(peak_resid)
 
 model.make_emission_surface(ax_c)
 model.make_disc_axes(ax_c)
@@ -233,10 +236,45 @@ if args.clusters:
         found_clusters = False
 else:
     found_clusters = False    
+
     
 #*************
 #PLOT CLUSTERS
 #*************
+kde_color = '#FFB000'
+max_val = np.max(peak_resid)
+def size_markers(size_array):
+    norm_array = size_array/max_val 
+    return 5+600*norm_array**2
+
+def plot_sizeaxes(fig, val, tick_params={}):
+    ax = fig.add_axes([0.74,0.05,0.08,0.25])
+    new_params = dict(direction='in',
+                      left=True, right=True, 
+                      labelleft=True, labelright=False,
+                      bottom=False, labelbottom=False,
+                      labeltop=False, top=False,
+                      color='0.8', labelcolor='0.6', rotation=45,
+                      size=6.0, width=3.0, labelsize=args.fontsize-3)
+    new_params.update(tick_params)
+    fakecolor = new_params['color']
+    y = np.sort(val)
+    x = np.zeros(len(y))
+    ylim = y[-1]*0.15
+    ax.set_ylim(y[0]-ylim, y[-1]+ylim)
+    ax.set_xlim(-1.2,1.2)
+    ax.set_ylabel(r'Peak residual [km/s]', fontsize=args.fontsize-4, color='0.6', labelpad=20, rotation=-90)
+    ax.yaxis.set_label_position('right')
+    for side in ['top','bottom','left','right']:
+        ax.spines[side].set_linewidth(3.5)
+        ax.spines[side].set_color(fakecolor)
+    ax.tick_params(**new_params)
+    ax.set_yticks(np.linspace(y[0], y[-1], 4))#[0.3,1,2,3])
+    ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+    fakem = np.linspace(y[0], y[-1], 4)
+    ax.scatter(np.zeros(len(fakem)), fakem, marker='o', edgecolor='0.5', facecolor='none', lw=1.2, s=size_markers(fakem))
+
+    
 if found_clusters and args.clusters:
     fig, ax = make_clusters_1d(pick, which='phi')
     plt.savefig('clusters_phi_peak_residuals_%s_%dclust.png'%(mtags['base'], args.nphi), bbox_inches='tight', dpi=200)
@@ -247,6 +285,88 @@ if found_clusters and args.clusters:
     plt.savefig('clusters_r_peak_residuals_%s_%dclust.png'%(mtags['base'], args.nr), bbox_inches='tight', dpi=200)
     plt.close()
     #plt.show()
+
+    #*********************
+    #2D AZIMUTHAL CLUSTERS
+    #*********************
+    fig = plt.figure(figsize=(8,8))                                                        
+    ax = fig.add_axes([0.05,0.05,0.9,0.9], polar=True)                                     
+
+    fill_angs = np.linspace(-0.5*np.pi, 0.5*np.pi, 50)    
+    rr = np.asarray(lev)                                                              
+    pphi = np.radians(peak_angle)
+
+    xs = rr*np.cos(pphi)
+    ys = rr*np.sin(pphi)
+                                                                                 
+    ind_cluster_acc_phi = [pick.klabels_phi==pick.kc_indsort_phi[i] for i in pick.acc_peaks_phi]  #accepted cluster points 
+    if len(pick.acc_peaks_phi)==0:
+        ind_cluster_acc_phi = [False]*npeaks
+
+    ind_cluster_acc_R = [pick.klabels_R==pick.kc_indsort_R[i] for i in pick.acc_peaks_R]  #accepted cluster points in r
+    if len(pick.acc_peaks_R)==0:
+        ind_cluster_acc_R = [False]*npeaks
+    ind_in_clusters_R = reduce(np.logical_or, ind_cluster_acc_R)
+        
+    ind_in_clusters_phi = reduce(np.logical_or, ind_cluster_acc_phi) 
+    ind_in_clusters = np.logical_or(ind_in_clusters_phi, ind_in_clusters_R)
+    ind_out_clusters = ~ind_in_clusters 
+                                                                           
+    ax.scatter(pphi, rr, marker='o', facecolors='0.5', edgecolors='none', s=6, zorder=12)
+    ax.scatter(pphi[ind_out_clusters], rr[ind_out_clusters], marker='o', facecolors='#648FFF', edgecolors='k', s=size_markers(peak_resid[ind_out_clusters]), alpha=0.14, zorder=13)
+    ax.scatter(pphi[ind_in_clusters], rr[ind_in_clusters], marker='o', facecolors='#DC267F', edgecolors='k', s=size_markers(peak_resid[ind_in_clusters]), alpha=0.14, zorder=14)
+
+    ax.scatter(np.radians(pick.acc_phi), pick.acc_R, marker='X', s=270, facecolor='palegreen', edgecolor='k', lw=2., label='Inferred planet', zorder=15)
+
+    kwargs_planet = dict(edgecolors='k', facecolors='none', marker='o', lw=2.5, alpha=1.0, zorder=22)    
+    mark_planet_location(ax, args, s=270, coords='disc', projection='polar', return_phiunit='radians', model=model, **kwargs_planet)    
+    
+    for i in range(len(pick.acc_peaks_phi)):
+        std_az_peak = np.std(pphi[ind_cluster_acc_phi[i]])
+        median_az_peak = np.median(pphi[ind_cluster_acc_phi[i]])
+        min_az_peak = median_az_peak-2*std_az_peak
+        max_az_peak = median_az_peak+2*std_az_peak
+        width_peak = np.abs(max_az_peak-min_az_peak)
+        bar = ax.bar(min_az_peak, 380, width=width_peak, bottom=0.0, align='edge', color=kde_color, alpha=0.25, zorder=-1)
+
+    for i in range(len(pick.acc_peaks_R)):
+        min_r_peak = np.min(rr[ind_cluster_acc_R[i]])
+        max_r_peak = np.max(rr[ind_cluster_acc_R[i]])
+        fill = ax.fill_between(fill_angs, min_r_peak, max_r_peak, color=kde_color, alpha=0.25, zorder=-2)
+
+    for i in range(args.nphi):
+        if i!=pick.ind_variance_peak_phi:
+            ind_cluster_rej = pick.klabels_phi==i
+            std_az_peak = np.std(pphi[ind_cluster_rej])
+            median_az_peak = np.median(pphi[ind_cluster_rej])
+            min_az_peak = median_az_peak-2*std_az_peak
+            max_az_peak = median_az_peak+2*std_az_peak
+            width_peak = np.abs(max_az_peak-min_az_peak)
+            ax.bar(np.min(pphi[ind_cluster_rej]), 380, width=width_peak, bottom=0.0, align='edge', color=kde_color, alpha=0.07, zorder=-1)
+
+    for gap in gaps:
+        ax.plot(fill_angs, [gap]*50, color='k', ls='--', lw=1.6, alpha=1)
+ 
+    ax.set_rorigin(0.0)
+    ax.set_rmax(Rmod_out)
+
+    ri = ax.set_rgrids(np.arange(100, 301, 100), labels=['100', '200', '300']) 
+    ax.tick_params(labelleft=False, labelright=True, rotation=45, labelsize=args.fontsize)
+    labels=np.arange(-90, 91, 45)
+    labels=[str(lab)+r'$^{\rm o}$' for lab in labels]
+    th = ax.set_thetagrids(np.arange(-90, 91, 45), labels=labels, fmt=None, fontsize=args.fontsize-1)
+    ax.tick_params(axis='x', pad=10)
+
+    for line in ri[0]:                                                     
+        line.set_linewidth(1.1)
+        line.set_linestyle('-')
+        line.set_color('0.5')
+    ax.set_thetamin(-90)
+    ax.set_thetamax(90)
+    
+    plot_sizeaxes(fig, peak_resid)
+    plt.savefig('clusters2d_residuals_%dphi_%dr'%(args.nphi, args.nr), bbox_inches='tight', dpi=200)
+    plt.close()
 
 #***************
 #SHOW FOLDED MAP
