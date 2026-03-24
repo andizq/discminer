@@ -96,6 +96,8 @@ if args.absolute_Router>=0:
 else:
     Rmod_out = args.Router*Rout
 
+rlim = args.rlim if args.rlim>=0 else Rmod_out
+
 gaps = np.array(custom['gaps'])
 rings = np.array(custom['rings'])
 gaps = gaps[gaps<Rmod_out]
@@ -347,16 +349,16 @@ if found_clusters and args.clusters:
     for gap in gaps:
         ax.plot(fill_angs, [gap]*50, color='k', ls='--', lw=1.6, alpha=1)
  
-    ax.set_rorigin(0.0)
-    ax.set_rmax(Rmod_out)
-
-    ri = ax.set_rgrids(np.arange(100, 301, 100), labels=['100', '200', '300']) 
+    ri = ax.set_rgrids(np.arange(100, rlim, 100))#, labels=) 
     ax.tick_params(labelleft=False, labelright=True, rotation=45, labelsize=args.fontsize)
     labels=np.arange(-90, 91, 45)
     labels=[str(lab)+r'$^{\rm o}$' for lab in labels]
     th = ax.set_thetagrids(np.arange(-90, 91, 45), labels=labels, fmt=None, fontsize=args.fontsize-1)
     ax.tick_params(axis='x', pad=10)
 
+    ax.set_rorigin(0.0)
+    ax.set_rmax(rlim)
+    
     for line in ri[0]:                                                     
         line.set_linewidth(1.1)
         line.set_linestyle('-')
@@ -383,8 +385,14 @@ sin_peak = np.sin(np.radians(peak_angle))
 if args.projection=='cartesian':
     levels_resid = np.linspace(-clim, clim, 32)
     qcbar = None if args.quadrant_cbar==0 else args.quadrant_cbar
-        
-    fig, ax = make_round_map(folded_map, levels_resid, pick.X*u.au, pick.Y*u.au, R_prof[-1]*u.au,
+
+    if rlim != Rmod_out:
+        pickplot = Pick(model, residuals, R_prof[R_prof<=rlim], fold=True, fold_func=args.fold_func)
+        folded_plot = pickplot.make_2d_map(return_coords=False) #Map where peaks will be picked from
+    else:
+        folded_plot = folded_map
+    
+    fig, ax = make_round_map(folded_plot, levels_resid, pick.X*u.au, pick.Y*u.au, rlim*u.au,
                              z_func=z_func, z_pars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc,
                              cmap=cmap_res, clabel=unit, fmt=cfmt,
                              make_cbar=args.colorbar, 
@@ -407,9 +415,15 @@ if args.projection=='cartesian':
     )#kwargs_rings={'lw': 0.6})
 
     if args.show_peaks:
-        ax.scatter(lev*cos_peak, lev*sin_peak, edgecolors='none', facecolors=color, alpha=0.2, s=100+150, zorder=20)
-        ax.scatter(lev*cos_peak, lev*sin_peak, edgecolors='none', facecolors=color, alpha=1.0, s=10+30, zorder=20)
-        ax.scatter(lev*cos_peak, lev*sin_peak, edgecolors='0.3', facecolors='none', alpha=1.0, s=100+150, zorder=20)
+        indp = lev<=rlim
+        lev_plot = lev[indp]
+        cos_plot = cos_peak[indp]
+        sin_plot = sin_peak[indp]
+        color_plot = color[indp]
+        
+        ax.scatter(lev_plot*cos_plot, lev_plot*sin_plot, edgecolors='none', facecolors=color_plot, alpha=0.2, s=100+150, zorder=20)
+        ax.scatter(lev_plot*cos_plot, lev_plot*sin_plot, edgecolors='none', facecolors=color_plot, alpha=1.0, s=10+30, zorder=20)
+        ax.scatter(lev_plot*cos_plot, lev_plot*sin_plot, edgecolors='0.3', facecolors='none', alpha=1.0, s=100+150, zorder=20)
 
     #Show global peak
     sb = 450
@@ -471,6 +485,7 @@ elif args.projection=='polar': #Currently displaying folded map only
     make_substructures(
         ax, gaps=gaps, rings=rings, twodim=True, label_rings=True, polar=True
     )
+    ax.set_ylim(None, rlim)
 
     
 if len(args.mask_R)>0 or len(args.mask_phi)>0:

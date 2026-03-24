@@ -139,6 +139,7 @@ def _mining_pick(parserobj, prog='pick', description='Use Pick tools. Fold resid
     parser.add_argument('-nr', '--nr', default=6, type=int, help="Number of radial clusters. DEFAULTS to 6.")
     parser.add_argument('-phimin', '--phimin', default=-85, type=float, help="Minimum azimuth at which peak residuals are considered for the analysis. DEFAULTS to -85 deg.")
     parser.add_argument('-phimax', '--phimax', default=85, type=float, help="Maximum azimuth at which peak residuals are considered for the analysis. DEFAULTS to 85 deg.")    
+    parser.add_argument('-rlim', '--rlim', default=-1, type=float, help="Radial limit for 2D plots. If < 0, take the value of -o or -ao set for the radial extent of the analysis region. DEFAULTS to -1.")
 
     parser.add_argument('-sleg', '--show_legend', default=0, type=int, help="Show markers legend. DEFAULTS to 0.")
     parser.add_argument('-fontsize', '--fontsize', default=MEDIUM_SIZE, type=int, help="Smallest font size in figure. DEFAULTS to %d."%MEDIUM_SIZE)
