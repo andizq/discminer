@@ -341,11 +341,13 @@ class Pick(Rail):
         self.kc_indsort_phi = kc_indsort_phi
         self.kcent_sort_phi = kcent_sort_phi
         self.var_y_sort_phi = var_y_sort_phi
-
+        self.var_x_sort_phi = variance_phi_x[kc_indsort_phi]
+        
         self.kc_indsort_R = kc_indsort_R
         self.kcent_sort_R = kcent_sort_R
         self.var_y_sort_R = var_y_sort_R
-
+        self.var_x_sort_R = variance_R_x[kc_indsort_R]
+        
         self.ind_variance_peak_phi = ind_variance_peak_phi        
         self.ind_variance_peak_R = ind_variance_peak_R
         
