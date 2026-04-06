@@ -29,6 +29,8 @@ if __name__ == '__main__':
     parser = _mining_intensdistrib(None)
     args = parser.parse_args()
 
+stat_func = getattr(np, args.stat)
+    
 #*******************
 #FILL UP EMPTY ARGS
 #*******************
@@ -152,9 +154,7 @@ moment_data, moment_model, residuals, mtags = load_moments(
 masktuples_R = _get_mask_tuples(args.annuli)
 masktuples_phi = _get_mask_tuples(args.wedges)
 
-if len(masktuples_phi)==nmasks:
-    pass
-else:
+if len(masktuples_phi)!=nmasks:
     nmissing = nmasks - len(masktuples_phi)
     masktuples_phi = masktuples_phi + [[]]*nmissing
     
@@ -192,13 +192,20 @@ for i in range(nmasks):
 #MAKE PDF
 #*********
 chanwidth = np.abs(np.median(np.diff(datacube.vchannels)))
-dv_native = 0.5*chanwidth
+dv_native = chanwidth/args.binsperchan
 
+vel_range = np.max(datacube.vchannels) - np.min(datacube.vchannels)
+vmin = -0.5*vel_range 
+vmax = 0.5*vel_range 
+bins   = np.arange(vmin, vmax + 0.1*dv_native, dv_native)
+vcenters = 0.5*(bins[:-1] + bins[1:])
+
+'''
 vmin = -5*dv_native + np.min(datacube.vchannels)   # generous margins
 vmax =  5*dv_native + np.max(datacube.vchannels)
 bins   = np.arange(vmin, vmax + dv_native, dv_native)
 vcenters = 0.5*(bins[:-1] + bins[1:])
-
+'''
 def thick_gaussian(v, sigma, tau=0.0, noise_mean=0.05, seed=10): #SNR 20 at planet location
     """
     Compute a thick (flat-topped) Gaussian intensity profile,
@@ -405,13 +412,14 @@ for i in range(nmasks):
 
             spectrai = make_spectra(masks[i])
             spectra.append(spectrai)
-            
-            if len(spectrai) > args.ndraws:
-                drawsi = random.sample(range(0, len(spectrai)), args.ndraws)
-            else:
-                drawsi = range(0, len(spectrai))
 
+            if (args.ndraws < 0) or (args.ndraws > len(spectrai)):
+                drawsi = range(0, len(spectrai))
+            else:
+                drawsi = random.sample(range(0, len(spectrai)), args.ndraws)
+            
             draws.append(drawsi)
+            
             zupi = model.z_upper_func({'R': Rgrid[masks[i]]*au_to_m}, **best['height_upper'])
             vphii = model.velocity_func({'R': Rgrid[masks[i]]*au_to_m, 'z': zupi}, **best['velocity'])
             vcenti = vsys + vphii * np.sin(incl) * np.cos(np.radians(phigrid[masks[i]]))            
@@ -425,7 +433,7 @@ for i in range(nmasks):
             for j in drawsi:
                 #peaki = np.nanmax(spectrai[j]) #Peak per spectrum
                 spec = spectrai[j]/peaki
-                v_dep = datacube.vchannels-vcenti[j]                
+                v_dep = datacube.vchannels - vcenti[j]                
                 bin_add(v_dep, spec, perbin)
                 axs.plot(v_dep, spec, lw=0.1, color=colors[i], alpha=0.2, zorder=50-i)
 
@@ -434,7 +442,7 @@ for i in range(nmasks):
 
             print ('Spectra i med(skew), med(kurt)', i, np.median(skewall), np.median(kurtall))
             
-            med_i = np.empty(len(vcenters)); med_i[:] = np.nan
+            stat_i = np.empty(len(vcenters)); stat_i[:] = np.nan
             p16_i = np.empty(len(vcenters)); p16_i[:] = np.nan
             p84_i = np.empty(len(vcenters)); p84_i[:] = np.nan
             cnt_i = np.zeros(len(vcenters), dtype=int)
@@ -443,36 +451,36 @@ for i in range(nmasks):
                 if perbin[b]:
                     arr = np.asarray(perbin[b], float)
                     cnt_i[b] = arr.size
-                    med_i[b] = np.median(arr)
-                    p16_i[b] = np.percentile(arr, 16)
-                    p84_i[b] = np.percentile(arr, 84)
+                    stat_i[b] = stat_func(arr)
+                    p16_i[b] = np.nanpercentile(arr, 16)
+                    p84_i[b] = np.nanpercentile(arr, 84)
 
             # (optional) mask bins with too few samples
             min_count = 3
             sparse = cnt_i < min_count
-            med_i[sparse] = np.nan; p16_i[sparse] = np.nan; p84_i[sparse] = np.nan
+            stat_i[sparse] = np.nan; p16_i[sparse] = np.nan; p84_i[sparse] = np.nan
 
             # ----- plot per-i median + spread -----
             if colors[i] in ['k', 'black']:
                 fci = '0.9'
             else:
                 fci = colors[i]
-                
-            axs.scatter(vcenters, med_i, lw=1.5, ec='k', color=fci, s=30, zorder=100-i)
+
+            axs.scatter(vcenters, stat_i, lw=1.5, ec='k', color=fci, s=30, zorder=100-i)
             
-            #axs.plot(vcenters, med_i, lw=4.0, color=colors[i], alpha=0.4, zorder=99-i)        
+            #axs.plot(vcenters, stat_i, lw=4.0, color=colors[i], alpha=0.4, zorder=99-i)        
             #axs.fill_between(vcenters, p16_i, p84_i, alpha=0.15, color=colors[i], linewidth=0, zorder=90-i)
 
             #axs.text(0.20, 0.85-0.12*ns, '%.2f'%skewi, fontsize=12, ha='right', va='top', color=colors[i], transform=axs.transAxes)
             ns += 1        
 
             """
-            good = np.isfinite(med_i)
+            good = np.isfinite(stat_i)
             v = vcenters[good]
-            I = med_i[good]
+            I = stat_i[good]
 
             if I.size == 0 or np.all(I <= 0):
-                print(f"[warn] Empty or zero med_i for region {i}")
+                print(f"[warn] Empty or zero stat_i for region {i}")
             else:
                 I = np.clip(I, 0, None)
                 w_sum = np.sum(I)

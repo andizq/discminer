@@ -1,4 +1,4 @@
-from discminer.mining_control import _mining_intensdistrib
+from discminer.mining_control import _mining_stack
 from discminer.core import Data
 
 from discminer.mining_utils import (_get_mask_tuples,
@@ -28,7 +28,7 @@ from scipy.interpolate import interp1d
 use_discminer_style()
 
 if __name__ == '__main__':
-    parser = _mining_intensdistrib(None)
+    parser = _mining_stack(None)
     args = parser.parse_args()
 
 stat_func = getattr(np, args.stat)
@@ -93,8 +93,6 @@ xmax = model.skygrid['xmax']
 xlim = 1.1*Rout
 extent= np.array([-xmax, xmax, -xmax, xmax])/au_to_m
 
-R_prof = np.arange(Rmod_in, Rmod_out, beam_au/args.binsperbeam)
-
 #****************************
 #LOAD DISC GEOMETRY AND MASK
 #****************************
@@ -121,24 +119,28 @@ moment_data, moment_model, residuals, mtags = load_moments(
 #***********
 #MAKE MASKS
 #***********
-masktuples_R = _get_mask_tuples(R_prof, consecutive=True)
-masktuples_phi = _get_mask_tuples([])
+nmasks = int(round(0.5*len(args.annuli)))
 
+if nmasks > 0: # If annuli boundaries were passed
+    masktuples_R = _get_mask_tuples(args.annuli)
+    masktuples_phi = _get_mask_tuples(args.wedges)
+else: # Map annuli across the disc radial extent
+    R_prof = np.arange(Rmod_in, Rmod_out, beam_au/args.binsperbeam)
+    masktuples_R = _get_mask_tuples(R_prof, consecutive=True)
+    masktuples_phi = _get_mask_tuples([])
+    nmasks = len(masktuples_R)
+    
 bincenters = np.mean(masktuples_R, axis=1)
 bincenters_arcsec = bincenters/dpc.value
 
 #*******************
 #FILL UP EMPTY ARGS
 #*******************
-nmasks = len(masktuples_R)
-
 cmap = plt.get_cmap(args.cmap)
 colors = cmap(np.linspace(0.15, 0.85, nmasks))
 lws = [1.2] * nmasks
     
-if len(masktuples_phi)==nmasks:
-    pass
-else:
+if len(masktuples_phi)!=nmasks:
     nmissing = nmasks - len(masktuples_phi)
     masktuples_phi = masktuples_phi + [[]]*nmissing
     

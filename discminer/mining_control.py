@@ -218,11 +218,13 @@ def _mining_intensdistrib(parserobj, prog='intensdistrib', description='Extract 
     parser.add_argument('-annuli', '--annuli', nargs='*', default=[90, 110], type=float,
                         help='Radial boundaries of the annuli from which the intensity distribution will be extracted. USAGE: -annuli 0 40 70 90 defines two annuli with boundaries (0, 40) and (70, 90) au. DEFAULTS to [90, 110].')
     parser.add_argument('-wedges', '--wedges', nargs='*', default=[], type=float, minimum=-180, maximum=180, action=Range,
-                        help="Azimuthal boundaries (per annulus). Define as many as there are annuli. If empty, takes full azimuth for all annuli. USAGE: -wedges 30 40 -60 -40 defines two wedges with boundaries (30, 40) and (-60, -40) deg. DEFAULTS to [].")
+                        help="Azimuthal boundaries (per annulus). Define as many as there are annuli. If empty, the full azimuth is used for all annuli. USAGE: -wedges 30 40 -60 -40 defines two wedges with boundaries (30, 40) and (-60, -40) deg. DEFAULTS to [].")
     parser.add_argument('-r0', '--r0', nargs='*', default=[], type=float, help="Reference radial coordinate for annuli (in au), relative to the disc frame. If empty, take 0 for all annuli. DEFAULTS to [].")    
     parser.add_argument('-phi0', '--phi0', nargs='*', default=[], type=float, help="Reference azimuthal coordinate for annuli (in deg), relative to the disc frame. If empty, take 0 for all annuli. DEFAULTS to [].")
     parser.add_argument('-spectra', '--spectra', nargs='*', default=[], type=int, help="Ids of spectra to be plotted in a separate subpanel, corresponding to the input analysis regions. DEFAULTS to [].")
-    parser.add_argument('-ndraws', '--ndraws', default=500, type=int, help="Number of random spectra selected from each region for plotting. DEFAULTS to 500.")
+    parser.add_argument('-ndraws', '--ndraws', default=500, type=int, help="Number of random spectra selected from each region for plotting (if < 0, consider all spectra within the bin). DEFAULTS to 500.")
+    parser.add_argument('-stat', '--stat', default='nanmedian', type=str, help="Statistic used to stack the line profiles (e.g. median, mean, max, nanmedian). DEFAULTS to 'nanmedian'")
+    parser.add_argument('-binsperchan', '--binsperchan', default=1, type=float, help="Number of bins per channel width for spectral binning. DEFAULTS to 1.")    
     
     parser.add_argument('-colors', '--colors', nargs='*', default=[], type=str, help="Color of the plotted distribution, per annulus. If empty, take 'black' for all annuli. DEFAULTS to [].")
     parser.add_argument('-lw', '--linewidths', nargs='*', default=[], type=float, help="Linewidth of the distribution curve, per annulus. If empty, take '1.5' for all annuli. DEFAULTS to [].")    
@@ -246,6 +248,12 @@ def _mining_stack(parserobj, prog='stack', description='Azimuthally stack line p
     parser.add_argument('-binsperbeam', '--binsperbeam', default=4, type=float, help="Number of bins per beam size for radial line stacking. DEFAULTS to 4.")
     parser.add_argument('-binsperchan', '--binsperchan', default=2, type=float, help="Number of bins per channel width for spectral binning. DEFAULTS to 2.")    
     parser.add_argument('-ndraws', '--ndraws', default=-1, type=int, help="Number of random spectra selected from each bin. DEFAULTS to -1 (i.e. consider all spectra within the bin).")
+    parser.add_argument('-annuli', '--annuli', nargs='*', default=[], type=float,
+                        help='If provided, perform stacking within the specified annuli. USAGE: -annuli 0 40 70 90 defines two annuli with boundaries (0, 40) and (70, 90) au. DEFAULTS to [].')
+    parser.add_argument('-wedges', '--wedges', nargs='*', default=[], type=float, minimum=-180, maximum=180, action=Range,
+                        help="If provided, perform stacking within the specified wedges. Define as many as there are annuli. If empty, the full azimuth is used for all annuli. USAGE: -wedges 30 40 -60 -40 defines two wedges with boundaries (30, 40) and (-60, -40) deg. DEFAULTS to [].")
+
+
     parser.add_argument('-keplerian', '--keplerian', default=0, type=int, help="Use pure Keplerian profile to stack the lines? DEFAULTS to 0.")
     parser.add_argument('-stat', '--stat', default='nanmedian', type=str, help="Statistic used to stack the line profiles (e.g. median, mean, max, nanmedian). DEFAULTS to 'nanmedian'")
     parser.add_argument('-vlim', '--vlim', default=4.1, type=float, help="Velocity xlim in km/s. DEFAULTS to 4.1.")
@@ -262,6 +270,13 @@ def _mining_stack(parserobj, prog='stack', description='Azimuthally stack line p
         Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True,
         colorbar=True, mask_R=True, mask_phi=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True
     )
+    return parser
+
+def _mining_stackcube(parserobj, prog='stackcube', description='Make stacked cube with lines shifted to their centroid velocity'):
+    parser = _check_and_return_parser(parserobj, prog=prog, description=description)
+    parser.add_argument('-keplerian', '--keplerian', default=0, type=int, help="Use pure Keplerian profile to stack the lines? DEFAULTS to 0.")
+    parser.add_argument('-binsperchan', '--binsperchan', default=1, type=float, help="Number of bins per channel width for spectral binning. DEFAULTS to 1.")    
+    add_parser_args(parser, surface=True, Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True)
     return parser
 
 def _mining_channels_peakint(parserobj, prog='channels+peakint', description='Show Data vs Model channel maps, peak intensities, and residuals'):
@@ -380,7 +395,8 @@ _mining_parser_func = {
     'pv': _mining_pv_diagram,
     'skewkurt': _mining_skewkurt,
     'intensdistrib': _mining_intensdistrib,
-    'stack': _mining_stack
+    'stack': _mining_stack,
+    'stackcube': _mining_stackcube    
 }
 
 scripts = {
@@ -407,7 +423,8 @@ scripts = {
     'pv': 'plot_pv_diagram.py',
     'skewkurt': 'make_skewkurt_moments.py',
     'intensdistrib': 'plot_intensity_distribution.py',
-    'stack': 'plot_stack.py',        
+    'stack': 'plot_stack.py',
+    'stackcube': 'make_stackcube.py'    
 }
 
 #<----------------------
