@@ -257,6 +257,7 @@ def _mining_stack(parserobj, prog='stack', description='Azimuthally stack line p
     parser.add_argument('-keplerian', '--keplerian', default=0, type=int, help="Use pure Keplerian profile to stack the lines? DEFAULTS to 0.")
     parser.add_argument('-stat', '--stat', default='nanmedian', type=str, help="Statistic used to stack the line profiles (e.g. median, mean, max, nanmedian). DEFAULTS to 'nanmedian'")
     parser.add_argument('-vlim', '--vlim', default=4.1, type=float, help="Velocity xlim in km/s. DEFAULTS to 4.1.")
+    parser.add_argument('-logscale', '--logscale', default=0, type=int, help="Set x and y axes to be logarithmic (via ax.set_yscale('symlog', linthresh=1e-2))? DEFAULTS to 0.")
     
     parser.add_argument('-cmap', '--cmap', default='cmr.rainforest', type=str, help="Colormap for the radial coordinate of the stacked spectra. DEFAULTS to 'cmr.rainforest'.")    
     parser.add_argument('-fontsize', '--fontsize', default=MEDIUM_SIZE, type=int, help="Smallest font size in figure. DEFAULTS to %d."%MEDIUM_SIZE)

@@ -293,7 +293,7 @@ for i in range(nmasks):
         spec = 1e3 * spectrai[j]
         v_dep = datacube.vchannels - vcenti[j]
         bin_add(v_dep, spec, perbin)
-        axs[i].plot(v_dep, spec, lw=0.1, color='k', alpha=0.15, zorder=50-i)
+        axs[i].plot(v_dep, spec, lw=0.1, color='k', alpha=0.1, zorder=50-i)
 
     stat_i = np.empty(len(vcenters)); stat_i[:] = np.nan
     p16_i = np.empty(len(vcenters)); p16_i[:] = np.nan
@@ -345,8 +345,15 @@ for i, axi in enumerate(axs):
     axi.tick_params(axis='y', pad=5, labelcolor='k')
 
     axi.set_xticks(np.linspace(-np.floor(args.vlim), np.floor(args.vlim), 5).astype(int))
-    axi.set_xlim(-args.vlim, args.vlim)
-    axi.set_ylim(-0.2*peakmax, 2*peakmax)
+
+    if args.logscale:
+        axi.set_ylim(1e-3*peakmax, 4*peakmax)
+        axi.set_yscale('symlog', linthresh=1e-2)
+        axi.set_xlim(0.1, args.vlim)
+        axi.set_xscale('symlog', linthresh=1e-2)
+    else:
+        axi.set_xlim(-args.vlim, args.vlim)
+        axi.set_ylim(-0.2*peakmax, 2*peakmax)
     
     if not is_bottom:
         axi.tick_params(labelbottom=False)
