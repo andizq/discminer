@@ -149,9 +149,9 @@ class Cube(_JSON):
             self.beam_area = 2*np.pi*x_stddev*y_stddev #Area of gaussian beam in pixels**2
             bmaj = self.beam.major.to(u.arcsecond).value
             bmin = self.beam.minor.to(u.arcsecond).value        
-            self.beam_area_arcsecs = 2*np.pi * (bmaj * bmin) / sigma2fwhm**2 #Area of gaussian beam in arcsecs**2        
+            self.beam_area_arcsecs = 2*np.pi * (bmaj * bmin) / sigma2fwhm**2 #Area of gaussian beam in arcsecs**2
             self.beam_size = bmaj*self.dpc.to('pc').value * u.au #in au
-            
+
             self.bmaj = self.beam.major.to(u.arcsecond)
             self.bmin = self.beam.minor.to(u.arcsecond)
             self.bpa = self.beam.pa.to(u.deg)
@@ -164,7 +164,7 @@ class Cube(_JSON):
                 #self.beam_size = 1 * self.dpc.to('pc').value * u.au                 
                 self.beam_area_arcsecs = 1*1 
                 self.beam_area = self.beam_area_arcsecs / self.pix_size.to(u.arcsecond).value**2 #Area in pixels**2
-                
+
                 self.bmaj = 1.0*u.arcsecond
                 self.bmin = 1.0*u.arcsecond
                 self.bpa = 0.0*u.deg
@@ -281,16 +281,24 @@ class Cube(_JSON):
         kwargs_io = dict(overwrite=True)  # Default kwargs
         kwargs_io.update(kwargs)
 
-        try:
+        try: #e.g. mJy/beam --> Jy/beam
             I = self.data * u.Unit(self.header["BUNIT"]).to("beam-1 Jy")
-        except u.core.UnitConversionError:
-            I = self.data #Assume Jy
-            
+            # beam_area: C*bmin['']*bmaj[''] * (dist[pc])**2 --> beam area in au**2 units
+            # beam solid angle: beam_area/(dist[m])**2.
+            #  dist**2 cancels out with beamarea's dist[pc]**2 from conversion of bmaj, bmin to mks units.
+            solid_angle = u.au.to("m") ** 2 * self.beam_area_arcsecs / u.pc.to("m") ** 2
+        except u.core.UnitConversionError: #Jy/arcsec2, Jy/pixel or K
+            I = self.data
+            if self.header.get('BUNIT') in ['Jy/arcsec^2', 'Jy / arcsec^2' , 'arcsec-2 Jy', 'Jy arcsec-2']:
+                solid_angle = (1 * u.arcsec**2).to(u.sr).value
+            elif self.header.get('BUNIT') in ['Jy/pixel', 'Jy / pixel', 'pixel-1 Jy', 'Jy pixel-1']:
+                solid_angle = (self.pix_size**2).to(u.sr).value
+            elif self.header.get('BUNIT') in ['K']:
+                sys.exit("Stopping execution: Cube already in K units...")
+            else:
+                sys.exit("Stopping execution: Unable to convert input cube units to K...")
+                
         nu = self.header["RESTFRQ"]  # in Hz
-        # beam_area: C*bmin['']*bmaj[''] * (dist[pc])**2 --> beam area in au**2 units
-        # beam solid angle: beam_area/(dist[m])**2.
-        #  dist**2 cancels out with beamarea's dist[pc]**2 from conversion of bmaj, bmin to mks units.
-        beam_solid = u.au.to("m") ** 2 * self.beam_area_arcsecs / u.pc.to("m") ** 2
         Jy_to_SI = 1e-26
         c_h = apc.h.value
         c_c = apc.c.value
@@ -302,7 +310,7 @@ class Cube(_JSON):
                 * (
                     np.log(
                         (2 * c_h * nu ** 3)
-                        / (c_c ** 2 * np.abs(I) * Jy_to_SI / beam_solid)
+                        / (c_c ** 2 * np.abs(I) * Jy_to_SI / solid_angle)
                         + 1
                     )
                 )
@@ -313,7 +321,7 @@ class Cube(_JSON):
             )
         else:
             wl = c_c / nu
-            Tb = 0.5 * wl ** 2 * I * Jy_to_SI / (beam_solid * c_k_B)
+            Tb = 0.5 * wl ** 2 * I * Jy_to_SI / (solid_angle * c_k_B)
 
         self.data = Tb
         self.header["BUNIT"] = "K"

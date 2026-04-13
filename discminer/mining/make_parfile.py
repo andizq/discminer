@@ -325,6 +325,10 @@ def get_base_pars(log_file, tags_dict):
                 units.append('km/s')
             elif 'Mstar' in hdr:
                 units.append('Msun')
+            elif 'bmaj' in hdr or 'bmin' in hdr:
+                units.append('arcsec')
+            elif 'bpa' in hdr:
+                units.append('deg')
             else:
                 units.append('unknown')
                         
@@ -338,12 +342,12 @@ def get_base_pars(log_file, tags_dict):
         par_dict_att = {
             'velocity': {}, 'orientation': {},
             'intensity': {}, 'linewidth': {}, 'lineslope': {},
-            'height_upper': {}, 'height_lower': {}
+            'height_upper': {}, 'height_lower': {}, 'beam': {}
         }
         uni_dict_att = {
             'velocity': {}, 'orientation': {},
             'intensity': {}, 'linewidth': {}, 'lineslope': {},
-            'height_upper': {}, 'height_lower': {}
+            'height_upper': {}, 'height_lower': {}, 'beam': {}
         }
 
         def update_dict(att, key):
@@ -369,7 +373,9 @@ def get_base_pars(log_file, tags_dict):
                 update_dict('height_upper', key)
             if 'lower' in key:
                 update_dict('height_lower', key)
-
+            if key in ['bmaj', 'bmin', 'bpa']:
+                update_dict('beam', key)
+                
         return par_dict_att, uni_dict_att
     
     except FileNotFoundError:

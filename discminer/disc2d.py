@@ -697,11 +697,11 @@ class Intensity:
         def _is_num(x):
             return isinstance(x, numbers.Number) and not isinstance(x, bool)
 
-        if not _is_num(bmaj):
+        if not _is_num(bmaj) or bmaj==0.0:
             #Beam not being fitted/modelled, continue and assume beam_model=beam_data
             return
 
-        if not _is_num(bmin):
+        if not _is_num(bmin) or bmin==0.0:
             bmin = bmaj #Default circular if bmaj is num and bmin not set
 
         if not _is_num(bpa):
