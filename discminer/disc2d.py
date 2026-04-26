@@ -728,7 +728,7 @@ class Intensity:
         #Convert to pixels^2 and get physical size
         pix_arcsec = self.pix_size.to(u.arcsec).value
         self.beam_area = self.beam_area_arcsecs / pix_arcsec**2
-        self.beam_size = bmaj_q * self.dpc.to("pc").value * u.au
+        self.beam_size = bmaj_q.value * self.dpc.to("pc").value * u.au
 
         #Overwrite values
         self.bmaj = bmaj_q
