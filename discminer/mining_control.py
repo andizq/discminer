@@ -462,7 +462,7 @@ def add_parser_args(parser,
                     moment=False, kernel=False, surface=False, smooth=False,
                     Rinner=False, Router=False, absolute_Rinner=False, absolute_Router=False,
                     kind=False, projection=False,
-                    planck=False,
+                    planck=False, jansky=0,
                     sigma=False,
                     mask_minor=False, mask_major=False, 
                     mask_phi=False, mask_R=False,
@@ -568,6 +568,12 @@ def add_parser_args(parser,
         parser.add_argument('-planck', '--planck', default=d0, type=int,
                             choices=[0, 1],
                             help="Use full Planck's law to convert Jy/bm to K. DEFAULTS to 0 (i.e. assume RJ).")
+
+    if jansky is not False:
+        d0 = set_default(jansky, 0)                
+        parser.add_argument('-jansky', '--jansky', default=d0, type=int,
+                            choices=[0, 1],
+                            help="Use native Jy/beam, Jy/arcsec or Jy/pixel units. DEFAULTS to 0 (i.e. use K units).")
         
     if writetxt is not False:
         d0 = set_default(writetxt, 1)                

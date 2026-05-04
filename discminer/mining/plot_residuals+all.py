@@ -133,7 +133,7 @@ clabels = {
 fill_angs_2pi = np.linspace(0, 2*np.pi, 100)
 
 for i, (axi, moment) in enumerate(zip(ax, mtypes)):
-    ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get_2d_plot_decorators(moment)
+    ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get_2d_plot_decorators(moment, args=args)
     levels_resid = np.linspace(-clim, clim, 32)
     levels_cbar = np.linspace(-clim, clim, 5)
 
@@ -187,7 +187,7 @@ tag_base = mtags['velocity']['base'].split('velocity_')[-1]
 #*************
 kwargs_sc = dict(s=150, lw=2.0, edgecolors='k')
 for axi in ax:
-    mark_planet_location(axi, args, dpc=dpc, coords='sky', zfunc=model.z_upper_func, zpars=best['height_upper'], **best['orientation'], **kwargs_sc)
+    mark_planet_location(axi, args, dpc=dpc, coords='sky', model=model, **kwargs_sc)
 
 plt.savefig('residuals_all_%s_%sframe.png'%(tag_base, args.coords), bbox_inches='tight', dpi=200)
 show_output(args)

@@ -297,7 +297,7 @@ class Cube(_JSON):
                 sys.exit("Stopping execution: Cube already in K units...")
             else:
                 sys.exit("Stopping execution: Unable to convert input cube units to K...")
-                
+
         nu = self.header["RESTFRQ"]  # in Hz
         Jy_to_SI = 1e-26
         c_h = apc.h.value

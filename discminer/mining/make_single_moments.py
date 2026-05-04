@@ -24,7 +24,7 @@ tag = meta['tag']
 #*********
 #LOAD DATA
 #*********
-if args.planck:
+if args.planck or args.jansky:
     file_data = 'cube_data_%s.fits'%tag
     file_model = 'cube_model_%s.fits'%tag
 else:

@@ -36,7 +36,12 @@ figsize2row = (11,6)
 #**************************
 #JSON AND SOME DEFINITIONS
 #**************************
-with open('parfile.json') as json_file:
+if args.moment=='continuum':
+    parfile = 'parfile_band7.json'
+else:
+    parfile = 'parfile.json'
+    
+with open(parfile) as json_file:
     pars = json.load(json_file)
 
 meta = pars['metadata']
@@ -53,21 +58,22 @@ gaps = custom['gaps']
 rings = custom['rings']
 Rmax = 1.1*Rout*u.au #Max model radius, 10% larger than disc Rout
 
-clabel, clabel_res, clim0, clim0_res, clim1, clim1_res, unit = get_1d_plot_decorators(args.moment)
-
-#*******************
-#LOAD DISC GEOMETRY
-#*******************
-R, phi, z = load_disc_grid()
-
-R_s = R[args.surface]*u.m.to('au')
-phi_s = phi[args.surface]
+clabel, clabel_res, clim0, clim0_res, clim1, clim1_res, unit = get_1d_plot_decorators(args.moment, parfile=parfile, args=args)
 
 #*******************
 #LOAD DATA AND MODEL
 #*******************
-datacube, model = init_data_and_model()
+if args.moment=='continuum':
+    datacube, model = init_data_and_model(parfile=parfile, twodim=True, write_extent=True)
+    datacube.convert_to_tb(writefits=False, planck=False)
+else:
+    datacube, model = init_data_and_model(parfile=parfile)
 
+R, phi, z = load_disc_grid()
+
+R_s = R[args.surface]*u.m.to('au')
+phi_s = phi[args.surface]
+    
 noise_mean, mask = get_noise_mask(datacube, thres=2,
                                   mask_phi={'map2d': np.degrees(phi_s),
                                             'lims': args.mask_phi},
@@ -78,7 +84,12 @@ model.make_model()
 
 #*************************
 #LOAD MOMENT MAPS
-moment_data, moment_model, residuals, mtags = load_moments(args, mask=mask)
+if args.moment=='continuum':
+    moment_data = moment_model = residuals = datacube.data[0]
+    mtags = dict(dir_model=meta['dir_model'], base=f'{args.moment}', ref_surf='upper')
+else:
+    moment_data, moment_model, residuals, mtags = load_moments(args, mask=mask)
+
 ref_surf = mtags['ref_surf']
 tag_base = mtags['base']
 

@@ -65,7 +65,7 @@ try:
 except KeyError:
     kinks = []
     
-ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get_2d_plot_decorators(args.moment, unit_simple=True, fmt_vertical=True)
+ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get_2d_plot_decorators(args.moment, unit_simple=True, fmt_vertical=True, args=args)
 
 if args.moment in ['v0r', 'v0phi','vr_leftover']: clim *= 2
 
@@ -194,7 +194,7 @@ if args.projection=='cartesian':
 
     #OVERLAY FIT SPIRALS?
     if len(args.spiral_ids)>0:
-        overlay_spirals(ax, args, mtags, Rmin=0, Rmax=Rmod_out)
+        overlay_spirals(ax, args, mtags, Rmin=0, Rmax=Rmod_out*0.8)
         tag_figure += '_' + args.spiral_type + '_spirals_' + args.spiral_moment
             
     #SHOW CONTINUUM?        
@@ -240,7 +240,7 @@ elif args.projection=='polar':
 if len(args.mask_R)>0 or len(args.mask_phi)>0:
     make_masks(ax, args.mask_R, args.mask_phi, Rmax=Rmod_out, facecolor='k', alpha=0.3)
     
-mark_planet_location(ax, args, edgecolors='k', lw=4.5, s=650, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc, kwargs_text={'fontsize': args.fontsize-1})    
+mark_planet_location(ax, args, facecolors='none', edgecolors='k', lw=4.5, s=650, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc, kwargs_text={'fontsize': args.fontsize-1})    
 if args.show_title:
     ax.set_title(ctitle, fontsize=args.fontsize+1, color='k')
 

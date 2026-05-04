@@ -193,7 +193,7 @@ def read_json(parfile='parfile.json', decimals=True): #Read json file again but 
         pars = json.load(json_file, parse_float=parse_func)
     return pars
             
-def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fmt_vertical=False):    
+def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fmt_vertical=False, args=None):    
     I_res2abs = 3.0
     v_res2abs = 20.0
     L_res2abs = 5.0
@@ -205,11 +205,25 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
     meta = pars['metadata']
 
     try:
-        ctitle = disctex[meta['disc']]+' '+moltex[meta['mol']]
-        
+        ctitle = disctex[meta['disc']]+' '+moltex[meta['mol']]        
     except KeyError:
         ctitle = meta['disc']+' '+meta['mol']
+        
+    try:
+        jansky = args.jansky
+    except AttributeError: 
+        jansky = 0
 
+    if moment in ['continuum', 'delta_peakintensity', 'peakintensity', 'peakint']:
+        if jansky:
+            unit = '[Jy/beam]'
+            if unit_simple:
+                unit = 'Jy/bm'
+        else:
+            unit = '[K]'
+            if unit_simple:
+                unit = 'K'            
+        
     if moment in ['bluewidth', 'redwidth', 'bluered']:
         clim = custom['Llim']
         fclim = float(clim)
@@ -224,8 +238,6 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
     if moment in ['continuum']:
         clim = custom['Ilim']
         fclim = float(clim)
-        unit = '[K]'
-        if unit_simple: unit = 'K'        
         clabel = r'Peak Intensity %s'%unit
         cmap_mom = matplotlib.pyplot.get_cmap('pink_r')    
         cmap_res = get_discminer_cmap('intensity_2', kind='residuals')
@@ -268,8 +280,6 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
     if moment=='delta_peakintensity':
         clim = custom['Ilim']
         fclim = float(clim)
-        unit = '[K]'
-        if unit_simple: unit = 'K'        
         clabel = r'$\Delta$ Peak Intensity %s'%unit
         cmap_mom = matplotlib.pyplot.get_cmap('magma') #get_discminer_cmap('intensity_2')
         cmap_res = cmap_mom #get_discminer_cmap('intensity_2', kind='residuals')
@@ -320,9 +330,7 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
     
     if moment in ['peakintensity', 'peakint']:
         clim = custom['Ilim']
-        fclim = float(clim)        
-        unit = '[K]'
-        if unit_simple: unit = 'K'        
+        fclim = float(clim)
         clabel = r'Peak Intensity %s'%unit
         cmap_mom = get_discminer_cmap('intensity_2')    
         cmap_res = get_discminer_cmap('intensity_2', kind='residuals')
@@ -341,12 +349,14 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         ndigs = len(sp_dec[0])
         cfmt = '%'+'%d.1f'%(ndigs+1+1+nsign) #ndigs + . + 1f + nsign
 
-    if 'delta' in moment or moment in ['peakintensity']:
+    if 'delta' in moment: 
         cfmt = '%d'
-
+    if moment in ['peakintensity'] and not jansky:
+        cfmt = '%d'
+        
     return ctitle, clabel, fclim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit
 
-def get_1d_plot_decorators(moment, parfile='parfile.json', tag=''):
+def get_1d_plot_decorators(moment, parfile='parfile.json', tag='', args=None):
     I_res2abs = 5.0
     v_res2abs = 20.0
     L_res2abs = 7.0
@@ -358,6 +368,17 @@ def get_1d_plot_decorators(moment, parfile='parfile.json', tag=''):
     meta = pars['metadata']
 
     if len(tag)>0: tag = tag+' '
+        
+    try:
+        jansky = args.jansky
+    except AttributeError: 
+        jansky = 0
+
+    if moment in ['continuum', 'delta_peakintensity', 'peakintensity', 'peakint']:
+        if jansky:
+            unit = '[Jy/bm]'
+        else:
+            unit = '[K]'
 
     if moment in ['bluewidth', 'redwidth', 'bluered']:
         clim0_res = -custom['Llim']
@@ -371,7 +392,6 @@ def get_1d_plot_decorators(moment, parfile='parfile.json', tag=''):
         clim0_res = -custom['Ilim']
         clim1_res = custom['Ilim']
         clim0, clim1 = 0.0, I_res2abs*clim1_res
-        unit = '[K]'
         clabel = r'Cont. Intensity %s%s'%(tag, unit)
         clabel_res = r'Cont. Int. residuals %s'%unit    
     
@@ -402,7 +422,6 @@ def get_1d_plot_decorators(moment, parfile='parfile.json', tag=''):
         clim0_res = -custom['Ilim']
         clim1_res = custom['Ilim']
         clim0, clim1 = 0.0, I_res2abs*clim1_res
-        unit = '[K]'
         clabel = r'$\Delta$ Peak Intensity %s%s'%(tag, unit)
         clabel_res = r'\Delta$ Peak Int. residuals %s'%unit    
         
@@ -441,7 +460,6 @@ def get_1d_plot_decorators(moment, parfile='parfile.json', tag=''):
         clim0_res = -custom['Ilim']
         clim1_res = custom['Ilim']
         clim0, clim1 = 0.0, I_res2abs*clim1_res
-        unit = '[K]'
         clabel = r'Peak Intensity %s%s'%(tag, unit)
         clabel_res = r'Peak Int. residuals %s'%unit    
     
@@ -862,6 +880,7 @@ def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', proje
                 phii = np.radians(phis[i])
                 zp = zfunc({'R': rs[i]*u.au.to('m')}, **zpars)*u.m.to('au')
                 xi,yi,zi = GridTools.get_sky_from_disc_coords(rs[i], phii, zp, incl, PA, xc, yc, midplane=midplane)
+                
             if model is not None:
                 rsky, PAsky = model.get_sky_offset(rs[i]*u.au, phis[i]*u.deg, relative_to='disc', midplane=True)
                 print (f'Marker in disc frame R={rs[i]:.1f} au, phi={phis[i]:.1f} deg --> sky offset', format_sky_coords(rsky, PAsky), 'relative to disc center and midplane.')
@@ -873,7 +892,7 @@ def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', proje
             ysky = rsky*np.cos(PAsky)
             
             if coords=='disc':
-                xdisc, ydisc = GridTools.get_disc_from_sky_coords(xsky, ysky, zfunc, zpars, incl, PA, xc=xc, yc=yc)
+                xdisc, ydisc = GridTools.get_disc_from_sky_coords(xsky, ysky, zfunc, zpars, incl, PA, xc=xc, yc=yc) 
                 
                 if projection=='cartesian':
                     xi, yi = xdisc, ydisc

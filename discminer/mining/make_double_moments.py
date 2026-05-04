@@ -40,7 +40,7 @@ model.make_model()
 #**********
 #LOAD MODEL
 #**********
-if args.planck:
+if args.planck or args.jansky:
     file_model = 'cube_model_%s.fits'%tag #Read Jy/bm version, and convert peakint to K after fit 
 else:
     datacube.convert_to_tb(writefits=False) #RJ
