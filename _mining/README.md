@@ -1,6 +1,6 @@
 # Mining scripts
 
-Attempt to automatically produce analysis plots for all discs based on log_pars.txt and prepare_data.py files.
+DEPRECATED. SEE ``discminer/example/`` FOR UPDATED COMMANDS.
 
 ## How to use
 
