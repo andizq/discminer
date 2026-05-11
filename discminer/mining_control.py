@@ -284,7 +284,7 @@ def _mining_channels_peakint(parserobj, prog='channels+peakint', description='Sh
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     parser.add_argument('-nc', '--nchans', default=5, type=int, help="Number of channels to plot")
     parser.add_argument('-st', '--step', default=4, type=int, help="Plot every #step channels")
-    add_parser_args(parser, sigma=3, moment='peakintensity', kernel=True, surface=True, smooth=True, Rinner=True, Router=1.0)
+    add_parser_args(parser, sigma=3, moment='peakintensity', kernel=True, kind=True, surface=True, smooth=True, Rinner=True, Router=1.0)
     return parser
 
 def _mining_isovelocities(parserobj, prog='isovelocities', description='Show Data vs Model isovelocity contours'):

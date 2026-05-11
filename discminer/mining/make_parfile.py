@@ -22,6 +22,7 @@ custom_dict = {
     'nchans': 15, #Plot n channels
     'vlim': 0.2, #Velocity max and min plot limit
     'Llim': 0.2, #Line width max and min
+    'Lslim': 2, #Line slope max and min
     'Ilim': 14, #Peak intensity max and min
     
 }
