@@ -104,6 +104,15 @@ def _scipy_fft_conv(image, kernel):
     k = kernel.array if hasattr(kernel, "array") else kernel
     return fftconvolve(image, k, mode="same")
 
+def _area_conv_jybeam(beam_area_pixels, beam_area_arcsecs):
+    return beam_area_pixels
+
+def _area_conv_jyarcsec(beam_area_pixels, beam_area_arcsecs):
+    return beam_area_pixels/beam_area_arcsecs
+
+def _area_conv_jypixel(beam_area_pixels, beam_area_arcsecs):
+    return 1.0
+
 #********************
 #Discminer Attributes
 #********************
@@ -730,6 +739,9 @@ class Intensity:
         self.beam_area = self.beam_area_arcsecs / pix_arcsec**2
         self.beam_size = bmaj_q.value * self.dpc.to("pc").value * u.au
 
+        #Update beam factor for convolution
+        self.beam_conv_factor = self.beam_conv_factor_func(self.beam_area, self.beam_area_arcsecs)
+        
         #Overwrite values
         self.bmaj = bmaj_q
         self.bmin = bmin_q
@@ -766,7 +778,7 @@ class Intensity:
         int2d_full = self.line_uplow(int2d_near, int2d_far)
         
         if self.beam_kernel is not None:
-            int2d_full = self.beam_area*self.beam_convolve_func(np.nan_to_num(int2d_full), self.beam_kernel)
+            int2d_full = self.beam_conv_factor*self.beam_convolve_func(np.nan_to_num(int2d_full), self.beam_kernel)
 
         return int2d_full
 
@@ -806,7 +818,6 @@ class Intensity:
         
         cube = []
         noise = 0.0
-        #for _ in itertools.repeat(None, nchan):
         for vchan in vchannels:
             int2d_near, int2d_far = self.get_line_profile(vchan, vel2d, int2d, linew2d, lineb2d, **kwargs_line)
             int2d_full = self.line_uplow(int2d_near, int2d_far) 
@@ -818,9 +829,9 @@ class Intensity:
             if self.beam_kernel is not None:
                 if make_convolve:
                     int2d_full[np.isnan(int2d_full)] = noise
-                    int2d_full = self.beam_area*self.beam_convolve_func(int2d_full, self.beam_kernel)
+                    int2d_full = self.beam_conv_factor*self.beam_convolve_func(int2d_full, self.beam_kernel)
                 else:
-                    int2d_full *= self.beam_area
+                    int2d_full *= self.beam_conv_factor
                     int2d_full[~np.isfinite(int2d_full)] = noise
             else:
                 int2d_full[~np.isfinite(int2d_full)] = noise
@@ -1043,6 +1054,20 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         self.beam_area_arcsecs = datacube.beam_area_arcsecs
         self.beam_convolve_func = self._get_beam_convolve_func(convolve_func)
 
+        #Model output units after convolution
+        if self.header.get('BUNIT') in ['Jy/arcsec^2', 'Jy / arcsec^2' , 'arcsec-2 Jy', 'Jy arcsec-2']:
+            #Jy/pixel-->Jy/arcsec2
+            self.beam_conv_factor_func = _area_conv_jyarcsec
+        elif self.header.get('BUNIT') in ['Jy/pixel', 'Jy / pixel', 'pixel-1 Jy', 'Jy pixel-1']:
+            #Jy/pixel-->Jy/pixel
+            self.beam_conv_factor_func = _area_conv_jypixel
+        else: #Assume data header in Jy/beam
+            #Jy/pixel-->Jy/beam
+            self.beam_conv_factor_func = _area_conv_jybeam
+
+        self.beam_conv_factor = self.beam_conv_factor_func(self.beam_area, self.beam_area_arcsecs)
+        
+        #Default functional forms
         self.orientation_func = cart.orientation_constant
         self._z_upper_func = cart.z_upper_exp_tapered
         self._z_lower_func = cart.z_upper_exp_tapered
@@ -1055,7 +1080,8 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         self._compute_prop = _compute_prop_standard
         self._use_temperature = False
         self._use_full_channel = False
- 
+
+        #Gridding
         x_true, y_true = grid['x'], grid['y']
         self.x_true, self.y_true = x_true, y_true
         self.phi_true = grid['phi'] #From 0 to 2pi, old sf3d version: -pi, pi
@@ -1183,7 +1209,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             )
 
         return backend_dict[convolve_func]
-            
+    
     def plot_quick_attributes(self, R_in=10, R_out=300, surface='upper', fig_width=80, fig_height=25,
                               height=True, velocity=True, linewidth=True, peakintensity=True, **kwargs_plot):                              
         import termplotlib as tpl  # pip install termplotlib. Requires gnuplot: brew install gnuplot (for OSX users)
