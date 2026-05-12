@@ -164,7 +164,6 @@ class Cube(_JSON):
                 #self.beam_size = 1 * self.dpc.to('pc').value * u.au                 
                 self.beam_area_arcsecs = 1*1 
                 self.beam_area = self.beam_area_arcsecs / self.pix_size.to(u.arcsecond).value**2 #Area in pixels**2
-
                 self.bmaj = 1.0*u.arcsecond
                 self.bmin = 1.0*u.arcsecond
                 self.bpa = 0.0*u.deg
@@ -184,7 +183,7 @@ class Cube(_JSON):
                 
         else:
             raise InputError(self.beam, "beam must be either None or radio_beam.Beam object")
-        
+
     @staticmethod
     def _channel_picker(channels, warn_hdr=True):
         """

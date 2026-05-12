@@ -834,6 +834,7 @@ class Intensity:
                     int2d_full *= self.beam_conv_factor
                     int2d_full[~np.isfinite(int2d_full)] = noise
             else:
+                int2d_full *= self.beam_conv_factor #unit conversion
                 int2d_full[~np.isfinite(int2d_full)] = noise
                 
             cube.append(int2d_full)
