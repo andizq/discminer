@@ -31,7 +31,7 @@
 
 
 <img
-  src="images/discminer_outline.png"
+  src="https://raw.githubusercontent.com/andizq/andizq.github.io/refs/heads/master/discminer/discminer_outline.png"
   alt="Discminer workflow and capabilities"
   style="display: inline-block; margin: 0 auto; max-width: 500px">
 
