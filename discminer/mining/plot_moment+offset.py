@@ -44,7 +44,7 @@ Rout = best['intensity']['Rout']
 rings = custom['rings']
 gaps = custom['gaps']
 
-ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get_2d_plot_decorators(args.moment)
+ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get_2d_plot_decorators(args.moment, args=args)
     
 file_data = meta['file_data']
 tag = meta['tag']

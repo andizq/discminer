@@ -51,7 +51,7 @@ rings = custom['rings']
 gaps = custom['gaps']
 kinks = []
 
-ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get_2d_plot_decorators(args.moment)
+ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get_2d_plot_decorators(args.moment, args=args)
     
 #****************
 #SOME DEFINITIONS
@@ -103,6 +103,7 @@ indices = np.arange(len(R_au_flat))
 #MOMENT MAPS AND RADIAL PROFILE
 #*******************************
 moment_data, moment_model, residuals, mtags = load_moments(args, mask=mask)
+moment_veldata, moment_velmodel, residuals_vel, mtags_vel = load_moments(args, moment='velocity', mask=mask)
 
 R_prof = np.arange(args.Rinner*beam_au, args.Router*Rout, beam_au/4)
 R_vkep = np.append(np.linspace(0.1*R_prof[0], R_prof[0], 10), R_prof[1:])
@@ -139,8 +140,10 @@ def get_sky_intensity(phii):
     
     for n in range(datacube.nchan):
         intensity_along_ray[n] = map_coordinates(datacube.data[n], coords, order=1, mode='nearest')
-    
-    return intensity_along_ray.T    
+
+    velocity_along_ray = map_coordinates(moment_veldata, coords, order=1, mode='nearest') - vsys
+        
+    return intensity_along_ray.T, velocity_along_ray
 
 def get_vkep(Mstar=None):
 
@@ -170,12 +173,20 @@ ax[1].axis('off')
 
 ax_cbar0 = fig.add_axes([pos0.x0, 0.09, pos0.width, 0.04])
 
-intensity_interp_p = get_sky_intensity(pvphi)
-intensity_interp_n = get_sky_intensity(pvphi-np.pi)
-line_profiles = np.append(intensity_interp_n[::-1], intensity_interp_p, axis=0)
-
 R_axis = np.append(-R_prof[::-1], R_prof)
+
+intensity_interp_p, velocity_interp_p = get_sky_intensity(pvphi)
+intensity_interp_n, velocity_interp_n = get_sky_intensity(pvphi-np.pi)
+line_profiles = np.append(intensity_interp_n[::-1], intensity_interp_p, axis=0)
+velocity_profile = np.append(velocity_interp_n[::-1], velocity_interp_p, axis=0)
+
+#medvel = np.asarray([np.sum(line_profiles[i,:]*vchans_shifted)/np.sum(line_profiles[i,:]) for i in range(len(R_axis))])
+
+
 ax1.contourf(R_axis, vchans_shifted, line_profiles.T, levels=np.linspace(0, np.nanmax(line_profiles), 32), cmap=pvcmap)
+#ax1.plot(R_axis, velocity_profile, lw=2.5, color='tomato')
+ax1.plot(R_prof, velocity_interp_p, lw=2.5, color='tomato')
+ax1.plot(-R_prof[::-1], velocity_interp_n[::-1], lw=2.5, color='dodgerblue')
 
 ax1.fill_between([-R_prof[0], R_prof[0]], vchans_shifted[0], vchans_shifted[-1], color='k', alpha=0.4)
 
@@ -253,7 +264,7 @@ ax1.set_title(r'PV along $\phi=%d^\circ$'%args.pvphi, pad=20, fontsize=17, color
 ax1.set_xlabel('Offset [au]', color='0.3', fontsize=15)
 ax1.set_ylabel(r'$\upsilon_{\rm l.o.s}$ [km/s]', fontsize=16, color='0.3')
 ax1.yaxis.set_label_position("right")
-ax1.yaxis.set_major_formatter(FormatStrFormatter('%2d'))
+ax1.yaxis.set_major_formatter(FormatStrFormatter('%.4f'))#'%2d'))
 
 cbar0 = plt.colorbar(im, cax=ax_cbar0, format='%.1f', **kwargs_cbar)
 cbar0.ax.tick_params(labelsize=12) 

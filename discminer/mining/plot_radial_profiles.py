@@ -321,6 +321,8 @@ if args.moment=='velocity':
     velocity_upper = model.get_attribute_map(coords, 'velocity', surface=ref_surf) * vel_sign
     ax.plot(R_prof, velocity_upper, c='k', lw=2.5, ls='--', label=r'Keplerian (%.2f Msun)'%Mstar, zorder=13)
 
+    writetxt([R_prof, velocity_upper, np.zeros_like(R_prof)], tag='purekeplerian')
+    
     #DECORATIONS
     make_basic_layout(ax)
     ax.set_ylabel(r'Rotation velocity [km/s]', fontsize=MEDIUM_SIZE, labelpad=10)
