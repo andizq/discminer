@@ -93,14 +93,15 @@ def _mining_skewkurt(parserobj, prog='skewkurt', description='Make skewness and 
 
 def _mining_moment_residuals(parserobj, prog='moment+residuals', description='Show Data vs Model moment map and residuals'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
-    add_parser_args(parser, moment=True, kernel=True, kind=True, sigma=3, surface=True, smooth=True, mask_phi=True, mask_R=True, Router=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True)  
+    add_parser_args(parser, moment=True, kernel=True, channel_id=True, kind=True, sigma=3, surface=True, smooth=True, cmap_mom=True, vmin=True, vmax=True, cmap_res=True, clim=True,
+                    mask_phi=True, mask_R=True, Router=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True)  
     return parser
 
 def _mining_moment_offset(parserobj, prog='moment+offset', description='Show moment map and a zoom-in illustrating offset from the centre'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     parser.add_argument('-scontours', '--show_contours', default=1, type=int, help="Overlay moment map contours? DEFAULTS to 1.")
     parser.add_argument('-zoom', '--zoom_size', default=100, type=float, help="Physical size of the zoom-in region. DEFAULTS to 100 au.")
-    add_parser_args(parser, moment=True, kernel=True, kind=True, sigma=True, show_continuum='none', surface=True, smooth=True,
+    add_parser_args(parser, moment=True, kernel=True, channel_id=True, kind=True, sigma=True, show_continuum='none', surface=True, smooth=True, cmap_mom=True, vmin=True, vmax=True,
                     radius_planet=True, phi_planet=True, label_planet=True, input_coords=True)
     return parser
 
@@ -116,8 +117,8 @@ def _mining_residuals_deproj(parserobj, prog='residuals+deproj', description='Sh
     
     add_parser_args(
         parser,
-        moment=True, kernel=True, kind=True, sigma=3, surface=True, projection=True, Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True, smooth=True,
-        show_continuum=True, show_filaments=True, spiral_ids=True, spiral_type=True, spiral_moment=True, colorbar=True,
+        moment=True, kernel=True, channel_id=True, kind=True, sigma=3, surface=True, projection=True, Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True, smooth=True,
+        show_continuum=True, show_filaments=True, spiral_ids=True, spiral_type=True, spiral_moment=True, colorbar=True, cmap_res=True, clim=True,
         mask_R=True, mask_phi=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True
     )
     return parser
@@ -152,8 +153,8 @@ def _mining_pick(parserobj, prog='pick', description='Use Pick tools. Fold resid
     
     add_parser_args(
         parser,
-        moment=True, kernel=True, kind=True, surface=True, fold=True, fold_func=True, projection=True, Rinner=3.0, Router=0.9, absolute_Rinner=True, absolute_Router=True,
-        colorbar=True, smooth=True, mask_phi=True, mask_R=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True, writetxt=1, writefits=0
+        moment=True, kernel=True, channel_id=True, kind=True, surface=True, fold=True, fold_func=True, projection=True, Rinner=3.0, Router=0.9, absolute_Rinner=True, absolute_Router=True,
+        colorbar=True, smooth=True, cmap_res=True, clim=True, mask_phi=True, mask_R=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True, writetxt=1, writefits=0
     )
     return parser
 
@@ -165,7 +166,7 @@ def _mining_radial_profiles(parserobj, prog='radprof', description='Extract and 
                         help="Subtract model vphi or perfect Keplerian vphi? DEFAULTS to True (i.e. subtract model vphi).")
     parser.add_argument('-ig', '--interpgrid', default=0, type=int,
                         help="Use linear grid interpolation for radial/azimuthal profile extraction. DEFAULTS to False (i.e. use native grid).")
-    add_parser_args(parser, moment=True, kernel=True, kind=True, surface=True, writetxt=True, mask_minor=True, mask_major=True, mask_R=True, mask_phi=True,
+    add_parser_args(parser, moment=True, kernel=True, channel_id=True, kind=True, surface=True, writetxt=True, mask_minor=True, mask_major=True, mask_R=True, mask_phi=True,
                     Rinner=True, absolute_Rinner=True, Router=True, absolute_Router=True, sigma=True, smooth=True)
     return parser
 
@@ -175,7 +176,7 @@ def _mining_radial_profiles_wedge(parserobj, prog='radprof+wedge', description='
                         help="Azimuthal boundaries of the wedges where radial profiles will be extracted. USAGE: -wedges 30 40 -60 -40 means two wedges, with boundaries (30, 40) and (-60, -40) deg. DEFAULTS to -60, 0, 0, 60, 120,  180, -180, -120.")
     parser.add_argument('-sf', '--savgol_filter', default=0, type=int,
                         help="Apply a Savitzky-Golay filter to smooth out the plotted curves. DEFAULTS to False.")
-    add_parser_args(parser, moment=True, kernel=True, kind=True, surface=True, Rinner=True, absolute_Rinner=True, Router=True, absolute_Router=True, sigma=np.inf, smooth=True)
+    add_parser_args(parser, moment=True, kernel=True, channel_id=True, kind=True, surface=True, Rinner=True, absolute_Rinner=True, Router=True, absolute_Router=True, sigma=np.inf, smooth=True)
     return parser
 
 def _mining_azimuthal_profiles(parserobj, prog='azimprof', description='Extract and show azimuthal profiles from moment maps OR residuals'):
@@ -186,7 +187,7 @@ def _mining_azimuthal_profiles(parserobj, prog='azimprof', description='Extract 
                         help="Compute profiles on data, model or residual moment map. DEFAULTS to 'residuals'.")
     parser.add_argument('-ig', '--interpgrid', default=0, type=int,
                         help="Use linear grid interpolation for radial/azimuthal profile extraction. DEFAULTS to False (i.e. use native grid).")
-    add_parser_args(parser, moment=True, kernel=True, kind=True, surface=True, Rinner=True, Router=True, smooth=True, writetxt=True)
+    add_parser_args(parser, moment=True, kernel=True, channel_id=True, kind=True, surface=True, Rinner=True, Router=True, smooth=True, writetxt=True)
     return parser
 
 def _mining_spectra(parserobj, prog='spectra', description='Extract and show line profiles along a specific annulus, every 30 deg'):
@@ -198,18 +199,18 @@ def _mining_spectra(parserobj, prog='spectra', description='Extract and show lin
     parser.add_argument('-np', '--npix', default=0, type=int, help="Number of pixels around central pixel considered for line profile extraction. DEFAULS to 0.")
     parser.add_argument('-t', '--type', default='data', type=str, choices=['data', 'model'], help="Show line profiles from data or model? DEFAULTS to 'data'.")
     parser.add_argument('-scontours', '--show_contours', default=1, type=int, help="Overlay contours. DEFAULTS to 1.")    
-    add_parser_args(parser, moment='peakintensity', kernel=True, kind=True, smooth=True, planck=True)
+    add_parser_args(parser, moment='peakintensity', kernel=True, kind=True, smooth=True, planck=True, cmap_mom=True, vmin=True, vmax=True)
     return parser
 
 def _mining_mirror_spectra(parserobj, prog='mirrorspectra', description='Extract and show line profiles around a pixel and from the mirror location on the other side of the disc'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     parser.add_argument('-dpix', '--dpix', default=1, type=int, help="Number of pixels around the central one to get spectra. Defaults to 1, i.e. 3x3 window.")
-    parser.add_argument('-ch', '--channel_id', default=0, type=int, help="Id of intensity channel map to show. DEFAULTS to 0.")
     parser.add_argument('-u', '--units', default='K', type=str, choices=['K', 'Jy'],
                         help="Intensity units of the input cube; relevant for figure labels and scale. Defaults to 'K'.")
     add_parser_args(
         parser,
-        moment='peakintensity', kernel=True, surface=True, Rinner=True, Router=0.95, mask_R=True, mask_phi=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True
+        moment='peakintensity', channel_id=True, kernel=True, surface=True, Rinner=True, Router=0.95, cmap_mom=True, vmin=True, vmax=True,
+        mask_R=True, mask_phi=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True
     )
     return parser
 
@@ -237,8 +238,8 @@ def _mining_intensdistrib(parserobj, prog='intensdistrib', description='Extract 
     
     add_parser_args(
         parser,
-        sigma=4, moment='velocity', kernel=True, surface=True, projection=True, smooth=True,
-        Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True,
+        sigma=4, moment='velocity', kernel=True, channel_id=True, surface=True, projection=True, smooth=True,
+        Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True, cmap_mom=True, vmin=True, vmax=True,
         colorbar=True, mask_R=True, mask_phi=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True
     )
     return parser
@@ -267,8 +268,8 @@ def _mining_stack(parserobj, prog='stack', description='Azimuthally stack line p
     
     add_parser_args(
         parser,
-        sigma=4, moment='velocity', kernel=True, surface=True, projection=True, smooth=True,
-        Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True,
+        sigma=4, moment='velocity', kernel=True, channel_id=True, surface=True, projection=True, smooth=True,
+        Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True, cmap_res=True, clim=True,
         colorbar=True, mask_R=True, mask_phi=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True
     )
     return parser
@@ -280,18 +281,43 @@ def _mining_stackcube(parserobj, prog='stackcube', description='Make stacked cub
     add_parser_args(parser, surface=True, Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True)
     return parser
 
+def _mining_destackcube(parserobj, prog='destackcube', description='Undo stacked cube with lines shifted to their original centroid velocity'):
+    parser = _check_and_return_parser(parserobj, prog=prog, description=description)
+    parser.add_argument(
+        'stackcube',
+        type=str,
+        help='Input processed stacked cube to destack, with shape (nchan, ny, nx).',
+    )
+    parser.add_argument(
+        '-output', '--output',
+        default=None,
+        help='Output FITS filename. Default: destacked_<stackcube>.fits',
+    )
+    parser.add_argument(
+        '-refcube', '--refcube',
+        default=None,
+        help=(
+            'Reference unstacked cube that defines the output velocity grid and header. '
+            'DEFAULT: cube_data_<tag>_convtb.fits from parfile.json.'
+        ),
+    )
+    parser.add_argument('-keplerian', '--keplerian', default=0, type=int, help="Use pure Keplerian profile to stack the lines? DEFAULTS to 0.")
+    parser.add_argument('-binsperchan', '--binsperchan', default=1, type=float, help="Number of bins per channel width for spectral binning. DEFAULTS to 1.")    
+    add_parser_args(parser, surface=True, Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True)
+    return parser
+
 def _mining_channels_peakint(parserobj, prog='channels+peakint', description='Show Data vs Model channel maps, peak intensities, and residuals'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     parser.add_argument('-nc', '--nchans', default=5, type=int, help="Number of channels to plot")
     parser.add_argument('-st', '--step', default=4, type=int, help="Plot every #step channels")
-    add_parser_args(parser, sigma=3, moment='peakintensity', kernel=True, kind=True, surface=True, smooth=True, Rinner=True, Router=1.0)
+    add_parser_args(parser, sigma=3, moment='peakintensity', kernel=True, channel_id=True, kind=True, surface=True, smooth=True, cmap_mom=True, vmin=True, vmax=True, Rinner=True, Router=1.0)
     return parser
 
 def _mining_isovelocities(parserobj, prog='isovelocities', description='Show Data vs Model isovelocity contours'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     add_parser_args(
         parser,
-        moment=True, kernel=True, kind=True, surface=True, projection=True, Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True, smooth=True,
+        moment=True, kernel=True, channel_id=True, kind=True, surface=True, projection=True, Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True, smooth=True,
         show_continuum=True, show_filaments=True, spiral_ids=True, spiral_type=True, spiral_moment=True,
         mask_R=True, mask_phi=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True
     )
@@ -300,7 +326,7 @@ def _mining_isovelocities(parserobj, prog='isovelocities', description='Show Dat
 def _mining_pv_diagram(parserobj, prog='pv', description='Show PV diagram extracted along a specific axis'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     parser.add_argument('-pvphi', '--pvphi', default=0.0, type=float, help="Azimuth of the axis along which the PV diagram is to be extracted. DEFAULTS to 0 deg.")
-    add_parser_args(parser, moment='peakintensity', kernel=True, kind=True, surface=True, smooth=True, Rinner=True, Router=1)
+    add_parser_args(parser, moment='peakintensity', kernel=True, channel_id=True, kind=True, surface=True, smooth=True, cmap_mom=True, vmin=True, vmax=True, Rinner=True, Router=1)
     return parser
 
 def _mining_attributes(parserobj, prog='attributes', description='Show model attributes (z, v, I, Lw) as a function of radius'):
@@ -314,8 +340,8 @@ def _mining_gradient(parserobj, prog='gradient', description='Show peak, radial 
     parser.add_argument('-sleg', '--show_legend', default=0, type=int, help="Show markers legend. DEFAULTS to 0.")
     parser.add_argument('-fontsize', '--fontsize', default=MEDIUM_SIZE, type=int, help="Smallest font size in figure. DEFAULTS to %d."%MEDIUM_SIZE)
     parser.add_argument('-stitle', '--show_title', default=1, type=int, help="Show title at the top of the map? DEFAULTS to 1.")    
-    add_parser_args(parser, moment=True, kernel=True, kind=True, surface=True, Rinner=True, absolute_Rinner=True, Router=True, absolute_Router=True,
-                    gradient=True, smooth=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords='disc')
+    add_parser_args(parser, moment=True, kernel=True, channel_id=True, kind=True, surface=True, Rinner=True, absolute_Rinner=True, Router=True, absolute_Router=True,
+                    gradient=True, smooth=True, cmap_res=True, clim=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords='disc')
     return parser
 
 def _mining_parcube(parserobj, prog='parcube', description='Show cube reconstructed from fit parameters vs data cube'):
@@ -397,7 +423,8 @@ _mining_parser_func = {
     'skewkurt': _mining_skewkurt,
     'intensdistrib': _mining_intensdistrib,
     'stack': _mining_stack,
-    'stackcube': _mining_stackcube    
+    'stackcube': _mining_stackcube,
+    'destackcube': _mining_destackcube
 }
 
 scripts = {
@@ -425,7 +452,8 @@ scripts = {
     'skewkurt': 'make_skewkurt_moments.py',
     'intensdistrib': 'plot_intensity_distribution.py',
     'stack': 'plot_stack.py',
-    'stackcube': 'make_stackcube.py'    
+    'stackcube': 'make_stackcube.py',
+    'destackcube': 'make_destackcube.py'    
 }
 
 #<----------------------
@@ -459,7 +487,9 @@ def main():
         
 def add_parser_args(parser,
                     show_output=True, show_block=True,
-                    moment=False, kernel=False, surface=False, smooth=False,
+                    moment=False, kernel=False,
+                    channel_id=False, 
+                    surface=False, smooth=False,
                     Rinner=False, Router=False, absolute_Rinner=False, absolute_Router=False,
                     kind=False, projection=False,
                     planck=False, jansky=0,
@@ -470,6 +500,8 @@ def add_parser_args(parser,
                     writetxt=False, writefits=True,
                     gradient=False,
                     colorbar=False,
+                    cmap_mom=False, vmin=False, vmax=False,
+                    cmap_res=False, clim=False, 
                     show_continuum=False, show_filaments=False,
                     spiral_ids=False, spiral_type=False, spiral_moment=False,
                     filament_ids=False, filament_moment=False,
@@ -481,13 +513,33 @@ def add_parser_args(parser,
             return default
         else:
             return val
+
+    ALLOWED_MOMENTS = ['velocity', 'linewidth', 'lineslope', 'peakint', 'peakintensity', 'v0r', 'v0phi', 'v0z', 'vr_leftover', 'delta_velocity', 'delta_meanvelocity', 'delta_medianvelocity', 'delta_linewidth', 'delta_peakintensity', 'reducedchi2', 'skewness', 'kurtosis', 'skewkurt', 'bluewidth', 'redwidth', 'bluered', 'continuum']
+
+    def choices_or_fits(value):
+        if value in ALLOWED_MOMENTS:
+            return value
         
+        if value.lower().endswith('.fits'):
+            return value
+        
+        choices_str = ", ".join(f"'{c}'" for c in sorted(ALLOWED_MOMENTS))
+        raise argparse.ArgumentTypeError(
+            f"invalid choice: '{value}' (choose from {choices_str} or provide a '.fits' file)"
+        )
+
+    display_moments = f"{{{','.join(sorted(ALLOWED_MOMENTS))}, *.fits}}"
+
     if moment is not False:
         d0 = set_default(moment, 'velocity')
-        parser.add_argument('-m', '--moment', default=d0, type=str,
-                            choices=['velocity', 'linewidth', 'lineslope', 'peakint', 'peakintensity', 'v0r', 'v0phi', 'v0z', 'vr_leftover', 'delta_velocity', 'delta_meanvelocity', 'delta_medianvelocity', 'delta_linewidth', 'delta_peakintensity', 'reducedchi2', 'skewness', 'kurtosis', 'skewkurt', 'bluewidth', 'redwidth', 'bluered', 'continuum'],
-                            help="Type of moment map to be analysed. DEFAULTS to '%s'."%d0)
+        parser.add_argument('-m', '--moment', default=d0, type=choices_or_fits,
+                            metavar=display_moments,
+                            help="Type of moment map to analyse. DEFAULTS to '%s'."%d0)
 
+    if channel_id is not False:
+        d0 = set_default(channel_id, '')
+        parser.add_argument('-ch', '--channel_id', default=0, type=int, help="Index of the channel map to show. DEFAULTS to 0.")
+    
     if kernel is not False:
         d0 = set_default(kernel, 'gaussian')
         parser.add_argument('-k', '--kernel', default=d0, type=str,
@@ -620,6 +672,31 @@ def add_parser_args(parser,
     if colorbar is not False:
         d0 = set_default(colorbar, 1)
         parser.add_argument('-cbar', '--colorbar', default=d0, type=int, help="Show colorbar. DEFAULTS to %d."%d0)        
+
+    if cmap_mom is not False:
+        d0 = set_default(cmap_mom, None)
+        parser.add_argument('-cmap_mom', '--cmap_mom', default=d0, type=str,
+                            help=f"Colormap for the moment map plot. DEFAULTS to {d0} (use Discminer default).")
+        
+    if vmin is not False:
+        d0 = set_default(vmin, None)
+        parser.add_argument('-vmin', '--vmin', default=d0, type=float,
+                            help=f"Minimum colorbar limit for the moment map plot. DEFAULTS to {d0} (infer from parfile.json).")
+
+    if vmax is not False:
+        d0 = set_default(vmax, None)
+        parser.add_argument('-vmax', '--vmax', default=d0, type=float,
+                            help=f"Maximum colorbar limit for the moment map plot. DEFAULTS to {d0} (infer from parfile.json).")
+
+    if cmap_res is not False:
+        d0 = set_default(cmap_res, None)
+        parser.add_argument('-cmap_res', '--cmap_res', default=d0, type=str,
+                            help=f"Colormap for the residuals plot. DEFAULTS to {d0} (use Discminer default).")
+        
+    if clim is not False:
+        d0 = set_default(clim, None)
+        parser.add_argument('-clim', '--clim', default=d0, type=float,
+                            help=f"Min/Max colorbar limit for the residuals plot. DEFAULTS to {d0} (infer from parfile.json).")
         
     if smooth is not False:
         d0 = set_default(smooth, 0.0)
