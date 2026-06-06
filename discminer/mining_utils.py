@@ -174,8 +174,8 @@ def init_data_and_model(parfile='parfile.json', Rmin=0, Rmax=1.1, twodim=False, 
         #****************
         model.params = copy.copy(best)
 
-        if datacube.beam is not None:
-            model.params['intensity']['I0'] /= meta['downsamp_factor']
+        #if datacube.beam is not None:
+        model.params['intensity']['I0'] /= meta['downsamp_factor']
 
         return datacube, model
 
@@ -235,7 +235,7 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         levels_im = np.linspace(0.0, L_res2abs*fclim, 64)
         levels_cc = np.linspace(0.2, 0.8, 4)
         
-    if moment in ['continuum']:
+    elif moment in ['continuum']:
         clim = custom['Ilim']
         fclim = float(clim)
         clabel = r'Peak Intensity %s'%unit
@@ -244,7 +244,7 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         levels_im = np.linspace(0.0, I_res2abs*fclim, 64)
         levels_cc = np.linspace(10, 50, 5)
     
-    if moment in ['skewness', 'kurtosis', 'skewkurt']:
+    elif moment in ['skewness', 'kurtosis', 'skewkurt']:
         clim = custom['Ilim']
         fclim = float(clim)
         unit = ''
@@ -255,7 +255,7 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         levels_im = np.linspace(0.2*fclim, fclim, 64)
         levels_cc = np.linspace(0.2*fclim, fclim, 4)
         
-    if moment in ['delta_velocity', 'delta_meanvelocity', 'delta_medianvelocity']:
+    elif moment in ['delta_velocity', 'delta_meanvelocity', 'delta_medianvelocity']:
         clim = custom['vlim']
         fclim = float(clim)*1000
         unit = '[m s$^{-1}$]'
@@ -266,7 +266,7 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         levels_im = np.linspace(0.2*fclim, fclim, 64)
         levels_cc = np.linspace(0.2*fclim, fclim, 4)
 
-    if moment=='delta_linewidth':
+    elif moment=='delta_linewidth':
         clim = custom['Llim']
         fclim = float(clim)*1000
         unit = '[m s$^{-1}$]'
@@ -277,7 +277,7 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         levels_im = np.linspace(0.0, fclim, 64)
         levels_cc = np.linspace(0.2*fclim, fclim, 4)
 
-    if moment=='delta_peakintensity':
+    elif moment=='delta_peakintensity':
         clim = custom['Ilim']
         fclim = float(clim)
         clabel = r'$\Delta$ Peak Intensity %s'%unit
@@ -286,7 +286,7 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         levels_im = np.linspace(0.0, fclim, 64)
         levels_cc = np.linspace(0.2*fclim, fclim, 4)
         
-    if moment=='reducedchi2':
+    elif moment=='reducedchi2':
         clim = custom['Ilim']
         fclim = float(clim)
         unit = '[R-Chi2]'
@@ -297,7 +297,7 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         levels_im = np.linspace(0.0, fclim, 64)
         levels_cc = np.linspace(0.2*fclim, fclim, 4)
         
-    if moment in ['velocity', 'v0phi', 'v0r', 'v0z', 'vr_leftover', 'meanvelocity', 'medianvelocity']:
+    elif moment in ['velocity', 'v0phi', 'v0r', 'v0z', 'vr_leftover', 'meanvelocity', 'medianvelocity']:
         clim = custom['vlim']
         fclim = float(clim)        
         unit = '[km s$^{-1}$]'
@@ -307,7 +307,7 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         levels_im = np.linspace(-v_res2abs*fclim, v_res2abs*fclim, 64)+vsys
         levels_cc = np.linspace(-2, 2, 9)+vsys
     
-    if moment=='linewidth':
+    elif moment=='linewidth':
         clim = custom['Llim']
         fclim = float(clim)
         unit = '[km s$^{-1}$]'
@@ -318,17 +318,17 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         levels_im = np.linspace(0.0, L_res2abs*fclim, 64)
         levels_cc = np.linspace(0.2, 0.8, 4)
 
-    if moment=='lineslope':
+    elif moment=='lineslope':
         clim = custom['Lslim']
         fclim = float(clim)        
         unit = ''
         clabel = r'Line slope'
         cmap_mom = get_discminer_cmap('linewidth')
         cmap_res = get_discminer_cmap('linewidth', kind='residuals')
-        levels_im = np.linspace(0.0, Ls_res2abs*fclim, 48)
+        levels_im = np.linspace(0.0, Ls_res2abs*fclim, 64)
         levels_cc = np.linspace(1.0, Ls_res2abs*fclim, 5)
     
-    if moment in ['peakintensity', 'peakint']:
+    elif moment in ['peakintensity', 'peakint']:
         clim = custom['Ilim']
         fclim = float(clim)
         clabel = r'Peak Intensity %s'%unit
@@ -337,6 +337,55 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         levels_im = np.linspace(0.0, I_res2abs*fclim, 64)
         levels_cc = np.linspace(10, 50, 5)
 
+    else:
+        clim = custom['Ilim']
+        fclim = float(clim)
+        unit = ''
+        clabel = r''
+        cmap_mom = matplotlib.pyplot.get_cmap('magma')
+        cmap_res = get_discminer_cmap('delta', kind='residuals')
+        levels_im = np.linspace(0.0, I_res2abs*fclim, 64)
+        levels_cc = np.linspace(0.1*fclim, 0.9*I_res2abs*fclim, 5)
+
+    #Try reading colormap and colorbar limits from CLI
+    try:
+        if args.cmap_mom is not None:
+            cmap_mom = matplotlib.pyplot.get_cmap(args.cmap_mom)
+    except AttributeError: 
+        pass
+
+    try:
+        if args.cmap_res is not None:
+            cmap_res = matplotlib.pyplot.get_cmap(args.cmap_res)
+    except AttributeError: 
+        pass
+            
+    try: #clim for residuals
+        clim = args.clim
+        fclim = float(clim)
+    except (AttributeError, TypeError): #Not passed or None 
+        pass
+
+    try: #clim for absolute quantities
+        vmin = float(args.vmin)
+    except (AttributeError, TypeError):
+        vmin = None
+        
+    try:
+        vmax = float(args.vmax)
+    except (AttributeError, TypeError):
+        vmax = None
+
+    if vmax is not None and vmin is None:
+        vmin = 0.0
+    if vmin is not None and vmax is None:
+        vmax = 0.0
+
+    if vmax is not None and vmin is not None:
+        levels_im = np.linspace(vmin, vmax, 64)
+        levels_cc = np.linspace(vmin, vmax, 5)
+
+    #Colorbar tick formatting
     sp_dec = str(clim).split('.')
     nsign = 0
     if fmt_vertical:
@@ -388,14 +437,14 @@ def get_1d_plot_decorators(moment, parfile='parfile.json', tag='', args=None):
         clabel = r'%s %s'%(moment, unit)
         clabel_res = r'%s residuals %s'%(moment, unit)
     
-    if moment in ['continuum']:
+    elif moment in ['continuum']:
         clim0_res = -custom['Ilim']
         clim1_res = custom['Ilim']
         clim0, clim1 = 0.0, I_res2abs*clim1_res
         clabel = r'Cont. Intensity %s%s'%(tag, unit)
         clabel_res = r'Cont. Int. residuals %s'%unit    
     
-    if moment in ['skewness', 'kurtosis', 'skewkurt']:
+    elif moment in ['skewness', 'kurtosis', 'skewkurt']:
         clim0_res = -custom['Ilim']
         clim1_res = custom['Ilim']
         clim0, clim1 = I_res2abs*clim0_res, I_res2abs*clim1_res
@@ -403,14 +452,14 @@ def get_1d_plot_decorators(moment, parfile='parfile.json', tag='', args=None):
         clabel = r'%s'%moment
         clabel_res = r'%s residuals'%moment
         
-    if moment in ['delta_velocity', 'delta_meanvelocity', 'delta_medianvelocity']:
+    elif moment in ['delta_velocity', 'delta_meanvelocity', 'delta_medianvelocity']:
         unit = '[km/s]'
         clim0_res = -custom['vlim']
         clim1_res = custom['vlim']    
         clim0, clim1 = 0.0, v_res2abs*clim1_res
         clabel = clabel_res = None #Modified within each script
 
-    if moment=='delta_linewidth':
+    elif moment=='delta_linewidth':
         clim0_res = -custom['Llim']
         clim1_res = custom['Llim']
         clim0, clim1 = 0, L_res2abs*clim1_res
@@ -418,14 +467,14 @@ def get_1d_plot_decorators(moment, parfile='parfile.json', tag='', args=None):
         clabel = r'$\Delta$ Line width %s%s'%(tag, unit)
         clabel_res = r'$\Delta$ L. width residuals %s'%unit    
 
-    if moment=='delta_peakintensity':
+    elif moment=='delta_peakintensity':
         clim0_res = -custom['Ilim']
         clim1_res = custom['Ilim']
         clim0, clim1 = 0.0, I_res2abs*clim1_res
         clabel = r'$\Delta$ Peak Intensity %s%s'%(tag, unit)
         clabel_res = r'\Delta$ Peak Int. residuals %s'%unit    
         
-    if moment=='reducedchi2':
+    elif moment=='reducedchi2':
         clim0_res = -custom['Ilim']
         clim1_res = custom['Ilim']
         clim0, clim1 = 0.0, I_res2abs*clim1_res
@@ -433,14 +482,14 @@ def get_1d_plot_decorators(moment, parfile='parfile.json', tag='', args=None):
         clabel = r'Reduced $X^2$'
         clabel_res = r'Reduced $X^2$ residuals'
     
-    if moment in ['velocity', 'v0phi', 'v0r', 'v0z', 'vr_leftover', 'meanvelocity', 'medianvelocity']:
+    elif moment in ['velocity', 'v0phi', 'v0r', 'v0z', 'vr_leftover', 'meanvelocity', 'medianvelocity']:
         unit = '[km/s]' #'[km s$^{-1}$]'
         clim0_res = -custom['vlim']
         clim1_res = custom['vlim']    
         clim0, clim1 = 0.0, v_res2abs*clim1_res + vsys
         clabel = clabel_res = None #Modified within each script
         
-    if moment=='linewidth':
+    elif moment=='linewidth':
         clim0_res = -custom['Llim']
         clim1_res = custom['Llim']
         clim0, clim1 = 0, L_res2abs*clim1_res
@@ -448,7 +497,7 @@ def get_1d_plot_decorators(moment, parfile='parfile.json', tag='', args=None):
         clabel = r'Line width %s%s'%(tag, unit)
         clabel_res = r'L. width residuals %s'%unit    
 
-    if moment=='lineslope':
+    elif moment=='lineslope':
         clim0_res = -custom['Lslim']
         clim1_res = custom['Lslim']
         clim0, clim1 = 0, Ls_res2abs*clim1_res
@@ -456,13 +505,21 @@ def get_1d_plot_decorators(moment, parfile='parfile.json', tag='', args=None):
         clabel = r'Line slope'
         clabel_res = r'L. slope residuals'
         
-    if moment in ['peakintensity', 'peakint']:
+    elif moment in ['peakintensity', 'peakint']:
         clim0_res = -custom['Ilim']
         clim1_res = custom['Ilim']
         clim0, clim1 = 0.0, I_res2abs*clim1_res
         clabel = r'Peak Intensity %s%s'%(tag, unit)
         clabel_res = r'Peak Int. residuals %s'%unit    
-    
+
+    else:
+        clim0_res = -custom['Ilim']
+        clim1_res = custom['Ilim']
+        clim0, clim1 = 0.0, clim1_res
+        clabel = r'External'
+        clabel_res = r'External residuals'
+        
+        
     return clabel, clabel_res, clim0, clim0_res, clim1, clim1_res, unit
 
 def _get_mask_tuples(lims, consecutive=False):
@@ -641,8 +698,22 @@ def load_moments(
         dir_model = './'
         
     #Read and mask moment maps, and compute residuals
-    moment_data = fits.getdata(os.path.join(dir_data, tag_base+'_data.fits')).squeeze()
-    moment_model = fits.getdata(os.path.join(dir_model, tag_base+'_model.fits')).squeeze()
+    if '.fits' in moment: #input map from .fits file
+        moment_data = fits.getdata(os.path.join(dir_data, moment)).squeeze()
+        try:
+            moment_model_ext = os.path.join(dir_data, moment).replace('data', 'model')
+            moment_model = fits.getdata(moment_model_ext).squeeze()
+        except FileNotFoundError:
+            moment_model = np.zeros_like(moment_data)
+
+        if len(moment_data.shape)>2:
+            moment_data = moment_data[args.channel_id]
+            moment_model = moment_model[args.channel_id]
+
+        tag_base = moment.replace('.fits', '_ch%d'%args.channel_id)
+    else: #standard moments
+        moment_data = fits.getdata(os.path.join(dir_data, tag_base+'_data.fits')).squeeze()
+        moment_model = fits.getdata(os.path.join(dir_model, tag_base+'_model.fits')).squeeze()
 
     try:
         if args.smooth>0.0:
@@ -892,7 +963,7 @@ def mark_planet_location(ax, args, r=[], phi=[], labels=[], coords='disc', proje
             ysky = rsky*np.cos(PAsky)
             
             if coords=='disc':
-                xdisc, ydisc = GridTools.get_disc_from_sky_coords(xsky, ysky, zfunc, zpars, incl, PA, xc=xc, yc=yc) 
+                xdisc, ydisc = GridTools.get_disc_from_sky_coords(xsky, ysky, zfunc, zpars, incl, PA, xc=xc, yc=yc) #midplane=False here: assuming xsky,ysky are projected onto the disc surface before transforming them to disc frame coordinates; midplane=True would assume xsky,ysky are on a flat disc
                 
                 if projection=='cartesian':
                     xi, yi = xdisc, ydisc
