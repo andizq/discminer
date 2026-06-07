@@ -14,7 +14,7 @@ Available examples
 
 .. list-table::
    :header-rows: 1
-   :widths: 25 55 20
+   :widths: 25 75
 
    * - Folder
      - Description
