@@ -357,6 +357,7 @@ def _mining_parfile(parserobj, prog='parfile', description='Make JSON parameter 
     parser.add_argument('-f', '--log_file', default='', type=str, help="If empty, try to guess input log_pars.txt with existing files. DEFAULTS to empty.")
     parser.add_argument('-p', '--prepare_data', default='prepare_data.py', type=str, help="Script employed to clip and downsample the cube of interest. DEFAULTS to prepare_data.py.")
     parser.add_argument('-j', '--json_file', default='parfile.json', type=str, help="Name of output JSON file. DEFAULTS to parfile.json.")
+    parser.add_argument('-fd', '--file_data', default='', type=str, help="If empty, try to guess the input datacube.fits from prepara_data.py. DEFAULTS to empty.")    
     parser.add_argument('-o', '--overwrite', default=0, type=int, help="overwrite if parfile.json exists. DEFAULTS to 0.")
     parser.add_argument('-r', '--reset', default=0, type=int,
                         help="If (1) AND --overwrite, rewrite parfile.json. If (0) AND --overwrite, forward 'custom' dictionary, and rewrite metadata and model parameters only. DEFAULTS to 0.")
@@ -364,9 +365,9 @@ def _mining_parfile(parserobj, prog='parfile', description='Make JSON parameter 
     add_parser_args(parser)
     return parser
 
-def _mining_prepare(parserobj, prog='prepare', description='Generate prepare_data.py + preview of suggested spatial and spectral clipping'):
+def _mining_prepare(parserobj, prog='prepare', description='Generate prepare_data.py + preview of suggested spatial and spectral clipping (Beta)'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
-    parser.add_argument("-f", "--file_data", required=True, help="Base path to the datacube") #Required
+    parser.add_argument("-fd", "--file_data", required=True, help="Base path to the datacube") #Required
     parser.add_argument("-dpc", "--dpc", type=float, required=True, help="Distance in parsecs") #Required
 
     parser.add_argument("-p", "--prepare_data", default="prepare_data.py", help="Output prepare_data file name.")
@@ -399,11 +400,11 @@ def _mining_prepare(parserobj, prog='prepare', description='Generate prepare_dat
     
 
 _mining_parser_func = {
-    'prepare': _mining_prepare,        
     'parfile': _mining_parfile,    
     'channels': _mining_channels,
     'moments1d': _mining_moments1d,
     'moments2d': _mining_moments2d,
+    'prepare': _mining_prepare,            
     'parcube': _mining_parcube,
     'channels+peakint': _mining_channels_peakint,    
     'attributes': _mining_attributes,
@@ -428,11 +429,11 @@ _mining_parser_func = {
 }
 
 scripts = {
-    'prepare': 'make_prepare_data.py',    
     'parfile': 'make_parfile.py',
     'channels': 'make_channels.py',
     'moments1d': 'make_single_moments.py',
     'moments2d': 'make_double_moments.py',
+    'prepare': 'make_prepare_data.py',        
     'parcube': 'show_parcube.py',        
     'channels+peakint': 'plot_channels+peakint.py',    
     'attributes': 'plot_attributes_model.py',

@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from astropy import units as u
 
+import warnings
 import json
 import copy
 import sys
@@ -75,6 +76,10 @@ if args.make_beam==-1:
 else:
     modelcube = model.make_model(make_convolve=True*args.make_beam)     
 
+if datacube.header['BUNIT']=='K': 
+    modelcube.header['BUNIT']='Jy/beam'
+    warnings.warn('The model cube is assumed in Jy/beam, despite the input data cube being in units of K.', Warning)
+    
 if args.writefits:
     modelcube.filename = 'cube_model_%s.fits'%tag
     modelcube.writefits() #Jy/bm

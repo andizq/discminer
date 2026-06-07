@@ -210,6 +210,9 @@ def get_tags_dict(log_file):
         file_data += '_downsamp_%dpix'%pro
     file_data += '.fits'
 
+    if args.file_data != '':
+        file_data = args.file_data
+        
     return dict(dir_data=args.dir_data, dir_model=args.dir_model, file_data=os.path.join(args.dir_data, file_data), prepare_script=pfile, log_file=log_file, tag=tag_full, disc=tag_disc, mol=tag_mol, dpc=dpc, dv=tag_dv, program=tag_program, kind=tag_kind.tolist(), nwalkers=int(tag_walkers), nsteps=int(tag_steps), downsamp_pro=int(pro), downsamp_fit=int(fit), downsamp_factor=(fit/pro)**2, v_discminer=__version__)
 
 
