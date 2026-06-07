@@ -57,8 +57,8 @@ moltex = {
     'c2h': r'C$_{\rm 2}$H'
 }
 
-warnings.filterwarnings("ignore", category=UserWarning)
-warnings.filterwarnings("ignore", category=RuntimeWarning)
+#warnings.filterwarnings("ignore", category=UserWarning)
+#warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 def init_data_and_model(parfile='parfile.json', Rmin=0, Rmax=1.1, twodim=False, init_model=True, write_extent=True, verbose=True, subpixels=0):
     #Rmin: If dimensionless, fraction of beam_size

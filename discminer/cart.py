@@ -6,6 +6,11 @@ from scipy.interpolate import interp1d, RectBivariateSpline
 from .grid import GridTools
 from .tools.utils import hypot_func
 
+import warnings
+
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
 au_to_m = u.au.to('m')
 
 #*******************

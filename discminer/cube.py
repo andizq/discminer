@@ -26,6 +26,7 @@ from matplotlib.widgets import Button, Cursor, Slider, RectangleSelector, TextBo
 from collections.abc import Iterable
 import numpy as np
 import copy
+import sys
 import os
 import warnings
 from packaging.version import Version
@@ -167,7 +168,7 @@ class Cube(_JSON):
                 self.bmaj = 1.0*u.arcsecond
                 self.bmin = 1.0*u.arcsecond
                 self.bpa = 0.0*u.deg
-                warnings.warn("No beam information was found. Setting resolution element area to 1x1 arcsecond**2, assuming Jy/arcsec^2 intensity units...")
+                warnings.warn("No beam information was found. Setting resolution element area to 1x1 arcsecond**2, assuming Jy/arcsec^2 intensity units...", Warning)
                 
             else: #Assume pixel size for reference resolution element, even if 'BUNIT'=='K'
                 self.beam_kernel = None
@@ -179,7 +180,7 @@ class Cube(_JSON):
                 self.bmaj = self.pix_size.to(u.arcsecond)
                 self.bmin = self.pix_size.to(u.arcsecond)
                 self.bpa = 0.0*u.deg
-                warnings.warn('No beam information was found. Setting resolution element area to 1x1 pixel**2 (in arcsecond**2), convenient for cubes in Jy/pixel or K intensity units...')
+                warnings.warn('No beam information was found. Setting resolution element area to 1x1 pixel**2 (in arcsecond**2), convenient for cubes in Jy/pixel or K intensity units...', Warning)
                 
         else:
             raise InputError(self.beam, "beam must be either None or radio_beam.Beam object")
@@ -210,9 +211,8 @@ class Cube(_JSON):
             idchan = np.arange(i0, i1 + 1).astype(int)
         elif channels["indices"] is not None:
             idchan = np.asarray(channels["indices"]).astype(int)
-            if warn_hdr: warnings.warn(
-                    "Note that if you select channels that are not regularly spaced the header of the output fits file will not reflect this information and therefore external analysis tools such as CASA or DS9 will not display the velocity information correctly.",
-            )
+            if warn_hdr:
+                warnings.warn("If the selected channels are not regularly spaced, the header of the output FITS file will not reflect this. External analysis tools such as CASA or DS9 may not display the velocity information correctly.", Warning)
         else:
             idchan = slice(None)
 
@@ -293,7 +293,11 @@ class Cube(_JSON):
             elif self.header.get('BUNIT') in ['Jy/pixel', 'Jy / pixel', 'pixel-1 Jy', 'Jy pixel-1']:
                 solid_angle = (self.pix_size**2).to(u.sr).value
             elif self.header.get('BUNIT') in ['K']:
-                sys.exit("Stopping execution: Cube already in K units...")
+                warnings.warn("Skipping convert_to_tb: Input Cube already in K units...", Warning)
+                self.wcs = WCS(self.header)
+                if writefits:
+                    self.writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)                
+                return 0
             else:
                 sys.exit("Stopping execution: Unable to convert input cube units to K...")
 

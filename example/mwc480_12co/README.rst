@@ -223,15 +223,14 @@ localized perturbations and radial trends.
    :align: center
 	   
 .. image:: png/residuals_deproj_velocity_gaussian_polar.png
-   :width: 40 %
+   :width: 80 %
    :align: center	   
  
 
 Extract radial profiles
 -----------------------
 
-Azimuthally averaged radial profiles can be extracted from the fitted moments
-and from their residuals. For example:
+Azimuthally averaged radial profiles can be extracted from the fitted moments and from their residuals. For example:
 
 .. code-block:: bash
 
@@ -239,8 +238,12 @@ and from their residuals. For example:
    discminer radprof -m peakint
    discminer radprof -m linewidth
 
-These profiles are useful for quantifying deviations from Keplerian rotation (**dvphi**), as well as
-radial (**vr**) and vertical (**vz**) velocity flows, and the radial structure of the line emission.
+Averages derived from the data alone provide access to the rotation curve
+(from the velocity map) and the temperature profile (from the optically thick
+peak intensity map). In comparison with the model, the residual profiles are
+useful for quantifying deviations from Keplerian rotation (**dvphi**), as well
+as radial (**vr**) and vertical (**vz**) gas flows, and for characterizing
+radial substructures in the line emission.
 
 .. image:: png/rotation_curve_velocity_gaussian.png
    :width: 80 %
@@ -265,7 +268,7 @@ radial (**vr**) and vertical (**vz**) velocity flows, and the radial structure o
 
      discminer radprof -m velocity -w 1
      
-Details on the physical interpretation of the substructures identified in this and other discs from the MAPS sample can be found in Izquierdo et al. (2023)_.
+Details on the physical interpretation of the substructures identified in this and other discs from the MAPS sample can be found in `Izquierdo et al. (2023)`_.
 
 .. _Izquierdo et al. (2023): https://ui.adsabs.harvard.edu/abs/arXiv:2304.03607
 
