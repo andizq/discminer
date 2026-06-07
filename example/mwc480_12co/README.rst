@@ -55,7 +55,7 @@ residuals in both sky/disc coordinates and radial profiles.
 Extended Guide
 ==============
 
-The example uses optically thick 12CO emission from MWC 480. The adopted
+This guide uses optically thick 12CO emission from MWC 480. The adopted
 ``discminer`` model is intentionally smooth and axisymmetric. Therefore,
 structured residuals between the data and the model highlight kinematic deviations
 from the adopted Keplerian rotation, but also velocity and line-profile perturbations
@@ -71,8 +71,7 @@ From inside this folder, run:
 
    bash download_MAPS.sh
 
-This downloads the MAPS MWC 480 12CO J=2-1 FITS cube used by the example. The
-script downloads the file:
+The script downloads the file:
 
 .. code-block:: text
 
@@ -81,8 +80,6 @@ script downloads the file:
 Prepare the datacube
 --------------------
 
-Then run:
-
 .. code-block:: bash
 
    python prepare_data.py
@@ -90,13 +87,13 @@ Then run:
 The preparation script reads the original cube assuming a distance of 162 pc,
 clips it spatially, and produces two downsampled versions:
 
-* a moderately downsampled cube for quick prototyping (this example);
+* a moderately downsampled cube for quick prototyping (used in this example);
 * a more strongly downsampled cube used by the MCMC fitting script.
 
 Create the Discminer parameter file
 -----------------------------------
 
-The command-line analysis tools require a JSON parameter file generated from
+The ``discminer`` analysis tools require a JSON parameter file generated from
 the available ``log_pars.txt`` file and the local ``prepare_data.py`` script.
 From inside this folder, run:
 
@@ -110,7 +107,7 @@ If multiple files are available, the desired ones can be selected explicitly:
 
 .. code-block:: bash
 
-   discminer parfile -o 1 -f log_file_n.txt -p prepare_data_n.py
+   discminer parfile -o 1 -f log_file2.txt -p prepare_data2.py
 
 Inspect model attributes (Optional)
 -----------------------------------
@@ -121,7 +118,7 @@ The radial dependence of the best-fit model attributes can be visualized with:
 
    discminer attributes
 
-This is useful for quickly inspecting the emitting surfaces and **unconvolved** rotation curve,
+This is useful for a quick inspection of the emitting surfaces and **unconvolved** rotation curve,
 peak intensity and linewidth profiles of the best-fit model.
 
 .. image:: png/model_attributes.png
@@ -131,13 +128,13 @@ peak intensity and linewidth profiles of the best-fit model.
 Generate model channel maps
 ---------------------------
 
-Generate and inspect the model channel maps with:
+Next, generate and inspect the model channel maps with:
 
 .. code-block:: bash
 
    discminer channels
 
-This is usually the first command to run after ``discminer parfile``, since several subsequent diagnostics depend on the model cube and residuals. These are the channel map residuals obtained for MWC480:
+This is usually the first command to run after ``discminer parfile``, since several subsequent diagnostics depend on the model cube and residuals. Here is a view of the channel map residuals obtained for MWC480:
 
 .. image:: png/channel_maps_residuals.png
    :width: 80%
@@ -214,19 +211,19 @@ localized perturbations and radial trends.
    :align: center
 
 .. image:: png/residuals_deproj_peakintensity_gaussian_cartesian.png
-   :width: 60 %
+   :width: 40 %
    :align: center
 	   
 .. image:: png/residuals_deproj_linewidth_gaussian_cartesian.png
-   :width: 60 %
+   :width: 40 %
    :align: center
 	   
 .. image:: png/residuals_deproj_velocity_gaussian_cartesian.png
-   :width: 60 %
+   :width: 40 %
    :align: center
 	   
 .. image:: png/residuals_deproj_velocity_gaussian_polar.png
-   :width: 80 %
+   :width: 40 %
    :align: center	   
  
 
@@ -261,12 +258,14 @@ radial (**vr**) and vertical (**vz**) velocity flows, and the radial structure o
    :width: 80%
    :align: center
 
-	   
-- **TIP**: The ``writetxt`` argument, activated through the ``-w 1`` flag in the command line, is particularly useful for producing .txt outputs of radial profiles for further analysis.
-  
+
+- **TIP:** The ``writetxt`` option, enabled with the ``-w 1`` flag, is particularly useful for exporting radial profiles to plain-text files for further analysis.
+
   .. code-block:: bash
 
-	discminer radprof -m velocity -w 1
-		
-Details on the physical interpretation of the substructures identified in this and other discs of the MAPS sample can be found in the work of Izquierdo et al. (2023).
-	   
+     discminer radprof -m velocity -w 1
+     
+Details on the physical interpretation of the substructures identified in this and other discs from the MAPS sample can be found in Izquierdo et al. (2023)_.
+
+.. _Izquierdo et al. (2023): https://ui.adsabs.harvard.edu/abs/arXiv:2304.03607
+
