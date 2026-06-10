@@ -53,11 +53,11 @@ modelcube = Data(file_model, dpc) # Read model and convert to Cube object
 #**********************
 #Use model priors + kernel
 if args.fit_data:
-    moments_data = datacube.make_moments(model=model, method=args.kernel, kind=args.kind, sigma_thres=args.sigma, niter=args.niter, neighs=args.neighs,
+    moments_data = datacube.make_moments(model=model, method=args.kernel, kind=args.kind, sigma_thres=args.sigma, niter=args.niter, neighs=args.neighs, ncpus=args.ncpus,
                                          writecomp=True, parcube=True, tag='_data')
 
 if args.fit_model:
-    moments_model = modelcube.make_moments(model=model, method=args.kernel, kind=args.kind, sigma_thres=0, niter=args.niter, neighs=args.neighs,
+    moments_model = modelcube.make_moments(model=model, method=args.kernel, kind=args.kind, sigma_thres=0, niter=args.niter, neighs=args.neighs, ncpus=args.ncpus,
                                            writecomp=True, parcube=True, tag='_model')
 
 #*********************************

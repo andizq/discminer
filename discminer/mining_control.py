@@ -71,6 +71,8 @@ def _mining_moments2d(parserobj, prog='moments2d', description='Make (double Gau
                         help="Number of iterations to re-do fit on hot pixels. DEFAULS to 10.")
     parser.add_argument('-ne', '--neighs', default=5, type=int,
                         help="Number of neighbour pixels on each side of hot pixel considered for the iterative fit. DEFAULS to 5.")
+    parser.add_argument('-ncpus', '--ncpus', default=None, type=int,
+                        help="Number of CPUs to run the initial fit. DEFAULTS to None (use all available cores).")    
     parser.add_argument('-fdata', '--fit_data', default=1, type=int,
                         help="Fit datacube and save moments into .fits files? DEFAULTS to 1.")
     parser.add_argument('-fmodel', '--fit_model', default=1, type=int,
@@ -254,7 +256,6 @@ def _mining_stack(parserobj, prog='stack', description='Azimuthally stack line p
     parser.add_argument('-wedges', '--wedges', nargs='*', default=[], type=float, minimum=-180, maximum=180, action=Range,
                         help="If provided, perform stacking within the specified wedges. Define as many as there are annuli. If empty, the full azimuth is used for all annuli. USAGE: -wedges 30 40 -60 -40 defines two wedges with boundaries (30, 40) and (-60, -40) deg. DEFAULTS to [].")
 
-
     parser.add_argument('-keplerian', '--keplerian', default=0, type=int, help="Use pure Keplerian profile to stack the lines? DEFAULTS to 0.")
     parser.add_argument('-stat', '--stat', default='nanmedian', type=str, help="Statistic used to stack the line profiles (e.g. median, mean, max, nanmedian). DEFAULTS to 'nanmedian'")
     parser.add_argument('-vlim', '--vlim', default=4.1, type=float, help="Velocity xlim in km/s. DEFAULTS to 4.1.")
@@ -276,7 +277,7 @@ def _mining_stack(parserobj, prog='stack', description='Azimuthally stack line p
 
 def _mining_stackcube(parserobj, prog='stackcube', description='Make stacked cube with lines shifted to their centroid velocity'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
-    parser.add_argument('-keplerian', '--keplerian', default=0, type=int, help="Use pure Keplerian profile to stack the lines? DEFAULTS to 0.")
+    parser.add_argument('-keplerian', '--keplerian', default=0, type=int, choices=[0,1,2], help="Use data rotation curve (0), pure Keplerian (1), or discminer model Keplerian (2) profile to stack the lines. DEFAULTS to 0.")    
     parser.add_argument('-binsperchan', '--binsperchan', default=1, type=float, help="Number of bins per channel width for spectral binning. DEFAULTS to 1.")    
     add_parser_args(parser, surface=True, Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True)
     return parser
@@ -301,7 +302,7 @@ def _mining_destackcube(parserobj, prog='destackcube', description='Undo stacked
             'DEFAULT: cube_data_<tag>_convtb.fits from parfile.json.'
         ),
     )
-    parser.add_argument('-keplerian', '--keplerian', default=0, type=int, help="Use pure Keplerian profile to stack the lines? DEFAULTS to 0.")
+    parser.add_argument('-keplerian', '--keplerian', default=0, type=int, choices=[0,1,2], help="Use data rotation curve (0), pure Keplerian (1), or discminer model Keplerian (2) profile to destack the lines. DEFAULTS to 0.")        
     parser.add_argument('-binsperchan', '--binsperchan', default=1, type=float, help="Number of bins per channel width for spectral binning. DEFAULTS to 1.")    
     add_parser_args(parser, surface=True, Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True)
     return parser

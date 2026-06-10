@@ -104,7 +104,7 @@ def get_channels_from_parcube(parcube_up, parcube_low, vchannels, method='double
 def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
                      method='doublegaussian', kind='mask', sigma_thres=5,
                      sigma_fit=None, mask=None, planck=False,
-                     niter=4, neighs=5, av_func=np.nanmedian,
+                     niter=4, neighs=5, ncpus=None, av_func=np.nanmedian,
                      mask_radially=True
 ):
 
@@ -337,7 +337,7 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
     
     def parallel_processing(data, mask, n_pars=8):
 
-        with Pool(ncpus=None) as pool:
+        with Pool(ncpus=ncpus) as pool:
             results = list(tqdm(pool.imap(
                 lambda i: process_xi(i, data[:,i,:], mask[i,:], n_pars=n_pars),
                 range(nx)
@@ -527,7 +527,7 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
         #FIT ONE COMPONENT FUNCTION TO REMAINING HOT PIXELS
         #***************************************************
         m, n = np.where(n_fit==-1)
-
+        #r"""
         for k in range(len(m)):
             i, j = m[k], n[k]                                
             tmp_data = data[:,i,j]
@@ -549,7 +549,7 @@ def fit_twocomponent(cube, model=None, lw_chans=1.0, lower2upper=1.0,
                 continue
 
             fill_props_ij(i,j,coeff,deltas)
-
+        #"""
     n_hot = clean_nfit()
     print ('Resulting hot pixels after fitting 1D component:', n_hot)
     
@@ -1076,7 +1076,7 @@ def fit_gaussian(*args, **kwargs): #Backcompat
     return fit_onecomponent(*args, **kwargs)
 
 def fit_onecomponent(
-        cube, method='gaussian', lw_chans=1.0, peak_kernel=True, sigma_fit=None, sigma_thres=4, fit_continuum=False
+        cube, method='gaussian', lw_chans=1.0, peak_kernel=True, sigma_fit=None, sigma_thres=4, fit_continuum=False, 
 ):
     """
     Fit 'gaussian' or 'bell' profiles along the velocity axis of the input cube.
