@@ -164,9 +164,14 @@ vcenters = 0.5*(bins[:-1] + bins[1:])
 #GET VPHI CENTROID
 zupi = model.z_upper_func({'R': R_s*au_to_m}, **best['height_upper'])
 
-if args.keplerian:
+if args.keplerian==1:
     vphii_data = vphii_model = model.velocity_func({'R': R_s*au_to_m, 'z': zupi}, **best['velocity'])
-else:
+elif args.keplerian==2: #Use intensity-biased discminer Keplerian model for both data and model
+    vphi_interp_data = get_vphi_interp(vphi_modelfile)
+    vphi_interp_model = get_vphi_interp(vphi_modelfile)    
+    vphii_data = vel_sign * vphi_interp_data(R_s)
+    vphii_model = vel_sign * vphi_interp_model(R_s)        
+else: #Use data curve for data, model curve for model
     vphi_interp_data = get_vphi_interp(vphi_datafile)
     vphi_interp_model = get_vphi_interp(vphi_modelfile)    
     vphii_data = vel_sign * vphi_interp_data(R_s)

@@ -161,10 +161,16 @@ phi_s = np.degrees(phi[args.surface])
 #**********************************
 zupi = model.z_upper_func({'R': R_s * au_to_m}, **best['height_upper'])
 
-if args.keplerian:
+vphi_datafile = 'radial_profile_velocity_data.dat'
+vphi_modelfile = 'radial_profile_velocity_model.dat'
+
+if args.keplerian==1:
     vphii_data = model.velocity_func({'R': R_s * au_to_m, 'z': zupi}, **best['velocity'])
-else:
-    vphi_interp_data = get_vphi_interp('radial_profile_velocity_data.dat')
+elif args.keplerian==2: #Use intensity-biased discminer Keplerian model to destack data
+    vphi_interp_data = get_vphi_interp(vphi_modelfile)
+    vphii_data = vel_sign * vphi_interp_data(R_s)    
+else: #Use data curve
+    vphi_interp_data = get_vphi_interp(vphi_datafile)
     vphii_data = vel_sign * vphi_interp_data(R_s)
 
 vcenti_data = vsys + vphii_data * np.sin(incl) * np.cos(np.radians(phi_s))

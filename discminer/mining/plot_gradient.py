@@ -229,7 +229,7 @@ for axi in ax:
     make_substructures(axi, gaps=gaps, rings=rings, twodim=True, polar=True, label_rings=label_rings, kwargs_gaps=kc, kwargs_rings=kc)
 
 kwargs_planet = dict(edgecolors='k', facecolors='none', lw=3.5) 
-mark_planet_location(ax[-1], args, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc, s=550, **kwargs_planet)    
+mark_planet_location(ax[-1], args, coords='disc', projection='polar', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc, s=550, **kwargs_planet)    
 
 if args.show_title:
     ax[0].set_title(ctitle, fontsize=args.fontsize+1, color='k')
