@@ -11,17 +11,6 @@ from astropy import units as u
 from radio_beam import Beam
 
 import copy
-
-func_defaults = {
-    'velocity_func': keplerian_vertical,
-    'z_upper_func': z_upper_exp_tapered,
-    'z_lower_func': z_lower_exp_tapered,
-    'intensity_func': intensity_powerlaw_rout,
-    'linewidth_func': linewidth_powerlaw,
-    'lineslope_func': lineslope_powerlaw,
-    'line_profile': line_profile_bell,
-    'line_uplow': line_uplow_mask
-}
                     
 class ReferenceModel(Cube):
     def __init__(
@@ -69,6 +58,7 @@ class ReferenceModel(Cube):
             'intensity' : intensity_powerlaw_rout,
             'linewidth' : linewidth_powerlaw,
             'lineslope' : lineslope_powerlaw,
+            'orientation': orientation_constant,            
             'line_profile' : line_profile_bell,
             'line_uplow' : line_uplow_mask,                        
         }
@@ -199,6 +189,7 @@ class ReferenceModel(Cube):
         model.intensity_func = self.funcs['intensity']
         model.linewidth_func = self.funcs['linewidth']
         model.lineslope_func = self.funcs['lineslope']
+        model.orientation_func = self.funcs['orientation']
         model.line_profile = self.funcs['line_profile']
         model.line_uplow = self.funcs['line_uplow']
 
