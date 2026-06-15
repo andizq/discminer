@@ -979,9 +979,10 @@ class Mcmc:
                       quantiles=quantiles, show_titles=True)
     
     def ln_likelihood(self, new_params, **kwargs):
+
         for i in range(self.mc_nparams):
             if not (self.mc_boundaries_list[i][0] < new_params[i] < self.mc_boundaries_list[i][1]):
-                return -np.inf
+                return -np.inf            
             #Update all parameter destinations, including the shared ones
             for (k, p) in self.mc_share_map[i]:
                 self.params[k][p] = new_params[i]
@@ -1309,6 +1310,12 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         self.mc_header, self.mc_kind, self.mc_nparams, self.mc_boundaries_list, self.mc_params_indices, self.mc_share_map = Model._get_params2fit(self.mc_params, self.mc_boundaries)
         self.params = copy.deepcopy(self.mc_params)
 
+        for src_i, targets in self.mc_share_map.items():
+            src_key, src_par = targets[0]
+            src_val = self.params[src_key][src_par]
+            for dst_key, dst_par in targets[1:]:
+                self.params[dst_key][dst_par] = src_val
+        
         if isinstance(p0_mean, (list, tuple, np.ndarray)): 
             if len(p0_mean) != self.mc_nparams: raise InputError(p0_mean, 'Length of input p0_mean must be equal to the number of parameters to fit: %d'%self.mc_nparams)
             else: pass
