@@ -121,7 +121,7 @@ elif args.surface in ['low', 'lower']:
 #**************
 if args.moment in ['velocity', 'v0phi', 'v0r', 'v0z', 'vr_leftover', 'linewidth']:
     unit = 'm/s'
-    ufac = u.Unit('km/s').to(unit)
+    ufac = u.Unit('km/s').to(unit) #1e3
     dfmt = '%4d'
 elif args.moment=='peakintensity':
     unit = 'K'
@@ -143,11 +143,16 @@ clabels = {
     'peakintensity': r'$\Delta$ Peak Int. [K]'
 }
 
-clabel_ = clabels[args.moment].split(' [')
-clabel_unit = unit #clabel_[1].split(']')[0]
-clabel_prop = clabel_[0]#.split('$')[-1]
-cu = (clabel_prop, clabel_unit)
-
+try:
+    clabelfromkey = clabels[args.moment]
+    clabel_ = clabelfromkey.split(' [')
+    clabel_unit = unit #clabel_[1].split(']')[0]
+    clabel_prop = clabel_[0]#.split('$')[-1]
+    cu = (clabel_prop, clabel_unit)
+except KeyError:
+    clabelfromkey = 'custom'
+    cu = ('custom', 'u')
+    
 clabels_grad = {
     'r': r'$\delta/\delta R$ (%s) [%s/au]'%cu,
     #'phi': r'$\delta/R\delta \phi$ (%s) [%s/au]'%cu,
@@ -193,7 +198,7 @@ _, _, cbar = make_polar_map(ufac*residuals, ufac*levels_resid,
                             R[args.surface]*u.m, phi[args.surface]*u.rad, Rout_plt,
                             fig=fig, ax=ax[-1],
                             Rin=Rin_plt, gradient=0,
-                            cmap=cmap_res, fmt='%4d', clabel=clabels[args.moment], **kwargs_fontsize)
+                            cmap=cmap_res, fmt='%4d', clabel=clabelfromkey, **kwargs_fontsize)
 
 
 if args.moment in ['velocity', 'linewidth']:

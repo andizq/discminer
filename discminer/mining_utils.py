@@ -343,7 +343,7 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         unit = ''
         clabel = r''
         cmap_mom = matplotlib.pyplot.get_cmap('magma')
-        cmap_res = get_discminer_cmap('delta', kind='residuals')
+        cmap_res = get_discminer_cmap('velocity', kind='residuals')
         levels_im = np.linspace(0.0, I_res2abs*fclim, 64)
         levels_cc = np.linspace(0.1*fclim, 0.9*I_res2abs*fclim, 5)
 
@@ -516,8 +516,9 @@ def get_1d_plot_decorators(moment, parfile='parfile.json', tag='', args=None):
         clim0_res = -custom['Ilim']
         clim1_res = custom['Ilim']
         clim0, clim1 = 0.0, clim1_res
-        clabel = r'External'
-        clabel_res = r'External residuals'
+        unit = ''
+        clabel = r'Custom moment'
+        clabel_res = r'Custom residuals'
         
         
     return clabel, clabel_res, clim0, clim0_res, clim1, clim1_res, unit
