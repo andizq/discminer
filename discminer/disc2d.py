@@ -881,21 +881,38 @@ class Mcmc:
         kind = []
         params_indices = {}
         boundaries_list = []
+        share_map = {}
         check_param2fit = lambda val: val and isinstance(val, bool)
+
+        #1st pass: collect fitted parameters (bool True)
         i = 0
         for key in mc_params:
-            if isinstance(mc_params[key], dict):
-                params_indices[key] = {}
-                for key2 in mc_params[key]: 
-                    if check_param2fit(mc_params[key][key2]):
-                        header.append(key2)
-                        kind.append(key)
-                        boundaries_list.append(boundaries[key][key2])
-                        params_indices[key][key2] = i
-                        i+=1
-            else: raise InputError(mc_params, 'Wrong input parameters. Base keys in mc_params must be categories; parameters of a category must be within a dictionary as well.')
+            if not isinstance(mc_params[key], dict):
+                raise InputError(mc_params, 'Base keys in mc_params must be categories; parameters of a category must be within a dictionary.')
+            params_indices[key] = {}
+            for key2 in mc_params[key]: 
+                if check_param2fit(mc_params[key][key2]):
+                    header.append(key2)
+                    kind.append(key)
+                    boundaries_list.append(boundaries[key][key2])
+                    params_indices[key][key2] = i
+                    share_map[i] = [(key, key2)] #initialise with all (attribute, param) tuples
+                    i+=1
 
-        return header, kind, len(header), boundaries_list, params_indices
+        #2nd pass: resolve shared parameters
+        for key in mc_params: #e.g. 'linewidth' (sharing 'Rout' with intensity)
+            for key2, val in mc_params[key].items(): #i.e. 'Rout', ('share', 'intensity', 'Rout')
+                if isinstance(val, tuple) and len(val) == 3 and val[0] == 'share':
+                    src_kind, src_par = val[1], val[2] #i.e. ('intensity', 'Rout')
+                    if src_kind not in params_indices or src_par not in params_indices[src_kind]:
+                        raise InputError(val, f"Shared param {key}.{key2} refers to unknown fitted {src_kind}.{src_par}")
+                    src_i = params_indices[src_kind][src_par]
+                    #make this parameter point to the same index
+                    params_indices[key][key2] = src_i
+                    #register extra destination to be updated when sampling src_i
+                    share_map[src_i].append((key, key2)) #i.e. this entry now stores [('intensity', 'Rout'), ('linewidth', 'Rout')]
+        
+        return header, kind, len(header), boundaries_list, params_indices, share_map
     
     @staticmethod
     def plot_walkers(samples, best_params, nstats=None, header=None, kind=None, tag=''):
@@ -963,8 +980,11 @@ class Mcmc:
     
     def ln_likelihood(self, new_params, **kwargs):
         for i in range(self.mc_nparams):
-            if not (self.mc_boundaries_list[i][0] < new_params[i] < self.mc_boundaries_list[i][1]): return -np.inf
-            else: self.params[self.mc_kind[i]][self.mc_header[i]] = new_params[i]
+            if not (self.mc_boundaries_list[i][0] < new_params[i] < self.mc_boundaries_list[i][1]):
+                return -np.inf
+            #Update all parameter destinations, including the shared ones
+            for (k, p) in self.mc_share_map[i]:
+                self.params[k][p] = new_params[i]
             
         vel2d, int2d, linew2d, lineb2d = self.make_model(**kwargs)
 
@@ -1190,7 +1210,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             for key in self.categories: self.params[key] = {}
             print ('Available categories for prototyping:', self.params.keys())            
         else: 
-            self.mc_header, self.mc_kind, self.mc_nparams, self.mc_boundaries_list, self.mc_params_indices = Model._get_params2fit(self.mc_params, self.mc_boundaries)
+            self.mc_header, self.mc_kind, self.mc_nparams, self.mc_boundaries_list, self.mc_params_indices, self.mc_share_map = Model._get_params2fit(self.mc_params, self.mc_boundaries)
             #print ('Default parameter header for mcmc fitting:', self.mc_header)
             #print ('Default parameters to fit and fixed parameters:', self.mc_params)
 
@@ -1285,7 +1305,8 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         kwargs_model.update({'z_mirror': z_mirror})
         if z_mirror: 
             for key in self.mc_params['height_lower']: self.mc_params['height_lower'][key] = 'height_upper_mirror'
-        self.mc_header, self.mc_kind, self.mc_nparams, self.mc_boundaries_list, self.mc_params_indices = Model._get_params2fit(self.mc_params, self.mc_boundaries)
+            
+        self.mc_header, self.mc_kind, self.mc_nparams, self.mc_boundaries_list, self.mc_params_indices, self.mc_share_map = Model._get_params2fit(self.mc_params, self.mc_boundaries)
         self.params = copy.deepcopy(self.mc_params)
 
         if isinstance(p0_mean, (list, tuple, np.ndarray)): 
