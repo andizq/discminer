@@ -1310,6 +1310,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         self.mc_header, self.mc_kind, self.mc_nparams, self.mc_boundaries_list, self.mc_params_indices, self.mc_share_map = Model._get_params2fit(self.mc_params, self.mc_boundaries)
         self.params = copy.deepcopy(self.mc_params)
 
+        #distribute unique and shared parameter values across all parameter keys
         for src_i, targets in self.mc_share_map.items():
             src_key, src_par = targets[0]
             src_val = self.params[src_key][src_par]
@@ -1462,6 +1463,22 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                 errneg[attribute][par] = float(val[2])        
                 errpos[attribute][par] = float(val[3])    
 
+            # Propagate sampled/shared values to all shared destinations
+            for src_i, targets in self.mc_share_map.items():
+    
+                src_key, src_par = targets[0]
+
+                src_p0 = p0pars[src_key][src_par]
+                src_best = params[src_key][src_par]
+                src_errneg = errneg[src_key][src_par]
+                src_errpos = errpos[src_key][src_par]
+                
+                for dst_key, dst_par in targets[1:]:
+                    p0pars[dst_key][dst_par] = src_p0
+                    params[dst_key][dst_par] = src_best
+                    errneg[dst_key][dst_par] = src_errneg
+                    errpos[dst_key][dst_par] = src_errpos
+        
             allheader = []
             allp0 = []
             allpars = []
