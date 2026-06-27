@@ -702,8 +702,11 @@ def load_moments(
     if '.fits' in moment: #input map from .fits file
         moment_data = fits.getdata(os.path.join(dir_data, moment)).squeeze()
         try:
-            moment_model_ext = os.path.join(dir_data, moment).replace('data', 'model')
-            moment_model = fits.getdata(moment_model_ext).squeeze()
+            if 'data' in moment:
+                moment_model_ext = os.path.join(dir_data, moment).replace('data', 'model')
+                moment_model = fits.getdata(moment_model_ext).squeeze()
+            else:
+                moment_model = np.zeros_like(moment_data)
         except FileNotFoundError:
             moment_model = np.zeros_like(moment_data)
 

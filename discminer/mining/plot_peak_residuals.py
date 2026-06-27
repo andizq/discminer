@@ -1,4 +1,4 @@
-from discminer.mining_control import _mining_pick
+from discminer.mining_control import _mining_pick, _adjust_args
 from discminer.mining_utils import (init_data_and_model,
                                     get_noise_mask,
                                     get_2d_plot_decorators,
@@ -38,6 +38,7 @@ use_discminer_style()
 if __name__ == '__main__':
     parser = _mining_pick(None)
     args = parser.parse_args()
+    _adjust_args(args)
 
 #**********************
 #JSON AND PARSER STUFF
@@ -156,6 +157,7 @@ pick = Pick(model, residuals, R_prof, fold=True, fold_func=args.fold_func, color
 xf, yf, folded_orig, folded_map = pick.make_2d_map(return_coords=True) #Map where peaks will be picked from
         
 figh, axh = plt.subplots(ncols=1, nrows=1, figsize=(9,6))    
+
 pick.find_peaks(clean_thres=args.clean_thres, phi_min=args.phimin, phi_max=args.phimax, fig_ax_histogram=(figh, axh), clean_histogram=True)
 figh.savefig('histogram_peak_residuals_%s.png'%mtags['base'], bbox_inches='tight', dpi=200)
 
@@ -164,6 +166,7 @@ color = pick.color_list
 peak_resid = pick.peak_resid
 peak_angle = pick.peak_angle
 npeaks = len(peak_resid)
+
 
 model.make_emission_surface(ax_c)
 model.make_disc_axes(ax_c)
@@ -221,7 +224,6 @@ append_sigma_panel(fig, ax, peak_resid, weights=pick.peak_weight, hist=True, lin
 fig.savefig('peak_residuals_%s.png'%mtags['base'], bbox_inches='tight', dpi=200)
 #plt.show()
 plt.close()
-
 
 #*************
 #FIND CLUSTERS
