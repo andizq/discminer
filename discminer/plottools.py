@@ -577,7 +577,7 @@ def make_round_map(
     kwargs_cf = dict(cmap=cmap_c, levels=levels, extend='both')
     kwargs_cf.update(kwargs_contourf)
     
-    kwargs_cc = dict(colors='k', levels=levels, linewidths=0.7)
+    kwargs_cc = dict(colors='k', levels=levels, linewidths=0.7, linestyles='-')
     kwargs_cc.update(kwargs_contour)
     
     #SOME DEFINITIONS

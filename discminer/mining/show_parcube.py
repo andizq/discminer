@@ -33,9 +33,13 @@ Ilim = custom['Ilim']
 au_to_m = u.au.to('m')
 dpc = meta['dpc']*u.pc
 
-datacube = Data(file_data, dpc)
-datacube.convert_to_tb(writefits=False)
+if args.type=='data':
+    filein = 'cube_data_%s_convtb.fits'%tag
+elif args.type=='model':
+    filein = 'cube_model_%s_convtb.fits'%tag
 
+datacube = Data(filein, dpc)
+#datacube.convert_to_tb(writefits=False)
 vchannels = datacube.vchannels
 
 with open('grid_extent.json') as json_file:
@@ -53,9 +57,9 @@ if args.kernel in ['gaussian', 'bell']:
 else:
     parcube_up, parcube_low = None, None
     if args.surface in ['upper', 'both']:
-        parcube_up = fits.getdata('parcube_up_%s_%s_data.fits'%(args.kernel, args.kind))
+        parcube_up = fits.getdata('parcube_up_%s_%s_%s.fits'%(args.kernel, args.kind, args.type))
     if args.surface in ['lower', 'both']:        
-        parcube_low = fits.getdata('parcube_low_%s_%s_data.fits'%(args.kernel, args.kind))
+        parcube_low = fits.getdata('parcube_low_%s_%s_%s.fits'%(args.kernel, args.kind, args.type))
 
 fitdata = fit_kernel.get_channels_from_parcube(parcube_up, parcube_low, vchannels, method=args.kernel, kind=args.kind, n_fit=None)
 fitcube = Cube(fitdata, datacube.header, vchannels, dpc, beam=datacube.beam)
