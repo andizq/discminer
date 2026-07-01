@@ -107,6 +107,16 @@ def _mining_moment_offset(parserobj, prog='moment+offset', description='Show mom
                     radius_planet=True, phi_planet=True, label_planet=True, input_coords=True)
     return parser
 
+def _mining_canvas_3d(parserobj, prog='canvas3d', description='Display moment or residual map in a 3D canvas'):
+    parser = _check_and_return_parser(parserobj, prog=prog, description=description)
+    parser.add_argument('-t', '--type', default='residuals', type=str,
+                        choices=['data', 'model', 'residuals'],
+                        help="Visualise main observables in 3D. DEFAULTS to 'residuals'")
+    parser.add_argument('-d', '--density', default=1, type=int,
+                        help="Total points shown: ntot/args.density. DEFAULTS to 1")
+    add_parser_args(parser, moment=True, kernel=True, channel_id=True, kind=True, surface=True, smooth=True, cmap_mom=True, cmap_res=True)
+    return parser
+
 def _mining_residuals_deproj(parserobj, prog='residuals+deproj', description='Show residuals from a moment map, deprojected onto the disc reference frame'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     parser.add_argument('-fontsize', '--fontsize', default=MEDIUM_SIZE, type=int, help="Smallest font size in figure. DEFAULTS to %d."%MEDIUM_SIZE)
@@ -122,6 +132,21 @@ def _mining_residuals_deproj(parserobj, prog='residuals+deproj', description='Sh
         moment=True, kernel=True, channel_id=True, kind=True, sigma=3, surface=True, projection=True, Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True, smooth=True,
         show_continuum=True, show_filaments=True, spiral_ids=True, spiral_type=True, spiral_moment=True, colorbar=True, cmap_res=True, clim=True,
         mask_R=True, mask_phi=True, radius_planet=True, phi_planet=True, label_planet=True, input_coords=True
+    )
+    return parser
+
+def _mining_residuals_filaments(parserobj, prog='residuals+filaments', description='Show residuals from a moment map, and extract filamentary structures with FilFinder'):
+    parser = _check_and_return_parser(parserobj, prog=prog, description=description)
+    parser.add_argument('-longpath', '--longpath', default=0, type=int, help="Use longpath skeleton of filaments. DEFAULTS to 0.")
+    parser.add_argument('-mw', '--make_filwidth', default=1, type=int, help="Extract filaments width? DEFAULTS to 1.")
+    parser.add_argument('-wobj', '--writeobj', default=1, type=int, help="Write filament properties into file? DEFAULTS to 1.")
+    
+    add_parser_args(
+        parser,
+        moment=True, kernel=True, channel_id=True, kind=True, sigma=3, surface=True, projection=True,
+        Rinner=1, Router=True, smooth=True, mask_R=True, mask_phi=True,
+        spiral_ids=True, spiral_type=True, spiral_moment=True, 
+        radius_planet=True, phi_planet=True, label_planet=True, input_coords=True
     )
     return parser
 
@@ -347,6 +372,8 @@ def _mining_gradient(parserobj, prog='gradient', description='Show peak, radial 
 
 def _mining_parcube(parserobj, prog='parcube', description='Show cube reconstructed from fit parameters vs data cube'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
+    parser.add_argument('-t', '--type', default='data', type=str, choices=['data', 'model'],
+                        help="Show 'data' or 'model' reconstructed cube. DEFAULTS to 'data'.")    
     add_parser_args(parser, kernel=True, kind=True, surface='both')
     return parser
 
@@ -416,8 +443,10 @@ _mining_parser_func = {
     'mirrorspectra': _mining_mirror_spectra,        
     'moment+residuals': _mining_moment_residuals,
     'moment+offset': _mining_moment_offset,
+    'canvas3d': _mining_canvas_3d,
     'residuals+deproj': _mining_residuals_deproj,
     'residuals+all': _mining_residuals_all,
+    'residuals+filaments': _mining_residuals_filaments,
     'pick': _mining_pick,
     'gradient': _mining_gradient,
     'isovelocities': _mining_isovelocities,
@@ -445,8 +474,10 @@ scripts = {
     'mirrorspectra': 'plot_mirror_spectra.py',        
     'moment+residuals': 'plot_moment+residuals.py',
     'moment+offset': 'plot_moment+offset.py',
+    'canvas3d': 'plot_canvas_3d.py',
     'residuals+deproj': 'plot_residuals+deproj.py',
     'residuals+all': 'plot_residuals+all.py',
+    'residuals+filaments': 'plot_residuals+filaments.py',    
     'pick': 'plot_peak_residuals.py',
     'gradient': 'plot_gradient.py',
     'isovelocities': 'plot_isovelocities.py',
