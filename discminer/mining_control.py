@@ -135,7 +135,7 @@ def _mining_residuals_deproj(parserobj, prog='residuals+deproj', description='Sh
     )
     return parser
 
-def _mining_residuals_filaments(parserobj, prog='residuals+filaments', description='Show residuals from a moment map, and extract filamentary structures with FilFinder'):
+def _mining_residuals_filaments(parserobj, prog='filaments', description='Extract filamentary structures from moment map residuals with FilFinder'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     parser.add_argument('-longpath', '--longpath', default=0, type=int, help="Use longpath skeleton of filaments. DEFAULTS to 0.")
     parser.add_argument('-mw', '--make_filwidth', default=1, type=int, help="Extract filaments width? DEFAULTS to 1.")
@@ -147,6 +147,23 @@ def _mining_residuals_filaments(parserobj, prog='residuals+filaments', descripti
         Rinner=1, Router=True, smooth=True, mask_R=True, mask_phi=True,
         spiral_ids=True, spiral_type=True, spiral_moment=True, 
         radius_planet=True, phi_planet=True, label_planet=True, input_coords=True
+    )
+    return parser
+
+def _mining_filaments_vz(parserobj, prog='filaments+vz', description='Examine filament velocity structure assuming vertical motions and overlay azimuthally averaged vz'):
+    parser = _check_and_return_parser(parserobj, prog=prog, description=description)
+    parser.add_argument('-longpath', '--longpath', default=0, type=int, help="Use longpath skeleton of filaments. DEFAULTS to 0.")
+    parser.add_argument('-t', '--type', default='residuals', type=str, choices=['data', 'model', 'residuals'],
+                        help="Compute profiles on data, model or residual moment map. DEFAULTS to 'residuals'")
+    parser.add_argument('-fontsize', '--fontsize', default=15, type=int, help="Smallest font size in figure. DEFAULTS to 15.")
+    parser.add_argument('-snsky', '--show_nsky', default=1, type=int, help="Overlay Nsky axis on round map? DEFAULTS to 1.")
+    parser.add_argument('-sxaxis', '--show_xaxis', default=0, type=int, help="Show reference xaxis below round map? DEFAULTS to 1.")
+
+    add_parser_args(
+        parser,
+        moment=True, kernel=True, channel_id=True, kind=True, sigma=3, surface=True,
+        Rinner=1, Router=True, smooth=True, mask_R=True, mask_phi=True,
+        show_filaments=True, filament_ids=True, filament_moment=True
     )
     return parser
 
@@ -446,10 +463,11 @@ _mining_parser_func = {
     'canvas3d': _mining_canvas_3d,
     'residuals+deproj': _mining_residuals_deproj,
     'residuals+all': _mining_residuals_all,
-    'residuals+filaments': _mining_residuals_filaments,
     'pick': _mining_pick,
     'gradient': _mining_gradient,
     'isovelocities': _mining_isovelocities,
+    'filaments': _mining_residuals_filaments,
+    'filaments+vz': _mining_filaments_vz,    
     'pv': _mining_pv_diagram,
     'skewkurt': _mining_skewkurt,
     'intensdistrib': _mining_intensdistrib,
@@ -477,10 +495,11 @@ scripts = {
     'canvas3d': 'plot_canvas_3d.py',
     'residuals+deproj': 'plot_residuals+deproj.py',
     'residuals+all': 'plot_residuals+all.py',
-    'residuals+filaments': 'plot_residuals+filaments.py',    
     'pick': 'plot_peak_residuals.py',
     'gradient': 'plot_gradient.py',
     'isovelocities': 'plot_isovelocities.py',
+    'filaments': 'plot_residuals+filaments.py',
+    'filaments+vz': 'plot_filaments+vz.py',        
     'pv': 'plot_pv_diagram.py',
     'skewkurt': 'make_skewkurt_moments.py',
     'intensdistrib': 'plot_intensity_distribution.py',

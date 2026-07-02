@@ -49,11 +49,14 @@ At the time this example set was written, the main commands include:
     mirrorspectra       Extract and show line profiles around a pixel and from the mirror location on the other side of the disc
     moment+residuals    Show Data vs Model moment map and residuals
     moment+offset       Show moment map and a zoom-in illustrating offset from the centre
+    canvas3d            Display moment or residual map in a 3D canvas
     residuals+deproj    Show residuals from a moment map, deprojected onto the disc reference frame
     residuals+all       Show ALL moment map residuals, deprojected onto the sky OR disc reference frame
     pick                Use Pick tools. Fold residual maps and identify peak and clustered residuals
     gradient            Show peak, radial AND/OR azimuthal gradient from residual maps
     isovelocities       Show Data vs Model isovelocity contours
+    filaments           Extract filamentary structures from moment map residuals with FilFinder
+    filaments+vz        Examine filament velocity structure assuming vertical motions and overlay azimuthally averaged vz
     pv                  Show PV diagram extracted along a specific axis
     skewkurt            Make skewness and kurtosis maps, and save output into .fits files
     intensdistrib       Extract and display the intensity distribution of pixels within selected radial regions
