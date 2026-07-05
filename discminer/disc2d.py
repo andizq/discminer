@@ -11,6 +11,7 @@ import os
 import pprint
 import sys
 import time
+import json
 import warnings
 from multiprocessing import Pool
 
@@ -1398,23 +1399,22 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         samples_all = samples_all.reshape(-1, samples.shape[-1]) #2d matrix, shape (nwalkers*nsteps, npars)
         self.mc_samples_all = samples_all
         
-        #Errors: +- 68.2 percentiles
+        #Errors: enclosing 68.3 per cent of the samples
         errpos, errneg = [], []
+        low_perc, high_perc = 15.865, 84.135
         for i in range(self.mc_nparams):
             tmp = best_params[i]
-            indpos = samples[:,i] > tmp
-            indneg = samples[:,i] < tmp
-            val = samples[:,i][indpos] - tmp
-            errpos.append(np.percentile(val, [68.2])) #1 sigma (2x perc 34.1), positive pars
-            val = np.abs(samples[:,i][indneg] - tmp)
-            errneg.append(np.percentile(val, [68.2])) 
+            low_val, high_val = np.percentile(samples[:,i], [low_perc, high_perc])
+            errneg.append(tmp - low_val)
+            errpos.append(high_val - tmp)
+
         self.best_params_errpos = np.asarray(errpos).squeeze()
         self.best_params_errneg = np.asarray(errneg).squeeze()
         
         best_fit_dict = np.array([np.atleast_1d(arr) for arr in [p0_mean, best_params, self.best_params_errneg, self.best_params_errpos]]).T
         best_fit_dict = {key+'_'+self.mc_kind[i]: str(best_fit_dict[i].tolist())[1:-1] for i,key in enumerate(self.mc_header)}
         self.best_fit_dict = best_fit_dict
-        
+
         _break_line(init='\n')
         print ('Median from parameter walkers for the last %d steps:\n'%nstats)        
         if found_termtables:
@@ -1452,7 +1452,6 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             errpos = cp(self.params)
             errneg = cp(self.params)
 
-            #print (self.best_fit_dict)
             for key in self.best_fit_dict: 
                 par = key.split('_')[0]
                 attribute = key.split(par+'_')[1]
@@ -1463,7 +1462,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                 errneg[attribute][par] = float(val[2])        
                 errpos[attribute][par] = float(val[3])    
 
-            # Propagate sampled/shared values to all shared destinations
+            #Propagate sampled/shared values to all shared destinations
             for src_i, targets in self.mc_share_map.items():
     
                 src_key, src_par = targets[0]
@@ -1492,12 +1491,19 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                     allpars.append(params[attribute][par])
                     allerrneg.append(errneg[attribute][par])
                     allerrpos.append(errpos[attribute][par])
-        
-            #print (allheader, allpars)
+
+            #Save txt file
             np.savetxt('log_pars_%s_cube_%dwalkers_%dsteps.txt'%(tag, nwalkers, backend.iteration),
                        np.array([allp0, allpars, allerrneg, allerrpos]), fmt='%.6f', header=str(allheader))
+
+            #Save json file
+            dicts_list = [p0pars, params, errneg, errpos]
+            keys_list = ['p0', 'params', 'errneg', 'errpos']
+            master_dict = {key: dicts_list[i] for i,key in enumerate(keys_list)}
             
-            
+            with open('log_pars_%s_cube_%dwalkers_%dsteps.json'%(tag, nwalkers, backend.iteration), 'w', encoding='utf-8') as f:
+                json.dump(master_dict, f, ensure_ascii=False, indent=4)
+                
     def _get_attribute_func(self, attribute):
         return {
             'orientation': self.orientation_func,

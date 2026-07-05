@@ -5,6 +5,7 @@ import os
 import json
 import warnings
 import numpy as np
+from pathlib import Path
 
 if __name__ == '__main__':
     parser = _mining_parfile(None)
@@ -222,19 +223,63 @@ def get_base_pars(log_file, tags_dict):
     mol = tags_dict['mol']
 
     def read_logpars(log_file):
-        log_pars = np.loadtxt(log_file)[1]
-        header = np.loadtxt(log_file, comments=None, dtype=str, delimiter=' ', max_rows=1)
-        header[1] = header[1][1:] #Remove first bracket of first entry
-        header = [hdr[1:-2] for hdr in header[1:]] #Jump # and remove brackets and commas
-        return log_pars, header
+        
+        suffix = Path(log_file).suffix.lower()
+
+        if suffix == '.json':
+
+            with open(log_file) as jf:
+                log_pars = json.load(jf)['params']
+
+            header = []                
+            isjson = True
+            
+        else:
+            log_pars = np.loadtxt(log_file)[1]
+            header = np.loadtxt(log_file, comments=None, dtype=str, delimiter=' ', max_rows=1)
+            header[1] = header[1][1:] #Remove first bracket of first entry
+            header = [hdr[1:-2] for hdr in header[1:]] #Jump # and remove brackets and commas
+            isjson = False
+            
+        return log_pars, header, isjson
     
     try:
         head, tail = os.path.split(log_file)
         log_file_split = np.asarray(tail.split('_'))
         tag_disc = log_file_split[2]
 
-        log_pars, header = read_logpars(log_file)
+        log_pars, header, isjson = read_logpars(log_file)
 
+        if isjson:
+            par_dict_att = log_pars
+            uni_dict_att = {}
+            
+            for att in log_pars:
+                uni_dict_att[att] = {}
+                for hdr in log_pars[att]:
+                    if 'R' in hdr or 'xc' in hdr or 'yc' in hdr or 'z' in hdr:
+                        unit = 'au'
+                    elif 'incl' in hdr or 'PA' in hdr:
+                        unit = 'rad'
+                    elif 'Ls' in hdr or 'p' in hdr or 'q' in hdr or 'vel_sign' in hdr:
+                        unit = 'none'
+                    elif 'I' in hdr:
+                        unit = 'Jy/pix'
+                    elif 'L' in hdr or 'vsys' in hdr:
+                        unit = 'km/s'
+                    elif 'Mstar' in hdr:
+                        unit = 'Msun'
+                    elif 'bmaj' in hdr or 'bmin' in hdr:
+                        unit = 'arcsec'
+                    elif 'bpa' in hdr:
+                        unit = 'deg'
+                    else:
+                        unit = 'unknown'
+                    
+                    uni_dict_att[att][hdr] = unit
+                    
+            return par_dict_att, uni_dict_att
+        
         #RENAME REPEATED TAGS IN HEADER
         hdr_arr = np.array(header)
         argI0, = np.where(hdr_arr == 'I0') #Array with one entry
