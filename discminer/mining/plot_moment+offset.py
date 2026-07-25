@@ -177,8 +177,8 @@ if args.show_continuum in ['all', 'band7']:
 #*************
 #MARK PLANETS
 #*************
-kwargs_sc = dict(s=700, lw=3.0, edgecolors='tomato', midplane=True)
-for axi in ax[1:]:
+kwargs_sc = dict(s=400, lw=3.0, edgecolors='limegreen', midplane=True)
+for axi in ax:
     mark_planet_location(axi, args, dpc=dpc, coords='sky', zfunc=model.z_upper_func, zpars=best['height_upper'], **best['orientation'], **kwargs_sc)
 
 plt.savefig('moment+offset_%s.png'%mtags['base'], bbox_inches='tight', dpi=200)

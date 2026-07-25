@@ -8,7 +8,11 @@
 *.json
 *.npy
 
-build/
-dist/
 *.egg-info
 *.DS_store
+*.code-workspace
+
+build/
+dist/
+.vscode/
+.ipynb_checkpoints/

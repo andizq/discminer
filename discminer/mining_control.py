@@ -18,7 +18,7 @@ def _check_and_return_parser(parserobj, prog='', description=''):
         parser = argparse.ArgumentParser(prog=prog, description=description)
     elif isinstance(parserobj, argparse._SubParsersAction):
         parser = parserobj.add_parser(prog, help=description)
-    elif isinstance(parserobj, ArgumentParser):
+    elif isinstance(parserobj, argparse.ArgumentParser):
         parser = parserobj
     else:
         print("Please provide a valid parser object from the argparse library...")

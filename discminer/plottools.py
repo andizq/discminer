@@ -191,6 +191,10 @@ def get_continuous_cmap(hex_list, float_list=None):
     return cmap_new
 
 def get_discminer_cmap(observable, kind='attribute'):
+    reverse = observable.endswith('_r')
+    if reverse:
+        observable = observable[:-2]
+
     if kind=='attribute':
         colors = _attribute_colors[observable]
         cranges = _attribute_cranges[observable]
@@ -207,7 +211,7 @@ def get_discminer_cmap(observable, kind='attribute'):
     elif isinstance(cranges, Iterable) or cranges is None:
         cmap = get_continuous_cmap(colors, float_list=cranges)
         
-    return cmap
+    return cmap.reversed() if reverse else cmap
         
 #**************
 #COLORBAR STUFF
@@ -775,7 +779,7 @@ def make_polar_map(
             map2d = dmax
         else:
             raise InputError(
-                kind, "kind must be 'attribute' or 'residuals'"
+                gradient, "gradient must be 'phi', 'r' or 'peak'"
             )
 
         if gradient=='phi':

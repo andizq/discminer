@@ -361,10 +361,12 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         pass
             
     try: #clim for residuals
-        clim = args.clim
-        fclim = float(clim)
+        if args.clim is not None:
+            clim = args.clim
+            fclim = float(clim)
     except (AttributeError, TypeError): #Not passed or None 
-        pass
+        clim = clim
+        fclim = fclim
 
     try: #clim for absolute quantities
         vmin = float(args.vmin)

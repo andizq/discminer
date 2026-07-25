@@ -129,7 +129,7 @@ def get_normalisation(mask_ang, component='z'):
         div_factor = 4*np.sin(np.pi/2 - np.radians(mask_ang)) * np.abs(np.sin(incl))/(2*np.pi - 4*np.radians(mask_ang))
     elif component=='z':
         div_factor = -np.cos(np.abs(incl))        
-    else: return comp
+    else: return 1.0
     
     return div_factor
 
