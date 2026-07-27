@@ -2,12 +2,13 @@ from .utils import FrontendUtils, InputError, FITSUtils, get_tb
 
 import numpy as np
 from astropy.io import fits
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, OptimizeWarning
 
 from tqdm import tqdm
 from pathos.multiprocessing import ProcessingPool as Pool
 
 import copy
+import warnings
 
 _progress_bar = FrontendUtils._progress_bar
 
@@ -1076,7 +1077,11 @@ def fit_gaussian(*args, **kwargs): #Backcompat
     return fit_onecomponent(*args, **kwargs)
 
 def fit_onecomponent(
-        cube, method='gaussian', lw_chans=1.0, peak_kernel=True, sigma_fit=None, sigma_thres=4, fit_continuum=False, 
+        cube, method='gaussian', lw_chans=1.0, peak_kernel=True, sigma_fit=None,
+        sigma_thres=4, fit_continuum=False, epsfcn='auto',
+        eps_sample_frac=0.002, eps_sample_min=1, eps_sample_max=512,
+        eps_random_seed=0, eps_covariance_tol=0.05,
+        eps_grid=(1e-12, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4),
 ):
     """
     Fit 'gaussian' or 'bell' profiles along the velocity axis of the input cube.
@@ -1091,6 +1096,28 @@ def fit_onecomponent(
 
     peak_kernel : bool, optional
         If True (default) the returned amplitude is the peak of the kernel fitted to the line. Otherwise, the actual peak of the line profile is returned.
+
+    epsfcn : float, None, or 'auto', optional
+        Relative finite-difference step used by LM. If 'auto', select one
+        cube-wide value using random pixels above ``sigma_thres``. None uses
+        scipy's default.
+
+    eps_sample_frac : float, optional
+        Fraction of pixels above ``sigma_thres`` used when ``epsfcn='auto'``.
+
+    eps_sample_min, eps_sample_max : int or None, optional
+        Optional lower and upper limits on the automatic calibration sample.
+
+    eps_random_seed : int, optional
+        Seed used for reproducible automatic pixel selection.
+
+    eps_covariance_tol : float, optional
+        Fraction of sampled pixels by which a candidate's finite-covariance
+        count may fall below the maximum. This favours the smallest stable
+        finite-difference step over fixing a few pathological pixels.
+
+    eps_grid : sequence of float, optional
+        Candidate finite-difference values tested in automatic mode.
 
     Returns
     -------
@@ -1145,6 +1172,246 @@ def fit_onecomponent(
 
     noise = np.std( np.append(data[:5,:,:], data[-5:,:,:], axis=0), axis=0) #rms intensity from first and last 5 channels
     mask = np.nanmax(data, axis=0) <= sigma_thres*noise
+
+    selected_epsfcn = epsfcn
+
+    if isinstance(epsfcn, str):
+        if epsfcn.lower() != 'auto':
+            raise ValueError("epsfcn must be a float, None, or 'auto'")
+        if not 0 < eps_sample_frac <= 1:
+            raise ValueError("eps_sample_frac must be in the interval (0, 1]")
+        if not 0 <= eps_covariance_tol <= 1:
+            raise ValueError("eps_covariance_tol must be in the interval [0, 1]")
+        if eps_sample_min is not None and eps_sample_min < 1:
+            raise ValueError("eps_sample_min must be positive or None")
+        if eps_sample_max is not None and eps_sample_max < 1:
+            raise ValueError("eps_sample_max must be positive or None")
+        if (
+            eps_sample_min is not None and eps_sample_max is not None
+            and eps_sample_min > eps_sample_max
+        ):
+            raise ValueError("eps_sample_min cannot exceed eps_sample_max")
+
+        eligible_mask = (~mask) & np.all(np.isfinite(data), axis=0)
+        eligible = np.flatnonzero(eligible_mask)
+        n_eligible = len(eligible)
+
+        if n_eligible == 0:
+            selected_epsfcn = None
+            print ("LM epsfcn auto-calibration skipped: no eligible pixels.")
+        else:
+            n_sample = max(1, int(np.ceil(eps_sample_frac*n_eligible)))
+            if eps_sample_min is not None:
+                n_sample = max(n_sample, int(eps_sample_min))
+            if eps_sample_max is not None:
+                n_sample = min(n_sample, int(eps_sample_max))
+            n_sample = min(n_sample, n_eligible)
+
+            rng = np.random.default_rng(eps_random_seed)
+            sample_flat = rng.choice(eligible, size=n_sample, replace=False)
+            sample_coords = np.column_stack(
+                np.unravel_index(sample_flat, mask.shape)
+            )
+
+            candidate_values = []
+            for value in eps_grid:
+                if value is None:
+                    continue
+                value = float(value)
+                if np.isfinite(value) and value > 0:
+                    candidate_values.append(value)
+            candidate_eps = [None] + sorted(set(candidate_values))
+            scipy_default_epsfcn = np.finfo(float).eps
+
+            print (
+                "Auto-selecting LM epsfcn from %d/%d eligible pixels "
+                "(%.3f%s, seed=%d)..."
+                % (
+                    n_sample, n_eligible, 100.0*n_sample/n_eligible,
+                    '%', eps_random_seed
+                )
+            )
+
+            def fit_sample_pixel(i, j, candidate):
+                kwargs_eps = {} if candidate is None else {'epsfcn': candidate}
+                tmp_data = data[:,i,j]
+                sigma_ij = sigma_func(i,j)
+
+                try:
+                    with warnings.catch_warnings(record=True) as caught:
+                        warnings.simplefilter('always', OptimizeWarning)
+                        warnings.simplefilter('ignore', RuntimeWarning)
+                        coeff, covariance = curve_fit(
+                            fit_func1d, vchannels, tmp_data,
+                            p0=pfunc_one(i,j), sigma=sigma_ij,
+                            **kwargs_eps
+                        )
+                except (RuntimeError, ValueError, FloatingPointError):
+                    return False, False, np.inf, None
+
+                warned = any(
+                    issubclass(item.category, OptimizeWarning)
+                    for item in caught
+                )
+                covariance_diag = np.diag(covariance)
+                covariance_valid = (
+                    not warned
+                    and np.all(np.isfinite(coeff))
+                    and np.all(np.isfinite(covariance_diag))
+                    and np.all(covariance_diag >= 0)
+                )
+
+                residual = tmp_data-fit_func1d(vchannels, *coeff)
+                if sigma_ij is not None:
+                    residual = residual/sigma_ij
+                rss = np.nansum(residual**2)
+                if not np.isfinite(rss):
+                    rss = np.inf
+
+                return True, covariance_valid, rss, coeff
+
+            sample_results = []
+            for candidate in candidate_eps:
+                results = [
+                    fit_sample_pixel(i, j, candidate)
+                    for i, j in sample_coords
+                ]
+                converged = np.sum([result[0] for result in results])
+                covariance_valid = np.sum([result[1] for result in results])
+                valid_rss = [
+                    result[2] for result in results
+                    if result[0] and np.isfinite(result[2])
+                ]
+                median_rss = (
+                    np.median(valid_rss) if len(valid_rss) else np.inf
+                )
+                sample_results.append({
+                    'eps': candidate,
+                    'results': results,
+                    'converged': converged,
+                    'covariance_valid': covariance_valid,
+                    'median_rss': median_rss,
+                    'drift': np.nan,
+                })
+
+            baseline_results = sample_results[0]['results']
+            for summary in sample_results:
+                drifts = []
+                for (i, j), baseline, result in zip(
+                        sample_coords, baseline_results, summary['results']
+                ):
+                    if not baseline[1] or not result[1]:
+                        continue
+
+                    pars0 = np.asarray(baseline[3], dtype=float).copy()
+                    pars1 = np.asarray(result[3], dtype=float).copy()
+                    pars0[2] = np.abs(pars0[2])
+                    pars1[2] = np.abs(pars1[2])
+
+                    scales = np.maximum(np.abs(pars0), 1.0)
+                    scales[0] = max(
+                        np.abs(pars0[0]), noise[i,j],
+                        np.finfo(float).eps
+                    )
+                    scales[1] = max(np.abs(dv), np.finfo(float).eps)
+                    scales[2] = scales[1]
+                    if is_bell:
+                        scales[3] = max(np.abs(pars0[3]), 1.0)
+                    if fit_continuum:
+                        scales[-1] = max(
+                            np.abs(pars0[-1]), noise[i,j],
+                            np.finfo(float).eps
+                        )
+
+                    drifts.append(np.max(np.abs(pars1-pars0)/scales))
+
+                if len(drifts):
+                    summary['drift'] = np.median(drifts)
+
+            max_covariance_valid = max(
+                summary['covariance_valid'] for summary in sample_results
+            )
+            covariance_tolerance = int(
+                np.ceil(eps_covariance_tol*n_sample)
+            )
+            candidates = [
+                summary for summary in sample_results
+                if (
+                    summary['covariance_valid']
+                    >= max_covariance_valid-covariance_tolerance
+                )
+                and (
+                    np.isnan(summary['drift'])
+                    or summary['drift'] <= 0.01
+                )
+            ]
+
+            if len(candidates) == 0:
+                candidates = [
+                    summary for summary in sample_results
+                    if (
+                        summary['covariance_valid']
+                        >= max_covariance_valid-covariance_tolerance
+                    )
+                ]
+
+            best_rss = min(summary['median_rss'] for summary in candidates)
+            rss_tolerance = 1e-3*max(np.abs(best_rss), 1.0)
+            stable_candidates = [
+                summary for summary in candidates
+                if summary['median_rss'] <= best_rss+rss_tolerance
+            ]
+            selected_summary = (
+                stable_candidates[0] if len(stable_candidates)
+                else min(candidates, key=lambda item: item['median_rss'])
+            )
+            selected_epsfcn = selected_summary['eps']
+
+            print (
+                "  epsfcn                 converged   finite covariance   "
+                "median objective   median drift"
+            )
+            for summary in sample_results:
+                eps_label = (
+                    'scipy (%.1e)' % scipy_default_epsfcn
+                    if summary['eps'] is None
+                    else '%.0e' % summary['eps']
+                )
+                drift_label = (
+                    'n/a' if np.isnan(summary['drift'])
+                    else '%.3e' % summary['drift']
+                )
+                print (
+                    "  %-22s %5d/%-5d %8d/%-5d %19.6g   %s"
+                    % (
+                        eps_label, summary['converged'], n_sample,
+                        summary['covariance_valid'], n_sample,
+                        summary['median_rss'], drift_label
+                    )
+                )
+
+            selected_label = (
+                'scipy (%.3e)' % scipy_default_epsfcn
+                if selected_epsfcn is None
+                else '%.0e' % selected_epsfcn
+            )
+            print (
+                "Selected LM epsfcn=%s "
+                "(within %d of the maximum finite-covariance count, "
+                "stable fit quality)."
+                % (selected_label, covariance_tolerance)
+            )
+
+    elif epsfcn is not None:
+        selected_epsfcn = float(epsfcn)
+        if not np.isfinite(selected_epsfcn) or selected_epsfcn <= 0:
+            raise ValueError("numeric epsfcn must be finite and positive")
+
+    cube.epsfcn_selected = selected_epsfcn
+    kwargs_eps = (
+        {} if selected_epsfcn is None
+        else {'epsfcn': selected_epsfcn}
+    )
         
     print ('Fitting one-component function along velocity axis of the input cube...')
 
@@ -1158,7 +1425,10 @@ def fit_onecomponent(
                 continue
             
             try:
-                coeff, var_matrix = curve_fit(fit_func1d, vchannels, tmp_data, p0=pfunc_one(i,j), sigma=sigma_func(i,j))
+                coeff, var_matrix = curve_fit(
+                    fit_func1d, vchannels, tmp_data, p0=pfunc_one(i,j),
+                    sigma=sigma_func(i,j), **kwargs_eps
+                )
                 n_fit[i,j] = 1
                     
             except RuntimeError: 
