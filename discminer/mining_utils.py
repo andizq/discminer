@@ -595,13 +595,17 @@ def make_masks(ax, mask_R, mask_phi, Rmax=1000, **kwargs_mask):
     kw_mask.update(kwargs_mask)
 
     mask_phi_tup = _get_mask_tuples(mask_phi)
-    if len(mask_phi_tup)==0:
-        mask_phi_tup = [[0, 360]]
-
     mask_R_tup = _get_mask_tuples(mask_R)
-    if len(mask_R_tup)==0:
-        mask_R_tup = [[0, Rmax]]
+    nphi = len(mask_phi_tup)
+    nR = len(mask_R_tup)
+    nmasks = np.max([nR, nphi])
+    
+    if nphi==0:
+        mask_phi_tup = [[0, 360]]*nmasks
 
+    if nR==0:
+        mask_R_tup = [[0, Rmax]]*nmasks
+        
     def add_mask(mask_phi_i, mask_R_i):
         # Adapted from https://stackoverflow.com/questions/22789356/plot-a-donut-with-fill-or-fill-between
         n, radii = 50, list(mask_R_i)

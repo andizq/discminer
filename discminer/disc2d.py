@@ -1132,7 +1132,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             self.sub_R_true = [[hypot_func(sub_x_true[j], sub_y_true[i]) for j in range(subpixels)] for i in range(subpixels)]
             self.sub_phi_true = [[np.arctan2(sub_y_true[i], sub_x_true[j]) for j in range(subpixels)] for i in range(subpixels)]
             self.sub_x_true = sub_x_true
-            self.sub_y_true = sub_x_true
+            self.sub_y_true = sub_y_true
             self.sub_dA = dx*dy
             self.pix_dA = pix_size**2
             self.sub_centre_id = centre_sq
@@ -1299,7 +1299,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             raise InputError((data, vchannels),
                              'Please specify both data AND vchannel slices you wish to consider for the MCMC sampling.')
             
-        self.mc_nchan = len(vchannels)
+        self.mc_nchan = len(self.mc_vchannels)
         self.noise_stddev = noise_stddev
         if use_zeus: import zeus as sampler_id
         else: import emcee as sampler_id

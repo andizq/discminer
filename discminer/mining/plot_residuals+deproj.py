@@ -239,7 +239,7 @@ elif args.projection=='polar':
 
 if len(args.mask_R)>0 or len(args.mask_phi)>0:
     make_masks(ax, args.mask_R, args.mask_phi, Rmax=Rmod_out, facecolor='k', alpha=0.3)
-    
+
 mark_planet_location(ax, args, facecolors='none', edgecolors='k', lw=4.5, s=650, coords='disc', zfunc=z_func, zpars=z_pars, incl=incl, PA=PA, xc=xc, yc=yc, dpc=dpc, kwargs_text={'fontsize': args.fontsize-1})    
 if args.show_title:
     ax.set_title(ctitle, fontsize=args.fontsize+1, color='k')
