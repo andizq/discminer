@@ -54,9 +54,16 @@ if args.kernel=='quadratic':
     
 else:
     if args.fit_data:
-        moments_data = datacube.make_moments(method=args.kernel, tag='data', sigma_thres=args.sigma, peak_kernel=args.peakkernel, fit_continuum=args.fit_continuum)
+        moments_data = datacube.make_moments(
+            method=args.kernel, tag='data', sigma_thres=args.sigma,
+            peak_kernel=args.peakkernel, fit_continuum=args.fit_continuum,
+            epsfcn=args.epsfcn
+        )
     if args.fit_model:
-        moments_model = modelcube.make_moments(method=args.kernel, tag='model', sigma_thres=0, peak_kernel=args.peakkernel)
+        moments_model = modelcube.make_moments(
+            method=args.kernel, tag='model', sigma_thres=0,
+            peak_kernel=args.peakkernel, epsfcn=args.epsfcn
+        )
 
 #*********************************
 #CONVERT TO TB USING PLANCK'S LAW

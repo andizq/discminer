@@ -13,6 +13,26 @@ SMALL_SIZE = 10
 MEDIUM_SIZE = 15
 BIGGER_SIZE = 22
 
+def _parse_epsfcn(value):
+    value_lower = value.lower()
+    if value_lower == 'auto':
+        return 'auto'
+    if value_lower in ['none', 'scipy']:
+        return None
+
+    try:
+        epsfcn = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            "epsfcn must be 'auto', 'none', 'scipy', or a positive number"
+        )
+
+    if not np.isfinite(epsfcn) or epsfcn <= 0:
+        raise argparse.ArgumentTypeError(
+            "numeric epsfcn must be finite and positive"
+        )
+    return epsfcn
+
 def _check_and_return_parser(parserobj, prog='', description=''):
     if parserobj is None:
         parser = argparse.ArgumentParser(prog=prog, description=description)
@@ -58,6 +78,8 @@ def _mining_moments1d(parserobj, prog='moments1d', description='Make (gaussian, 
                         help="Return peak from fitted kernel (1) or global peak intensity (0). DEFAULTS to 1 (Return peak from kernel).")
     parser.add_argument('-fc', '--fit_continuum', default=0, type=int,
                         help="Fit continuum and save into .fits file? DEFAULTS to 0.")
+    parser.add_argument('-eps', '--epsfcn', default='auto', type=_parse_epsfcn,
+                        help="LM finite-difference step: 'auto', 'none'/'scipy', or a positive number. DEFAULTS to 'auto'.")
     parser.add_argument('-fdata', '--fit_data', default=1, type=int,
                         help="Fit datacube and save moments into .fits files? DEFAULTS to 1.")
     parser.add_argument('-fmodel', '--fit_model', default=1, type=int,
