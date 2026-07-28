@@ -27,6 +27,7 @@ from matplotlib import ticker
 from scipy.integrate import quad
 from scipy.interpolate import interp1d    
 from scipy.optimize import curve_fit
+from scipy.fft import next_fast_len, rfft2, irfft2
 from scipy.special import ellipe, ellipk
 from scipy.signal import convolve2d, fftconvolve
 from .tools.utils import FrontendUtils, InputError, _get_beam_from, hypot_func
@@ -104,6 +105,100 @@ def _scipy_conv(image, kernel):
 def _scipy_fft_conv(image, kernel):
     k = kernel.array if hasattr(kernel, "array") else kernel
     return fftconvolve(image, k, mode="same")
+
+
+class _BeamFFTConvolver:
+    """Reusable spatial FFT of a beam kernel for 2-D images or image blocks."""
+
+    AUTO_MEMORY_LIMIT = 2 * 1024**2
+    AUTO_BLOCK_CANDIDATES = (1, 2, 4, 8, 12)
+
+    def __init__(self, kernel, image_shape):
+        kernel = kernel.array if hasattr(kernel, "array") else kernel
+        kernel = np.asarray(kernel)
+        if kernel.ndim != 2:
+            raise ValueError(
+                f"Beam kernel must be two-dimensional, got shape {kernel.shape}"
+            )
+        if np.iscomplexobj(kernel):
+            raise ValueError("Cached beam FFT requires a real-valued kernel")
+        if not np.all(np.isfinite(kernel)):
+            raise ValueError("Beam kernel must contain only finite values")
+
+        self.image_shape = tuple(image_shape)
+        if len(self.image_shape) != 2:
+            raise ValueError(
+                f"Image shape must have two dimensions, got {self.image_shape}"
+            )
+
+        self.kernel_shape = kernel.shape
+        self.fft_shape = tuple(
+            next_fast_len(image_size + kernel_size - 1)
+            for image_size, kernel_size in zip(
+                self.image_shape,
+                self.kernel_shape,
+            )
+        )
+        self.kernel_fft = rfft2(kernel, s=self.fft_shape)
+        self.y0 = (self.kernel_shape[0] - 1) // 2
+        self.x0 = (self.kernel_shape[1] - 1) // 2
+
+    def __call__(self, images):
+        images = np.asarray(images)
+        if tuple(images.shape[-2:]) != self.image_shape:
+            raise ValueError(
+                f"Expected trailing image shape {self.image_shape}, "
+                f"got {images.shape[-2:]}"
+            )
+        if np.iscomplexobj(images):
+            raise ValueError("Cached beam FFT requires real-valued images")
+
+        image_fft = rfft2(
+            images,
+            s=self.fft_shape,
+            axes=(-2, -1),
+        )
+        full = irfft2(
+            image_fft * self.kernel_fft,
+            s=self.fft_shape,
+            axes=(-2, -1),
+        )
+        ny, nx = self.image_shape
+        return full[
+            ...,
+            self.y0:self.y0 + ny,
+            self.x0:self.x0 + nx,
+        ]
+
+    def estimate_working_memory(self, block_size):
+        """Conservative bytes estimate for block FFT temporary arrays."""
+        fy, fx = self.fft_shape
+        rfft_elements = fy * (fx // 2 + 1)
+        real_elements = fy * fx
+        image_elements = np.prod(self.image_shape)
+
+        total = self.kernel_fft.nbytes
+        total += 2 * block_size * rfft_elements * np.dtype(np.complex128).itemsize
+        total += block_size * real_elements * np.dtype(np.float64).itemsize
+        total += 2 * block_size * image_elements * np.dtype(np.float64).itemsize
+        return total
+
+    def select_block_size(self, nchan):
+        """
+        Select the largest tested block that keeps FFT temporaries near 2 MiB.
+
+        Small working sets benefit from batching, while large spatial FFTs
+        remain channel-wise to avoid cache and memory pressure.
+        """
+        selected = 1
+        for candidate in self.AUTO_BLOCK_CANDIDATES:
+            if candidate > nchan:
+                break
+            if self.estimate_working_memory(candidate) > self.AUTO_MEMORY_LIMIT:
+                break
+            selected = candidate
+        return selected
+
 
 def _area_conv_jybeam(beam_area_pixels, beam_area_arcsecs):
     return beam_area_pixels
@@ -489,11 +584,25 @@ class Intensity:
     def beam_kernel(self, beam_kernel): 
         print('Setting beam_kernel var to', beam_kernel)
         self._beam_kernel = beam_kernel
+        self._beam_kernel_version = getattr(
+            self,
+            "_beam_kernel_version",
+            0,
+        ) + 1
+        self._beam_fft_convolver = None
+        self._beam_fft_cache_key = None
         
     @beam_kernel.deleter 
     def beam_kernel(self): 
         print('Deleting beam_kernel var') 
-        del self._beam_kernel     
+        del self._beam_kernel
+        self._beam_kernel_version = getattr(
+            self,
+            "_beam_kernel_version",
+            0,
+        ) + 1
+        self._beam_fft_convolver = None
+        self._beam_fft_cache_key = None
 
     @property
     def beam_from(self):
@@ -779,7 +888,30 @@ class Intensity:
         int2d_full = self.line_uplow(int2d_near, int2d_far)
         
         if self.beam_kernel is not None:
-            int2d_full = self.beam_conv_factor*self.beam_convolve_func(np.nan_to_num(int2d_full), self.beam_kernel)
+            int2d_full = np.nan_to_num(int2d_full)
+            kernel_array = (
+                self.beam_kernel.array
+                if hasattr(self.beam_kernel, "array")
+                else np.asarray(self.beam_kernel)
+            )
+            scalar_kernel = (
+                self.beam_convolve_backend.startswith("scipy")
+                and kernel_array.shape == (1, 1)
+            )
+            if scalar_kernel:
+                int2d_full = (
+                    self.beam_conv_factor
+                    * kernel_array[0, 0]
+                    * int2d_full
+                )
+            elif self.beam_convolve_backend == "scipy_fft_cached":
+                convolver = self._get_beam_fft_convolver(int2d_full.shape)
+                int2d_full = self.beam_conv_factor * convolver(int2d_full)
+            else:
+                int2d_full = self.beam_conv_factor * self.beam_convolve_func(
+                    int2d_full,
+                    self.beam_kernel,
+                )
 
         return int2d_full
 
@@ -818,7 +950,45 @@ class Intensity:
         """
         
         cube = []
+        cached_block = []
         noise = 0.0
+        if self.beam_kernel is not None:
+            kernel_array = (
+                self.beam_kernel.array
+                if hasattr(self.beam_kernel, "array")
+                else np.asarray(self.beam_kernel)
+            )
+        else:
+            kernel_array = None
+        use_scalar_kernel = (
+            kernel_array is not None
+            and make_convolve
+            and self.beam_convolve_backend.startswith("scipy")
+            and kernel_array.shape == (1, 1)
+        )
+        use_cached_fft = (
+            self.beam_kernel is not None
+            and make_convolve
+            and self.beam_convolve_backend == "scipy_fft_cached"
+            and not use_scalar_kernel
+        )
+        if use_cached_fft:
+            cached_convolver = self._get_beam_fft_convolver(int2d_shape)
+            if self.beam_fft_block_size == "auto":
+                cached_block_size = cached_convolver.select_block_size(
+                    len(vchannels)
+                )
+            else:
+                cached_block_size = min(
+                    self.beam_fft_block_size,
+                    len(vchannels),
+                )
+            self.beam_fft_last_block_size = cached_block_size
+        elif use_scalar_kernel:
+            self.beam_fft_last_block_size = 0
+        else:
+            self.beam_fft_last_block_size = None
+
         for vchan in vchannels:
             int2d_near, int2d_far = self.get_line_profile(vchan, vel2d, int2d, linew2d, lineb2d, **kwargs_line)
             int2d_full = self.line_uplow(int2d_near, int2d_far) 
@@ -830,6 +1000,21 @@ class Intensity:
             if self.beam_kernel is not None:
                 if make_convolve:
                     int2d_full[np.isnan(int2d_full)] = noise
+                    if use_scalar_kernel:
+                        int2d_full = (
+                            self.beam_conv_factor
+                            * kernel_array[0, 0]
+                            * int2d_full
+                        )
+                    elif use_cached_fft:
+                        cached_block.append(int2d_full)
+                        if len(cached_block) == cached_block_size:
+                            convolved = cached_convolver(
+                                np.asarray(cached_block)
+                            )
+                            cube.extend(self.beam_conv_factor * convolved)
+                            cached_block.clear()
+                        continue
                     int2d_full = self.beam_conv_factor*self.beam_convolve_func(int2d_full, self.beam_kernel)
                 else:
                     int2d_full *= self.beam_conv_factor
@@ -839,6 +1024,10 @@ class Intensity:
                 int2d_full[~np.isfinite(int2d_full)] = noise
                 
             cube.append(int2d_full)
+
+        if cached_block:
+            convolved = cached_convolver(np.asarray(cached_block))
+            cube.extend(self.beam_conv_factor * convolved)
             
         if return_data_only: return np.asarray(cube)
         else: return Cube(np.asarray(cube), header, vchannels, dpc, beam=self.beam_info, filename="./cube_model.fits", disc=disc, mol=mol, kind=kind)
@@ -1007,7 +1196,20 @@ class Mcmc:
 
 class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
     
-    def __init__(self, datacube, Rmax, Rmin=1.0, prototype=False, subpixels=False, write_extent=True, convolve_func="scipy_fft", init_params={}, init_funcs={}, verbose=True):        
+    def __init__(
+            self,
+            datacube,
+            Rmax,
+            Rmin=1.0,
+            prototype=False,
+            subpixels=False,
+            write_extent=True,
+            convolve_func="scipy_fft_cached",
+            convolve_block_size="auto",
+            init_params={},
+            init_funcs={},
+            verbose=True,
+    ):
         """
         Initialise discminer model object.
 
@@ -1031,6 +1233,15 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         
         subpixels : bool, optional
             Subdivide original grid pixels into smaller pixels (subpixels) to account for large velocity gradients in the disc. This allows for more precise calculations of line-of-sight velocities in regions where velocity gradients across individual pixels can be large, e.g. near the centre of the disc. Defaults to False.
+
+        convolve_func : str, optional
+            Beam convolution backend. Use ``"scipy_fft_cached"`` to reuse the
+            beam FFT and convolve velocity channels in spatial blocks.
+
+        convolve_block_size : int, optional
+            Number of velocity channels per cached FFT block, or ``"auto"``
+            to select a block from the image and kernel FFT working size.
+            Defaults to ``"auto"``.
 
         Attributes
         ----------
@@ -1075,7 +1286,15 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         self.beam_size = datacube.beam_size        
         self.beam_area = datacube.beam_area
         self.beam_area_arcsecs = datacube.beam_area_arcsecs
+        self.beam_convolve_backend = convolve_func
         self.beam_convolve_func = self._get_beam_convolve_func(convolve_func)
+        if convolve_block_size == "auto":
+            self.beam_fft_block_size = "auto"
+        else:
+            self.beam_fft_block_size = int(convolve_block_size)
+            if self.beam_fft_block_size < 1:
+                raise ValueError("convolve_block_size must be at least 1")
+        self.beam_fft_last_block_size = None
 
         #Model output units after convolution
         if self.header.get('BUNIT') in ['Jy/arcsec^2', 'Jy / arcsec^2' , 'arcsec-2 Jy', 'Jy arcsec-2']:
@@ -1216,6 +1435,13 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             #print ('Default parameter header for mcmc fitting:', self.mc_header)
             #print ('Default parameters to fit and fixed parameters:', self.mc_params)
 
+    def __getstate__(self):
+        """Avoid serializing a potentially large, safely rebuildable FFT cache."""
+        state = self.__dict__.copy()
+        state["_beam_fft_convolver"] = None
+        state["_beam_fft_cache_key"] = None
+        return state
+
     def _get_beam_convolve_func(self, convolve_func):
 
         backend_dict = {
@@ -1223,15 +1449,34 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             "astropy_fft": _astropy_fft_conv,
             "scipy": _scipy_conv,
             "scipy_fft": _scipy_fft_conv,
+            # Single-image fallback; get_cube uses the cached block path.
+            "scipy_fft_cached": _scipy_fft_conv,
         }
 
         if convolve_func not in backend_dict:
             raise ValueError(
                 f"Invalid convolve_func '{convolve_func}'. "
-                "Options are: astropy, astropy_fft, scipy, scipy_fft"
+                "Options are: astropy, astropy_fft, scipy, scipy_fft, "
+                "scipy_fft_cached"
             )
 
         return backend_dict[convolve_func]
+
+    def _get_beam_fft_convolver(self, image_shape):
+        cache_key = (
+            self._beam_kernel_version,
+            tuple(image_shape),
+        )
+        if (
+            self._beam_fft_convolver is None
+            or self._beam_fft_cache_key != cache_key
+        ):
+            self._beam_fft_convolver = _BeamFFTConvolver(
+                self.beam_kernel,
+                image_shape,
+            )
+            self._beam_fft_cache_key = cache_key
+        return self._beam_fft_convolver
     
     def plot_quick_attributes(self, R_in=10, R_out=300, surface='upper', fig_width=80, fig_height=25,
                               height=True, velocity=True, linewidth=True, peakintensity=True, **kwargs_plot):                              
