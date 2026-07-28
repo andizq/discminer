@@ -1,45 +1,94 @@
 import numpy as np
-from scipy.interpolate import LinearNDInterpolator
 import scipy.sparse as sp
+from scipy.spatial import Delaunay
+
+
+def _coordinate_points(coord):
+    """Return coordinates as an ``(npoints, ndim)`` array."""
+    if isinstance(coord, (tuple, list)):
+        arrays = [np.asarray(item) for item in coord]
+        if not arrays:
+            raise ValueError("At least one coordinate array is required")
+        if any(item.shape != arrays[0].shape for item in arrays[1:]):
+            raise ValueError("Coordinate arrays must all have the same shape")
+        return np.column_stack([item.ravel() for item in arrays])
+
+    points = np.asarray(coord)
+    if points.ndim != 2:
+        raise ValueError(
+            "Coordinates must be an (npoints, ndim) array or a tuple of arrays"
+        )
+    return points
+
+
+def _target_points_and_shape(coord):
+    if isinstance(coord, (tuple, list)):
+        arrays = [np.asarray(item) for item in coord]
+        points = _coordinate_points(arrays)
+        return points, arrays[0].shape
+
+    points = np.asarray(coord)
+    if points.ndim < 2:
+        raise ValueError(
+            "Target coordinates must have a final coordinate dimension"
+        )
+    return points.reshape(-1, points.shape[-1]), points.shape[:-1]
+
 
 def get_griddata_sparse(old_coord, new_coord):
-    
-    #print('generating new interpolation function')
-    
-    xi = np.array(new_coord).T
-    old_xi_shape = xi.shape
-    xi = xi.reshape(-1, xi.shape[-1])
+    """
+    Build a reusable piecewise-linear scattered-grid interpolator.
 
-    #old coord can be an array with shape (N, ndim) or a tuple of arrays of N elements
-    if isinstance(old_coord, tuple):
-        old_coord = np.array(old_coord).T
-    ndim = old_coord.shape[1]
-        
-    #construct the triangulation using LinearNDInterpolator
-    interp = LinearNDInterpolator(old_coord, np.ones((old_coord.shape[0], 1)))
-    simplex_indices = interp.tri.find_simplex(xi)
+    The Delaunay triangulation and barycentric weights depend only on the
+    coordinates, so they are computed once and stored in a sparse matrix.
+    Calling the returned function only performs a sparse matrix-vector
+    multiplication.
 
-    #construct the interpolation matrix in COO format
-    row_indices, col_indices, values = [], [], []
+    Points outside the convex hull retain the old discminer behaviour
+    and are returned as zero.
+    """
+    source_points = _coordinate_points(old_coord)
+    target_points, target_shape = _target_points_and_shape(new_coord)
 
-    #TODO: I think this can be done without the python for loop
-    for n in range(xi.shape[0]):
-        isimplex = simplex_indices[n]
-        if isimplex == -1:
-            continue  
-        
-        indices = interp.tri.simplices[isimplex]
-        weights = [*(interp.tri.transform[isimplex, :ndim, :ndim] @ 
-                     (xi[n] - interp.tri.transform[isimplex, ndim, :])), 
-                   1 - (interp.tri.transform[isimplex, :ndim, :ndim] @ 
-                        (xi[n] - interp.tri.transform[isimplex, ndim, :])).sum()]
+    ndim = source_points.shape[1]
+    if target_points.shape[1] != ndim:
+        raise ValueError("Source and target coordinates have different dimensions")
 
-        row_indices.extend([n] * len(indices))
-        col_indices.extend(indices)
-        values.extend(weights)
+    tri = Delaunay(source_points)
+    simplex_ids = tri.find_simplex(target_points)
 
-    #Convert to CSR format (more efficient for matrix multiplication)
-    c = sp.coo_matrix((values, (row_indices, col_indices)), 
-                      shape=(xi.shape[0], old_coord.shape[0])).tocsr()
+    valid = simplex_ids >= 0
+    valid_simplex = simplex_ids[valid]
 
-    return lambda values: (c @ values).reshape(*old_xi_shape[:-1]).T
+    transform = tri.transform[valid_simplex]
+    delta = target_points[valid] - transform[:, ndim, :]
+    first_weights = np.einsum(
+        "nij,nj->ni",
+        transform[:, :ndim, :],
+        delta,
+        optimize=True,
+    )
+    weights = np.concatenate(
+        (
+            first_weights,
+            1.0 - first_weights.sum(axis=1, keepdims=True),
+        ),
+        axis=1,
+    )
+
+    rows = np.repeat(np.flatnonzero(valid), ndim + 1)
+    cols = tri.simplices[valid_simplex].ravel()
+    interpolation_matrix = sp.csr_matrix(
+        (weights.ravel(), (rows, cols)),
+        shape=(target_points.shape[0], source_points.shape[0]),
+    )
+
+    def interpolate(values):
+        values = np.asarray(values).ravel()
+        if values.size != source_points.shape[0]:
+            raise ValueError(
+                f"Expected {source_points.shape[0]} values, got {values.size}"
+            )
+        return (interpolation_matrix @ values).reshape(target_shape)
+
+    return interpolate
