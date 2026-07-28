@@ -30,8 +30,7 @@ class ReferenceModel(Cube):
                 minor=0.15*u.arcsec,
                 pa=0*u.deg
             ),
-            convolve_func = 'scipy_fft_cached',
-            convolve_block_size = 'auto',
+            convolve_func = 'scipy_fft',
             init_params = {},
             reset_params = False,
             init_funcs = {},
@@ -49,15 +48,6 @@ class ReferenceModel(Cube):
         
         dpc : `~astropy.units.Quantity`
             Distance to the disc.
-
-        convolve_func : str, optional
-            Beam convolution backend. ``"scipy_fft_cached"`` reuses the
-            spatial beam FFT across velocity-channel blocks.
-
-        convolve_block_size : int, optional
-            Number of velocity channels processed in each cached FFT block,
-            or ``"auto"`` to select it from the FFT working size. Defaults
-            to ``"auto"``.
         """
 
         #Init default functional forms and parameters
@@ -191,16 +181,7 @@ class ReferenceModel(Cube):
         Cube.__init__(self, data, hdu.header, vchannels, dpc, beam=beam, filename=filename, disc=disc, mol=mol, kind=kind, parfile=parfile) #Empty datacube
         
         #Init model
-        model = Model(
-            self,
-            Rmax=Rmax,
-            Rmin=Rmin,
-            write_extent=write_extent,
-            prototype=True,
-            subpixels=subpixels,
-            convolve_func=convolve_func,
-            convolve_block_size=convolve_block_size,
-        ) #Self is the simulated datacube
+        model = Model(self, Rmax=Rmax, Rmin=Rmin, write_extent=write_extent, prototype=True, subpixels=subpixels, convolve_func=convolve_func) #Self is the simulated datacube
         
         model.velocity_func = self.funcs['velocity']
         model.z_upper_func = self.funcs['z_upper']
