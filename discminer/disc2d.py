@@ -1572,12 +1572,22 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             y_pro = y_pro+yc
             
             griddata_diff = get_griddata((x_pro, y_pro), (self.mesh[0], self.mesh[1]))
-                        
-            R[side] = griddata_diff(self.R_true)
-            x_grid = griddata_diff(xt)
-            y_grid = griddata_diff(yt)
+
+            projected_fields = griddata_diff(
+                np.column_stack(
+                    [
+                        self.R_true,
+                        xt,
+                        yt,
+                        z_true[side],
+                    ]
+                )
+            )
+            R[side] = projected_fields[..., 0]
+            x_grid = projected_fields[..., 1]
+            y_grid = projected_fields[..., 2]
             phi[side] = np.arctan2(y_grid, x_grid) #-np.pi, np.pi output for user 
-            z[side] = griddata_diff( z_true[side])
+            z[side] = projected_fields[..., 3]
             #r[side] = hypot_func(R[side], z[side])
             if self.Rmax_m is not None: 
                 for prop in [R, phi, z]: prop[side] = np.where(np.logical_and(R[side]<self.Rmax_m, R[side]>self.Rmin_m), prop[side], np.nan)
@@ -1796,26 +1806,69 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             y_pro = y_pro+yc
             
             griddata_diff = get_griddata((x_pro, y_pro), (self.mesh[0], self.mesh[1]))
-            if self.Rmax_m is not None:
-                R_grid = griddata_diff(self.R_true) #griddata((x_pro, y_pro), self.R_true, (self.mesh[0], self.mesh[1]), method='linear')
 
             x_pro_dict[side] = x_pro
             y_pro_dict[side] = y_pro
             z_pro_dict[side] = z_pro
 
-            if self.subpixels:
+            fields = []
+            destinations = []
+            if self.Rmax_m is not None:
+                fields.append(self.R_true)
 
+            if self.subpixels:
                 for prop in props:
                     for i in range(self.subpixels_sq): #Subpixels are projected on the same plane where true grid is projected
                         if not isinstance(prop[i][side], numbers.Number):
-                            prop[i][side] =  griddata_diff(prop[i][side]) #griddata((x_pro, y_pro), prop[i][side], (self.mesh[0], self.mesh[1]), method='linear')
-                        if self.Rmax_m is not None:
-                            prop[i][side] = np.where(np.logical_and(R_grid<self.Rmax_m, R_grid>self.Rmin_m), prop[i][side], np.nan)
+                            fields.append(prop[i][side])
+                            destinations.append((prop, i))
+
+                if fields:
+                    projected_fields = griddata_diff(np.column_stack(fields))
+                    column = 0
+                    if self.Rmax_m is not None:
+                        R_grid = projected_fields[..., column]
+                        column += 1
+                    for prop, i in destinations:
+                        prop[i][side] = projected_fields[..., column]
+                        column += 1
 
             else:
                 for prop in props:
-                    if not isinstance(prop[side], numbers.Number): prop[side] = griddata_diff(prop[side]) #griddata((x_pro, y_pro), prop[side], (self.mesh[0], self.mesh[1]), method='linear')
-                    if self.Rmax_m is not None: prop[side] = np.where(np.logical_and(R_grid<self.Rmax_m, R_grid>self.Rmin_m), prop[side], np.nan)
+                    if not isinstance(prop[side], numbers.Number):
+                        fields.append(prop[side])
+                        destinations.append(prop)
+
+                if fields:
+                    projected_fields = griddata_diff(np.column_stack(fields))
+                    column = 0
+                    if self.Rmax_m is not None:
+                        R_grid = projected_fields[..., column]
+                        column += 1
+                    for prop in destinations:
+                        prop[side] = projected_fields[..., column]
+                        column += 1
+
+            if self.Rmax_m is not None:
+                radial_mask = np.logical_and(
+                    R_grid < self.Rmax_m,
+                    R_grid > self.Rmin_m,
+                )
+                if self.subpixels:
+                    for prop in props:
+                        for i in range(self.subpixels_sq):
+                            prop[i][side] = np.where(
+                                radial_mask,
+                                prop[i][side],
+                                np.nan,
+                            )
+                else:
+                    for prop in props:
+                        prop[side] = np.where(
+                            radial_mask,
+                            prop[side],
+                            np.nan,
+                        )
 
         #*************************************
         if self.prototype:

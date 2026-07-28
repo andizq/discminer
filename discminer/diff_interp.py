@@ -47,6 +47,11 @@ def get_griddata_sparse(old_coord, new_coord):
     Points outside the convex hull retain the old discminer behaviour
     and are returned as zero.
     """
+    source_shape = (
+        np.asarray(old_coord[0]).shape
+        if isinstance(old_coord, (tuple, list))
+        else None
+    )
     source_points = _coordinate_points(old_coord)
     target_points, target_shape = _target_points_and_shape(new_coord)
 
@@ -84,11 +89,30 @@ def get_griddata_sparse(old_coord, new_coord):
     )
 
     def interpolate(values):
-        values = np.asarray(values).ravel()
-        if values.size != source_points.shape[0]:
-            raise ValueError(
-                f"Expected {source_points.shape[0]} values, got {values.size}"
-            )
-        return (interpolation_matrix @ values).reshape(target_shape)
+        values = np.asarray(values)
+        nsource = source_points.shape[0]
+
+        # Preserve the historical behaviour for a single field supplied with
+        # the same shape as the source coordinate grid.
+        single_field = (
+            values.ndim == 1
+            or (source_shape is not None and values.shape == source_shape)
+        )
+        if single_field:
+            values = values.reshape(nsource, 1)
+            field_shape = ()
+        else:
+            if values.ndim < 2 or values.shape[0] != nsource:
+                raise ValueError(
+                    f"Expected {nsource} source rows, got shape {values.shape}"
+                )
+            field_shape = values.shape[1:]
+            values = values.reshape(nsource, -1)
+
+        projected = interpolation_matrix @ values
+        projected = projected.reshape(target_shape + field_shape)
+        if single_field:
+            return projected.reshape(target_shape)
+        return projected
 
     return interpolate
