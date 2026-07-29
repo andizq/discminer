@@ -105,6 +105,14 @@ def _scipy_fft_conv(image, kernel):
     k = kernel.array if hasattr(kernel, "array") else kernel
     return fftconvolve(image, k, mode="same")
 
+def _identity_conv(image, kernel):
+    return image
+
+def _scalar_conv(image, kernel):
+    if kernel == 1:
+        return image
+    return image * kernel
+
 def _area_conv_jybeam(beam_area_pixels, beam_area_arcsecs):
     return beam_area_pixels
 
@@ -688,8 +696,8 @@ class Intensity:
         #velocity nans might differ from Int nans when a z surf is zero and SG is active, nanmax must be used
         return np.nanmax([Iup, Ilow], axis=0)
 
-    def _apply_beam_convolution(self, image):
-        """Convolve an image, bypassing the backend for a 1x1 kernel."""
+    def _get_beam_convolution_operation(self):
+        """Select the beam operation and its kernel once per cube."""
         kernel = self.beam_kernel
         kernel_array = (
             kernel.array
@@ -703,14 +711,17 @@ class Intensity:
             if self.beam_convolve_func in (_astropy_conv, _astropy_fft_conv):
                 # Astropy normalizes every finite, nonzero kernel by default.
                 if np.isfinite(kernel_value) and kernel_value != 0:
-                    return image
+                    return _identity_conv, None
             else:
                 # SciPy preserves the amplitude of the supplied kernel.
-                if kernel_value == 1:
-                    return image
-                return image * kernel_value
+                return _scalar_conv, kernel_value
 
-        return self.beam_convolve_func(image, kernel)
+        return self.beam_convolve_func, kernel
+
+    def _apply_beam_convolution(self, image):
+        """Convolve one image, bypassing the backend for a 1x1 kernel."""
+        convolve_func, kernel = self._get_beam_convolution_operation()
+        return convolve_func(image, kernel)
 
     def update_beam_from_params(self):
         """
@@ -846,6 +857,11 @@ class Intensity:
         
         cube = []
         noise = 0.0
+        if self.beam_kernel is not None and make_convolve:
+            beam_convolve_func, beam_kernel = (
+                self._get_beam_convolution_operation()
+            )
+
         for vchan in vchannels:
             int2d_near, int2d_far = self.get_line_profile(vchan, vel2d, int2d, linew2d, lineb2d, **kwargs_line)
             int2d_full = self.line_uplow(int2d_near, int2d_far) 
@@ -859,7 +875,7 @@ class Intensity:
                     int2d_full[np.isnan(int2d_full)] = noise
                     int2d_full = (
                         self.beam_conv_factor
-                        * self._apply_beam_convolution(int2d_full)
+                        * beam_convolve_func(int2d_full, beam_kernel)
                     )
                 else:
                     int2d_full *= self.beam_conv_factor
