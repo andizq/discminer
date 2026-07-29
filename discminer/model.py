@@ -31,6 +31,7 @@ class ReferenceModel(Cube):
                 pa=0*u.deg
             ),
             convolve_func = 'scipy_fft',
+            dtype = np.float64,
             init_params = {},
             reset_params = False,
             init_funcs = {},
@@ -48,6 +49,11 @@ class ReferenceModel(Cube):
         
         dpc : `~astropy.units.Quantity`
             Distance to the disc.
+
+        dtype : numpy dtype, optional
+            Floating-point dtype used for projected properties, synthesized
+            channels, convolution, and the output model cube. Defaults to
+            ``numpy.float64``.
         """
 
         #Init default functional forms and parameters
@@ -181,7 +187,16 @@ class ReferenceModel(Cube):
         Cube.__init__(self, data, hdu.header, vchannels, dpc, beam=beam, filename=filename, disc=disc, mol=mol, kind=kind, parfile=parfile) #Empty datacube
         
         #Init model
-        model = Model(self, Rmax=Rmax, Rmin=Rmin, write_extent=write_extent, prototype=True, subpixels=subpixels, convolve_func=convolve_func) #Self is the simulated datacube
+        model = Model(
+            self,
+            Rmax=Rmax,
+            Rmin=Rmin,
+            write_extent=write_extent,
+            prototype=True,
+            subpixels=subpixels,
+            convolve_func=convolve_func,
+            dtype=dtype,
+        ) #Self is the simulated datacube
         
         model.velocity_func = self.funcs['velocity']
         model.z_upper_func = self.funcs['z_upper']

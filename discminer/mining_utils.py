@@ -60,7 +60,17 @@ moltex = {
 #warnings.filterwarnings("ignore", category=UserWarning)
 #warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-def init_data_and_model(parfile='parfile.json', Rmin=0, Rmax=1.1, twodim=False, init_model=True, write_extent=True, verbose=True, subpixels=0):
+def init_data_and_model(
+    parfile='parfile.json',
+    Rmin=0,
+    Rmax=1.1,
+    twodim=False,
+    init_model=True,
+    write_extent=True,
+    verbose=True,
+    subpixels=0,
+    dtype=np.float64,
+):
     #Rmin: If dimensionless, fraction of beam_size
     #Rmax: If dimensionless, fraction of Rout    
     with open(parfile) as jf:
@@ -165,7 +175,16 @@ def init_data_and_model(parfile='parfile.json', Rmin=0, Rmax=1.1, twodim=False, 
         if isinstance(Rmax, numbers.Real):
             Rmax = Rmax*Rout*u.au
             
-        model = Model(datacube, Rmax=Rmax, Rmin=Rmin, write_extent=write_extent, prototype=True, verbose=verbose, subpixels=subpixels)
+        model = Model(
+            datacube,
+            Rmax=Rmax,
+            Rmin=Rmin,
+            write_extent=write_extent,
+            prototype=True,
+            verbose=verbose,
+            subpixels=subpixels,
+            dtype=dtype,
+        )
 
         set_model_funcs(model)
 

@@ -29,6 +29,7 @@ from scipy.interpolate import interp1d
 from scipy.optimize import curve_fit
 from scipy.special import ellipe, ellipk
 from scipy.signal import convolve2d, fftconvolve
+from scipy.fft import fftn as scipy_fftn, ifftn as scipy_ifftn
 from .tools.utils import FrontendUtils, InputError, _get_beam_from, hypot_func
 from . import constants as sfc
 from . import units as sfu
@@ -95,7 +96,20 @@ def _astropy_conv(image, kernel):
     return convolve(image, kernel, nan_treatment="fill", fill_value=0.0)
 
 def _astropy_fft_conv(image, kernel):
-    return convolve_fft(image, kernel, nan_treatment="fill", fill_value=0.0)
+    kwargs = {}
+    if image.dtype == np.float32:
+        kwargs = {
+            "complex_dtype": np.complex64,
+            "fftn": scipy_fftn,
+            "ifftn": scipy_ifftn,
+        }
+    return convolve_fft(
+        image,
+        kernel,
+        nan_treatment="fill",
+        fill_value=0.0,
+        **kwargs,
+    )
 
 def _scipy_conv(image, kernel):
     k = kernel.array if hasattr(kernel, "array") else kernel
@@ -699,6 +713,7 @@ class Intensity:
     def _get_beam_convolution_operation(self):
         """Select the beam operation and its kernel once per cube."""
         kernel = self.beam_kernel
+        dtype = getattr(self, "dtype", np.dtype(np.float64))
         kernel_array = (
             kernel.array
             if hasattr(kernel, "array")
@@ -715,6 +730,9 @@ class Intensity:
             else:
                 # SciPy preserves the amplitude of the supplied kernel.
                 return _scalar_conv, kernel_value
+
+        if dtype == np.dtype(np.float32):
+            kernel = np.asarray(kernel_array, dtype=dtype)
 
         return self.beam_convolve_func, kernel
 
@@ -801,6 +819,7 @@ class Intensity:
             return int2d['upper']*v_near, int2d['lower']*v_far 
 
     def get_channel(self, velocity2d, intensity2d, linewidth2d, lineslope2d, v_chan, **kwargs):                    
+        dtype = getattr(self, "dtype", np.dtype(np.float64))
         vel2d, int2d, linew2d, lineb2d = velocity2d, {}, {}, {}
 
         if isinstance(intensity2d, numbers.Number): int2d['upper'] = int2d['lower'] = intensity2d
@@ -811,7 +830,10 @@ class Intensity:
         else: lineb2d = lineslope2d
     
         int2d_near, int2d_far = self.get_line_profile(v_chan, vel2d, int2d, linew2d, lineb2d, **kwargs)
-        int2d_full = self.line_uplow(int2d_near, int2d_far)
+        int2d_full = np.asarray(
+            self.line_uplow(int2d_near, int2d_far),
+            dtype=dtype,
+        )
         
         if self.beam_kernel is not None:
             int2d_full = (
@@ -824,6 +846,7 @@ class Intensity:
     def get_cube(self, vchannels, velocity2d, intensity2d, linewidth2d, lineslope2d, make_convolve=True,
                  rms=None, tb={'nu': False, 'beam': False, 'full': True}, return_data_only=False, header=None, dpc=None, disc=None, mol='12co', kind=['mask'], **kwargs_line):
         
+        dtype = getattr(self, "dtype", np.dtype(np.float64))
         vel2d, int2d, linew2d, lineb2d = velocity2d, {}, {}, {}
         
         if isinstance(intensity2d, numbers.Number):
@@ -855,19 +878,28 @@ class Intensity:
             vel2d_far_nan = np.isnan(vel2d['lower']) #~vel2d['lower'].mask
         """
         
-        cube = []
+        cube = np.empty(
+            (len(vchannels), *int2d_shape),
+            dtype=dtype,
+        )
         noise = 0.0
         if self.beam_kernel is not None and make_convolve:
             beam_convolve_func, beam_kernel = (
                 self._get_beam_convolution_operation()
             )
 
-        for vchan in vchannels:
+        for channel, vchan in enumerate(vchannels):
             int2d_near, int2d_far = self.get_line_profile(vchan, vel2d, int2d, linew2d, lineb2d, **kwargs_line)
-            int2d_full = self.line_uplow(int2d_near, int2d_far) 
+            int2d_full = np.asarray(
+                self.line_uplow(int2d_near, int2d_far),
+                dtype=dtype,
+            )
             
             if rms is not None:
-                noise = np.random.normal(scale=rms, size=int2d_shape)
+                noise = np.random.normal(
+                    scale=rms,
+                    size=int2d_shape,
+                ).astype(dtype, copy=False)
                 int2d_full += noise
 
             if self.beam_kernel is not None:
@@ -883,11 +915,11 @@ class Intensity:
             else:
                 int2d_full *= self.beam_conv_factor #unit conversion
                 int2d_full[~np.isfinite(int2d_full)] = noise
-                
-            cube.append(int2d_full)
+
+            cube[channel] = int2d_full
             
-        if return_data_only: return np.asarray(cube)
-        else: return Cube(np.asarray(cube), header, vchannels, dpc, beam=self.beam_info, filename="./cube_model.fits", disc=disc, mol=mol, kind=kind)
+        if return_data_only: return cube
+        else: return Cube(cube, header, vchannels, dpc, beam=self.beam_info, filename="./cube_model.fits", disc=disc, mol=mol, kind=kind)
 
     @staticmethod
     def make_channels_movie(vchan0, vchan1, velocity2d, intensity2d, linewidth2d, lineslope2d, nchans=30, folder='./movie_channels/', **kwargs):
@@ -1065,14 +1097,30 @@ class Mcmc:
                     0.0,
                 )
 
-            lnlike += -0.5 * np.sum(squared_residual)
+            lnlike += -0.5 * np.sum(
+                squared_residual,
+                dtype=np.float64,
+            )
 
         return lnlike if np.isfinite(lnlike) else -np.inf
     
 
 class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
     
-    def __init__(self, datacube, Rmax, Rmin=1.0, prototype=False, subpixels=False, write_extent=True, convolve_func="scipy_fft", init_params={}, init_funcs={}, verbose=True):        
+    def __init__(
+        self,
+        datacube,
+        Rmax,
+        Rmin=1.0,
+        prototype=False,
+        subpixels=False,
+        write_extent=True,
+        convolve_func="scipy_fft",
+        init_params={},
+        init_funcs={},
+        verbose=True,
+        dtype=np.float64,
+    ):
         """
         Initialise discminer model object.
 
@@ -1097,6 +1145,12 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         subpixels : bool, optional
             Subdivide original grid pixels into smaller pixels (subpixels) to account for large velocity gradients in the disc. This allows for more precise calculations of line-of-sight velocities in regions where velocity gradients across individual pixels can be large, e.g. near the centre of the disc. Defaults to False.
 
+        dtype : numpy dtype, optional
+            Floating-point dtype used for projected physical properties,
+            channel synthesis, convolution, and model cubes. Geometry and
+            interpolation calculations remain in float64. Defaults to
+            ``numpy.float64``.
+
         Attributes
         ----------
         skygrid : dict
@@ -1111,6 +1165,9 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         
         self.prototype = prototype
         self.verbose = verbose
+        self.dtype = np.dtype(dtype)
+        if self.dtype not in (np.dtype(np.float32), np.dtype(np.float64)):
+            raise ValueError("dtype must be np.float32 or np.float64")
 
         self.datacube = datacube
         
@@ -1772,8 +1829,26 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             R_lev=R_lev, phi_lev=phi_lev, proj_offset=proj_offset,
             which=which, kwargs_R=kwargs_R, kwargs_phi=kwargs_phi
         )
-        
-            
+
+    def _cast_projected_properties(self, props):
+        """Cast projected physical fields at the synthesis boundary."""
+        for prop in props:
+            if self.subpixels:
+                surfaces = prop
+            else:
+                surfaces = [prop]
+
+            for surface in surfaces:
+                for side in ("upper", "lower"):
+                    value = surface[side]
+                    if not isinstance(value, numbers.Number):
+                        surface[side] = np.asarray(
+                            value,
+                            dtype=self.dtype,
+                        )
+
+        return props
+
     def make_model(self, z_mirror=False, **kwargs_line_profile):                   
         if self.prototype and self.verbose: 
             _break_line()
@@ -1934,6 +2009,8 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                             prop[side],
                             np.nan,
                         )
+
+        props = self._cast_projected_properties(props)
 
         #*************************************
         if self.prototype:
