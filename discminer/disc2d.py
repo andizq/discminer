@@ -688,6 +688,30 @@ class Intensity:
         #velocity nans might differ from Int nans when a z surf is zero and SG is active, nanmax must be used
         return np.nanmax([Iup, Ilow], axis=0)
 
+    def _apply_beam_convolution(self, image):
+        """Convolve an image, bypassing the backend for a 1x1 kernel."""
+        kernel = self.beam_kernel
+        kernel_array = (
+            kernel.array
+            if hasattr(kernel, "array")
+            else np.asarray(kernel)
+        )
+
+        if kernel_array.shape == (1, 1):
+            kernel_value = kernel_array[0, 0]
+
+            if self.beam_convolve_func in (_astropy_conv, _astropy_fft_conv):
+                # Astropy normalizes every finite, nonzero kernel by default.
+                if np.isfinite(kernel_value) and kernel_value != 0:
+                    return image
+            else:
+                # SciPy preserves the amplitude of the supplied kernel.
+                if kernel_value == 1:
+                    return image
+                return image * kernel_value
+
+        return self.beam_convolve_func(image, kernel)
+
     def update_beam_from_params(self):
         """
         Update the model beam kernel & area from MCMC beam parameters.
@@ -779,7 +803,10 @@ class Intensity:
         int2d_full = self.line_uplow(int2d_near, int2d_far)
         
         if self.beam_kernel is not None:
-            int2d_full = self.beam_conv_factor*self.beam_convolve_func(np.nan_to_num(int2d_full), self.beam_kernel)
+            int2d_full = (
+                self.beam_conv_factor
+                * self._apply_beam_convolution(np.nan_to_num(int2d_full))
+            )
 
         return int2d_full
 
@@ -830,7 +857,10 @@ class Intensity:
             if self.beam_kernel is not None:
                 if make_convolve:
                     int2d_full[np.isnan(int2d_full)] = noise
-                    int2d_full = self.beam_conv_factor*self.beam_convolve_func(int2d_full, self.beam_kernel)
+                    int2d_full = (
+                        self.beam_conv_factor
+                        * self._apply_beam_convolution(int2d_full)
+                    )
                 else:
                     int2d_full *= self.beam_conv_factor
                     int2d_full[~np.isfinite(int2d_full)] = noise
