@@ -1025,40 +1025,6 @@ class Mcmc:
         corner.corner(samples, labels=labels, title_fmt='.4f', bins=30,
                       quantiles=quantiles, show_titles=True)
 
-    def _prepare_likelihood_cache(self, noise_stddev):
-        """Cache fixed data and noise terms used by the likelihood."""
-        data = np.asarray(self.mc_data)
-        noise = np.asarray(noise_stddev, dtype=float)
-
-        try:
-            noise = np.broadcast_to(noise, data.shape)
-        except ValueError as exc:
-            raise InputError(
-                noise_stddev,
-                "noise_stddev must be scalar or broadcastable "
-                f"to the data shape {data.shape}; got {noise.shape}",
-            ) from exc
-
-        valid = (
-            np.isfinite(data)
-            & np.isfinite(noise)
-            & (noise > 0)
-        )
-        self.mc_valid_packed = np.packbits(valid.ravel())
-
-        noise_original = np.asarray(noise_stddev, dtype=float)
-        noise_is_valid = (
-            np.isfinite(noise_original)
-            & (noise_original > 0)
-        )
-        self.mc_inv_noise = np.zeros_like(noise_original, dtype=float)
-        np.divide(
-            1.0,
-            noise_original,
-            out=self.mc_inv_noise,
-            where=noise_is_valid,
-        )
-    
     def ln_likelihood(self, new_params, **kwargs):
 
         for i in range(self.mc_nparams):
@@ -1070,26 +1036,37 @@ class Mcmc:
             
         vel2d, int2d, linew2d, lineb2d = self.make_model(**kwargs)
 
-        model_cube = self.get_cube(self.mc_vchannels, vel2d, int2d, linew2d, lineb2d, return_data_only=True)
-        model_cube = np.asarray(model_cube)
-        valid = np.unpackbits(
-            self.mc_valid_packed,
-            count=model_cube.size,
-        ).view(np.bool_).reshape(model_cube.shape)
-
-        #Model validity can depend on sampled parameters
-        # (through Rmin/Rmax), so per-evaluation mask can change.
-        valid &= np.isfinite(model_cube)
-        inv_noise = np.broadcast_to(
-            self.mc_inv_noise,
-            model_cube.shape,
+        model_cube = self.get_cube(
+            self.mc_vchannels,
+            vel2d,
+            int2d,
+            linew2d,
+            lineb2d,
+            return_data_only=True,
         )
-        residual = (
-            model_cube[valid]
-            - np.asarray(self.mc_data)[valid]
-        ) * inv_noise[valid]
 
-        lnlike = -0.5 * np.dot(residual, residual)
+        lnlike = 0.0
+        for channel in range(self.mc_nchan):
+            data_channel = self.mc_data[channel]
+            model_channel = model_cube[channel]
+            valid = (
+                np.isfinite(data_channel)
+                & np.isfinite(model_channel)
+            )
+
+            #Non-finite data/model regions are excluded.
+            with np.errstate(divide="ignore", invalid="ignore"):
+                squared_residual = np.where(
+                    valid,
+                    np.square(
+                        (data_channel - model_channel)
+                        / self.noise_stddev
+                    ),
+                    0.0,
+                )
+
+            lnlike += -0.5 * np.sum(squared_residual)
+
         return lnlike if np.isfinite(lnlike) else -np.inf
     
 
@@ -1389,7 +1366,6 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             
         self.mc_nchan = len(self.mc_vchannels)
         self.noise_stddev = noise_stddev
-        self._prepare_likelihood_cache(noise_stddev)
         if use_zeus: import zeus as sampler_id
         else: import emcee as sampler_id
             
