@@ -67,7 +67,6 @@ except KeyError:
     
 ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get_2d_plot_decorators(args.moment, unit_simple=True, fmt_vertical=True, args=args)
 
-if args.moment in ['v0r', 'v0phi','vr_leftover']: clim *= 2
 
 #****************
 #SOME DEFINITIONS
@@ -162,6 +161,7 @@ clabels = { #ylabel for polar plots
     'v0z': r'$\upsilon_z$ [km s$^{-1}$]',
     'v0phi': r'$\upsilon_{\phi}$ [km s$^{-1}$]',
     'v0r': r'$\upsilon_R$ [km s$^{-1}$]',
+    'v0all': r'$\upsilon_{\phi,R,z}$ [km s$^{-1}$]',
     'vr_leftover': r'$\upsilon_R (leftover)$ [km s$^{-1}$]',        
     'peakintensity': r'$\Delta$ Peak Int. [K]'
 }

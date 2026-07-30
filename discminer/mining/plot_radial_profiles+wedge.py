@@ -165,7 +165,7 @@ mod_major_ticks(ax, axis='y', nbins=5)
 make_substructures(ax, gaps=gaps, rings=rings, label_gaps=True, label_rings=True)      
 
 ax.set_xlabel('Radius [au]')
-if args.moment in ['velocity', 'v0phi', 'v0r', 'v0z', 'vr_leftover']:
+if args.moment in ['velocity', 'v0phi', 'v0r', 'v0z', 'v0all', 'vr_leftover']:
     ax.set_ylabel(r'$\delta\upsilon$ [km/s]', fontsize=MEDIUM_SIZE, labelpad=10)    
 
 make_1d_legend(ax, scatterpoints=3, fontsize=13, loc='lower right', bbox_to_anchor=(0.9,1.0))

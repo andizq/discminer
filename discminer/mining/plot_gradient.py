@@ -119,7 +119,7 @@ elif args.surface in ['low', 'lower']:
 #**************
 #FIGURE LABELS
 #**************
-if args.moment in ['velocity', 'v0phi', 'v0r', 'v0z', 'vr_leftover', 'linewidth']:
+if args.moment in ['velocity', 'v0phi', 'v0r', 'v0z', 'v0all', 'vr_leftover', 'linewidth']:
     unit = 'm/s'
     ufac = u.Unit('km/s').to(unit) #1e3
     dfmt = '%4d'
@@ -139,6 +139,7 @@ clabels = {
     'v0phi': r'$\Delta$ Centroid [m s$^{-1}$]',
     'v0r': r'$\Delta$ Centroid [m s$^{-1}$]',
     'v0z': r'$\Delta$ Centroid [m s$^{-1}$]',
+    'v0all': r'$\Delta$ Centroid [m s$^{-1}$]',
     'vr_leftover': r'$\Delta$ Centroid [m s$^{-1}$]',    
     'peakintensity': r'$\Delta$ Peak Int. [K]'
 }
@@ -201,7 +202,7 @@ _, _, cbar = make_polar_map(ufac*residuals, ufac*levels_resid,
                             cmap=cmap_res, fmt='%4d', clabel=clabelfromkey, **kwargs_fontsize)
 
 
-if args.moment in ['velocity', 'linewidth']:
+if args.moment in ['velocity', 'linewidth'] and args.show_peaks:
     try:
         peaks_pos = np.loadtxt('phi_gradient_peaks_%s_positive.txt'%mtags['base']).T    
         peaks_neg = np.loadtxt('phi_gradient_peaks_%s_negative.txt'%mtags['base']).T

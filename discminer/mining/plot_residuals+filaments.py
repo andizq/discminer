@@ -124,6 +124,7 @@ clabels = {
     'v0phi': r'$\Delta$ Centroid [km s$^{-1}$]',
     'v0r': r'$\Delta$ Centroid [km s$^{-1}$]',
     'v0z': r'$\Delta$ Centroid [km s$^{-1}$]',
+    'v0all': r'$\Delta$ Centroid [km s$^{-1}$]',
     'vr_leftover': r'$\Delta$ Centroid [km s$^{-1}$]',        
     'peakintensity': r'$\Delta$ Peak Int. [K]'
 }

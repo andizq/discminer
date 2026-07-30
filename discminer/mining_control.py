@@ -346,6 +346,24 @@ def _mining_stackcube(parserobj, prog='stackcube', description='Make stacked cub
     add_parser_args(parser, surface=True, Rinner=True, Router=0.95, absolute_Rinner=True, absolute_Router=True)
     return parser
 
+def _mining_avg_velocity(parserobj, prog='avgvel', description='Make axisymmetric data-derived velocity moment maps'):
+    parser = _check_and_return_parser(parserobj, prog=prog, description=description)
+    parser.add_argument('-pf', '--profile-prefix', default='radial_profile_velocity', type=str,
+                        help="Filename prefix of radial velocity profiles. DEFAULTS to 'radial_profile_velocity'.")
+    parser.add_argument('-o', '--overwrite', default=1, type=int, choices=[0, 1],
+                        help="Overwrite existing averaged velocity FITS products? DEFAULTS to 1.")
+    add_parser_args(
+        parser,
+        kernel=True,
+        kind=True,
+        surface=True,
+        jansky=False, #Turn off options that are enforced or not relevant
+        show_output=False,
+        show_block=False,
+        writefits=False,
+    )
+    return parser
+
 def _mining_destackcube(parserobj, prog='destackcube', description='Undo stacked cube with lines shifted to their original centroid velocity'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     parser.add_argument(
@@ -402,6 +420,7 @@ def _mining_attributes(parserobj, prog='attributes', description='Show model att
 def _mining_gradient(parserobj, prog='gradient', description='Show peak, radial AND/OR azimuthal gradient from residual maps'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     parser.add_argument('-gt', '--threshold', default=2, type=float, help="Minimum gradient value a peak must have to be taken into account. DEFAULTS to 2 (m/s/au).")
+    parser.add_argument('-sp', '--show_peaks', default=1, type=int, help="Show peak gradients on 2D maps. DEFAULTS to 1.")
     parser.add_argument('-sleg', '--show_legend', default=0, type=int, help="Show markers legend. DEFAULTS to 0.")
     parser.add_argument('-fontsize', '--fontsize', default=MEDIUM_SIZE, type=int, help="Smallest font size in figure. DEFAULTS to %d."%MEDIUM_SIZE)
     parser.add_argument('-stitle', '--show_title', default=1, type=int, help="Show title at the top of the map? DEFAULTS to 1.")    
@@ -494,6 +513,7 @@ _mining_parser_func = {
     'skewkurt': _mining_skewkurt,
     'intensdistrib': _mining_intensdistrib,
     'stack': _mining_stack,
+    'avgvel': _mining_avg_velocity,
     'stackcube': _mining_stackcube,
     'destackcube': _mining_destackcube
 }
@@ -526,6 +546,7 @@ scripts = {
     'skewkurt': 'make_skewkurt_moments.py',
     'intensdistrib': 'plot_intensity_distribution.py',
     'stack': 'plot_stack.py',
+    'avgvel': 'make_avg_velocity.py',
     'stackcube': 'make_stackcube.py',
     'destackcube': 'make_destackcube.py'    
 }
@@ -588,7 +609,7 @@ def add_parser_args(parser,
         else:
             return val
 
-    ALLOWED_MOMENTS = ['velocity', 'linewidth', 'lineslope', 'peakint', 'peakintensity', 'v0r', 'v0phi', 'v0z', 'vr_leftover', 'delta_velocity', 'delta_meanvelocity', 'delta_medianvelocity', 'delta_linewidth', 'delta_peakintensity', 'reducedchi2', 'skewness', 'kurtosis', 'skewkurt', 'bluewidth', 'redwidth', 'bluered', 'continuum']
+    ALLOWED_MOMENTS = ['velocity', 'linewidth', 'lineslope', 'peakint', 'peakintensity', 'v0r', 'v0phi', 'v0z', 'v0all', 'vr_leftover', 'delta_velocity', 'delta_meanvelocity', 'delta_medianvelocity', 'delta_linewidth', 'delta_peakintensity', 'reducedchi2', 'skewness', 'kurtosis', 'skewkurt', 'bluewidth', 'redwidth', 'bluered', 'continuum']
 
     def choices_or_fits(value):
         if value in ALLOWED_MOMENTS:

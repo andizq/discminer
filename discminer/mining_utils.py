@@ -316,7 +316,7 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         levels_im = np.linspace(0.0, fclim, 64)
         levels_cc = np.linspace(0.2*fclim, fclim, 4)
         
-    elif moment in ['velocity', 'v0phi', 'v0r', 'v0z', 'vr_leftover', 'meanvelocity', 'medianvelocity']:
+    elif moment in ['velocity', 'v0phi', 'v0r', 'v0z', 'v0all', 'vr_leftover', 'meanvelocity', 'medianvelocity']:
         clim = custom['vlim']
         fclim = float(clim)        
         unit = '[km s$^{-1}$]'
@@ -503,7 +503,7 @@ def get_1d_plot_decorators(moment, parfile='parfile.json', tag='', args=None):
         clabel = r'Reduced $X^2$'
         clabel_res = r'Reduced $X^2$ residuals'
     
-    elif moment in ['velocity', 'v0phi', 'v0r', 'v0z', 'vr_leftover', 'meanvelocity', 'medianvelocity']:
+    elif moment in ['velocity', 'v0phi', 'v0r', 'v0z', 'v0all', 'vr_leftover', 'meanvelocity', 'medianvelocity']:
         unit = '[km/s]' #'[km s$^{-1}$]'
         clim0_res = -custom['vlim']
         clim1_res = custom['vlim']    
@@ -673,6 +673,37 @@ def get_noise_mask(
     return noise, mask
 
 
+def get_moment_tag(moment, kernel='gaussian', surface='upper', kind='mask'):
+    """Return the filename tag used by discminer moment-map products."""
+    kernel_aliases = {
+        'gauss': 'gaussian',
+        'dgauss': 'doublegaussian',
+        'dbell': 'doublebell',
+    }
+    kernel = kernel_aliases.get(kernel, kernel)
+
+    if kernel in ['gaussian', 'quadratic', 'bell']:
+        tag_surf = 'both'
+        ref_surf = 'upper'
+        tag_base = f'{moment}_{kernel}'
+    elif kernel in ['doublegaussian', 'doublebell']:
+        if surface in ['up', 'upper']:
+            tag_surf = 'up'
+            ref_surf = 'upper'
+        elif surface in ['low', 'lower']:
+            tag_surf = 'low'
+            ref_surf = 'lower'
+        else:
+            raise ValueError(
+                "Double-component moment maps require surface='upper' or 'lower'"
+            )
+        tag_base = f'{moment}_{tag_surf}_{kernel}_{kind}'
+    else:
+        raise ValueError(f"Unsupported moment kernel: {kernel!r}")
+
+    return tag_base, tag_surf, ref_surf
+
+
 def load_moments(
         args, moment=None, kernel=None, mask=[],
         clip_Rgrid=None, clip_Rmin=0*u.au, clip_Rmax=np.inf*u.au,
@@ -688,27 +719,12 @@ def load_moments(
     if kernel is None:
         kernel = args.kernel
         
-    if kernel in ['gauss', 'gaussian', 'quadratic', 'bell']:
-        tag_surf = 'both'
-        ref_surf = 'upper' #For contour plots
-    else:
-        if args.surface in ['up', 'upper']:
-            tag_surf = 'up'
-            ref_surf = 'upper'
-        elif args.surface in ['low', 'lower']:
-            tag_surf = 'low'
-            ref_surf = 'lower'
-            
-    if kernel in ['gauss', 'gaussian']:
-        tag_base = f'{moment}_gaussian'
-    elif kernel in ['quadratic']:
-        tag_base = f'{moment}_quadratic'        
-    elif kernel in ['bell']:
-        tag_base = f'{moment}_bell'
-    elif kernel in ['dgauss', 'doublegaussian']:
-        tag_base = f'{moment}_{tag_surf}_doublegaussian_{args.kind}'
-    elif kernel in ['dbell', 'doublebell']:
-        tag_base = f'{moment}_{tag_surf}_doublebell_{args.kind}'
+    tag_base, tag_surf, ref_surf = get_moment_tag(
+        moment,
+        kernel=kernel,
+        surface=getattr(args, 'surface', 'upper'),
+        kind=getattr(args, 'kind', 'mask'),
+    )
 
     if deltas:
         tag_base = 'delta_'+tag_base
