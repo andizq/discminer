@@ -194,8 +194,11 @@ def init_data_and_model(
         model.params = copy.copy(best)
 
         #if datacube.beam is not None:
-        model.params['intensity']['I0'] /= meta['downsamp_factor']
-
+        try:
+            model.params['intensity']['I0'] /= meta['downsamp_factor']
+        except KeyError:
+            print ('Warning: I0 parameter not found. Skipping downsampling re-normalisation. Make sure your intensity normalisation refers to the same pixel size of your input image...')
+            
         return datacube, model
 
     else:

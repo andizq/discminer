@@ -101,11 +101,19 @@ class Rail(object):
         except ValueError: #No contour found
             return np.inf
 
-    def make_interpolated_lev(self, prop, lev, phi_beam_frac=1/4.):
+    def make_interpolated_lev(self, prop, lev, surface='upper', phi_beam_frac=1/4.):
         lev_m = lev*au_to_m
         phi_step = self.beam_size.to('au').value*phi_beam_frac/lev
         phi_list = np.arange(-np.pi, np.pi, phi_step)
-        zp = self.model.z_upper_func({'R': lev_m}, **self.model.params['height_upper'])/au_to_m
+        if surface == 'upper':
+            z_func = self.model.z_upper_func
+            z_pars = self.model.params['height_upper']
+        elif surface == 'lower':
+            z_func = self.model.z_lower_func
+            z_pars = self.model.params['height_lower']
+        else:
+            raise ValueError("surface must be 'upper' or 'lower'")
+        zp = z_func({'R': lev_m}, **z_pars)/au_to_m
         incl, PA, xc, yc = self.model.orientation_func({'R': lev_m}, **self.model.params['orientation'])
         xc /= au_to_m
         yc /= au_to_m        
@@ -198,7 +206,7 @@ class Rail(object):
         for levi, lev in enumerate(coord_levels):
 
             if interpgrid:
-                prop_cont, second_cont, x_cont, y_cont = self.make_interpolated_lev(prop, lev)
+                prop_cont, second_cont, x_cont, y_cont = self.make_interpolated_lev(prop, lev, surface=surface)
                 corr_inds = slice(None)
 
             else:
@@ -366,6 +374,302 @@ class Rail(object):
                                    [float, object, object, object]
                 )
         ]
+
+    @staticmethod
+    def fit_velocity_harmonics(phi_deg, velocity, inclination, vsys=0.0,
+                               mask_ang=0.0, min_samples=6,
+                               clip_sigma=np.inf, max_iterations=10,
+                               sample_mask=None):
+        """
+        Fit intrinsic azimuthal, radial, and vertical velocities.
+
+        The projection follows the convention used by ``General2d``:
+
+        ``v_los - v_sys = A sin(i) cos(phi) - B sin(i) sin(phi) - C cos(i)``.
+
+        Positive ``C`` therefore denotes motion toward positive disc z,
+        i.e. upward from the midplane on the upper surface.
+        """
+        phi_deg = np.asarray(phi_deg, dtype=float)
+        velocity = np.asarray(velocity, dtype=float)
+
+        if phi_deg.shape != velocity.shape:
+            raise ValueError("phi_deg and velocity must have matching shapes")
+        if not 0.0 <= mask_ang < 90.0:
+            raise ValueError("mask_ang must satisfy 0 <= mask_ang < 90 degrees")
+        if min_samples < 3:
+            raise ValueError("min_samples must be at least 3")
+        if not np.isfinite(inclination):
+            raise ValueError("inclination must be finite and expressed in radians")
+        if np.isnan(clip_sigma) or clip_sigma <= 0:
+            raise ValueError("clip_sigma must be positive or np.inf")
+        if max_iterations < 1:
+            raise ValueError("max_iterations must be at least 1")
+
+        finite = np.isfinite(phi_deg) & np.isfinite(velocity)
+        outside_minor_mask = np.abs(np.abs(phi_deg) - 90.0) > mask_ang
+        accepted = finite & outside_minor_mask
+        nan3 = np.full(3, np.nan)
+
+        if sample_mask is not None:
+            sample_mask = np.asarray(sample_mask, dtype=bool)
+            if sample_mask.shape != velocity.shape:
+                raise ValueError("sample_mask and velocity must have matching shapes")
+            accepted &= sample_mask
+
+        sin_incl = np.sin(inclination)
+        cos_incl = np.cos(inclination)
+        phi = np.radians(phi_deg)
+        design_full = np.column_stack((
+            sin_incl*np.cos(phi),
+            -sin_incl*np.sin(phi),
+            np.full(phi.size, -cos_incl),
+        ))
+
+        def solve(mask):
+            nsamples = np.count_nonzero(mask)
+            if nsamples < min_samples:
+                return nan3.copy(), nan3.copy(), np.nan, nsamples, np.nan
+
+            design = design_full[mask]
+            y = velocity[mask] - vsys
+            coeff, _, rank, _ = np.linalg.lstsq(design, y, rcond=None)
+            condition = np.linalg.cond(design)
+
+            if rank < 3:
+                return nan3.copy(), nan3.copy(), np.nan, nsamples, condition
+
+            residual = y - design @ coeff
+            rms = np.sqrt(np.mean(residual**2))
+            dof = nsamples - 3
+
+            if dof > 0:
+                residual_variance = np.sum(residual**2) / dof
+                covariance = residual_variance*np.linalg.pinv(design.T @ design)
+                error = np.sqrt(np.maximum(np.diag(covariance), 0.0))
+            else:
+                error = nan3.copy()
+
+            return coeff, error, rms, nsamples, condition
+
+        if np.isfinite(clip_sigma) and sample_mask is None:
+            for _ in range(max_iterations):
+                coeff, _, _, _, _ = solve(accepted)
+                if not np.all(np.isfinite(coeff)):
+                    break
+
+                residual = velocity-vsys-design_full @ coeff
+                residual_centre = np.nanmedian(residual[accepted])
+                mad = np.nanmedian(
+                    np.abs(residual[accepted]-residual_centre)
+                )
+                robust_sigma = 1.4826*mad
+                if not np.isfinite(robust_sigma) or robust_sigma <= 0:
+                    break
+
+                accepted_next = (
+                    accepted
+                    & (np.abs(residual-residual_centre)
+                       <= clip_sigma*robust_sigma)
+                )
+                if np.array_equal(accepted_next, accepted):
+                    break
+                accepted = accepted_next
+
+        result = solve(accepted)
+        return result + (accepted,)
+
+    def get_velocity_harmonics(self, inclination, vsys=0.0, surface='upper',
+                               mask_ang=0.0, min_samples=6,
+                               clip_sigma=np.inf, max_iterations=10,
+                               sample_masks=None, plot_diagnostics=False,
+                               tag='',
+                               **kwargs_along_coords):
+        """
+        Fit velocity harmonics independently along each radial contour.
+
+        Returns a dictionary containing the fitted radii, coefficients,
+        formal errors, residual RMS, accepted sample counts and masks, and
+        design matrix condition numbers.
+        """
+        if self._lev_list is None:
+            kwargs_along_coords.update({'surface': surface})
+            self.prop_along_coords(**kwargs_along_coords)
+
+        if sample_masks is not None and len(sample_masks) != len(self._lev_list):
+            raise ValueError(
+                "sample_masks must contain one mask per radial contour"
+            )
+
+        fit_results = []
+        for i, (phi, velocity) in enumerate(
+                zip(self._coord_list, self._resid_list)):
+            sample_mask = None if sample_masks is None else sample_masks[i]
+            fit_results.append(Rail.fit_velocity_harmonics(
+                phi,
+                velocity,
+                inclination=inclination,
+                vsys=vsys,
+                mask_ang=mask_ang,
+                min_samples=min_samples,
+                clip_sigma=clip_sigma,
+                max_iterations=max_iterations,
+                sample_mask=sample_mask,
+            ))
+
+        if not fit_results:
+            raise RuntimeError(
+                "No annular contours were available in the requested radial range"
+            )
+
+        result = {
+            'radius': np.asarray(self._lev_list, dtype=float),
+            'coeff': np.asarray([result[0] for result in fit_results]),
+            'error': np.asarray([result[1] for result in fit_results]),
+            'rms': np.asarray([result[2] for result in fit_results]),
+            'nsamples': np.asarray([result[3] for result in fit_results]),
+            'condition': np.asarray([result[4] for result in fit_results]),
+            'accepted': [result[5] for result in fit_results],
+        }
+
+        if plot_diagnostics:
+            self._plot_velocity_harmonics_diagnostics(
+                result,
+                inclination=inclination,
+                vsys=vsys,
+                mask_ang=mask_ang,
+                clip_sigma=clip_sigma,
+                tag=tag,
+            )
+
+        return result
+
+    def _plot_velocity_harmonics_diagnostics(
+            self, harmonics, inclination, vsys=0.0, mask_ang=0.0,
+            clip_sigma=np.inf, tag=''):
+        """Plot the samples and residuals used by representative annular fits."""
+        nconts = len(harmonics['radius'])
+        idiag = np.unique(np.clip(
+            (np.array([0.3, 0.6, 0.9])*nconts).astype(int),
+            0,
+            nconts-1,
+        ))
+        colors = plt.get_cmap('viridis')(np.linspace(0.15, 0.85, len(idiag)))
+
+        fig, (ax0, ax1) = plt.subplots(
+            nrows=2, figsize=(12, 10), sharex=True
+        )
+        sin_incl = np.sin(inclination)
+        cos_incl = np.cos(inclination)
+
+        for color, i in zip(colors, idiag):
+            phi_deg = np.asarray(self._coord_list[i], dtype=float)
+            velocity = np.asarray(self._resid_list[i], dtype=float)
+            accepted = np.asarray(harmonics['accepted'][i], dtype=bool)
+            coeff = harmonics['coeff'][i]
+
+            finite = np.isfinite(phi_deg) & np.isfinite(velocity)
+            outside_minor = np.abs(np.abs(phi_deg)-90.0) > mask_ang
+            eligible = finite & outside_minor
+            clipped = eligible & ~accepted
+            masked_minor = finite & ~outside_minor
+
+            if np.all(np.isfinite(coeff)):
+                phi_fit_deg = np.linspace(-180.0, 180.0, 721)
+                phi_fit = np.radians(phi_fit_deg)
+                velocity_fit = (
+                    vsys
+                    + coeff[0]*sin_incl*np.cos(phi_fit)
+                    - coeff[1]*sin_incl*np.sin(phi_fit)
+                    - coeff[2]*cos_incl
+                )
+                phi = np.radians(phi_deg)
+                velocity_pred = (
+                    vsys
+                    + coeff[0]*sin_incl*np.cos(phi)
+                    - coeff[1]*sin_incl*np.sin(phi)
+                    - coeff[2]*cos_incl
+                )
+                residual = velocity-velocity_pred
+                ax0.plot(
+                    phi_fit_deg, velocity_fit, color=color, lw=2.5,
+                    label=r'$R=%.1f$ au' % harmonics['radius'][i],
+                )
+            else:
+                residual = np.full_like(velocity, np.nan)
+                ax0.plot(
+                    [], [], color=color, lw=2.5,
+                    label=r'$R=%.1f$ au (fit failed)'
+                    % harmonics['radius'][i],
+                )
+
+            for ax, values in ((ax0, velocity), (ax1, residual)):
+                ax.scatter(
+                    phi_deg[accepted], values[accepted],
+                    edgecolor=color, facecolor='none', s=42, lw=1.4,
+                    zorder=5,
+                )
+                ax.scatter(
+                    phi_deg[clipped], values[clipped],
+                    color=color, marker='x', s=42, lw=1.5, zorder=6,
+                )
+                ax.scatter(
+                    phi_deg[masked_minor], values[masked_minor],
+                    color='0.65', marker='.', s=22, alpha=0.55, zorder=2,
+                )
+
+        if mask_ang > 0:
+            for ax in (ax0, ax1):
+                ax.axvspan(
+                    -90.0-mask_ang, -90.0+mask_ang,
+                    color='0.7', alpha=0.12, lw=0,
+                )
+                ax.axvspan(
+                    90.0-mask_ang, 90.0+mask_ang,
+                    color='0.7', alpha=0.12, lw=0,
+                )
+
+        marker_handles = [
+            matplotlib.lines.Line2D(
+                [], [], color='0.2', marker='o', markerfacecolor='none',
+                linestyle='none', label='Accepted',
+            ),
+            matplotlib.lines.Line2D(
+                [], [], color='0.2', marker='x', linestyle='none',
+                label='MAD rejected',
+            ),
+            matplotlib.lines.Line2D(
+                [], [], color='0.65', marker='.', linestyle='none',
+                label='Minor-axis mask',
+            ),
+        ]
+        radius_legend = ax0.legend(
+            frameon=False, fontsize=13, loc='lower left'
+        )
+        ax0.add_artist(radius_legend)
+        ax0.legend(
+            handles=marker_handles, frameon=False, fontsize=12,
+            loc='lower right',
+        )
+
+        ax0.set_ylabel(r'Line-of-sight velocity [km/s]')
+        ax1.set_ylabel(r'Fit residual [km/s]')
+        ax1.set_xlabel(r'Azimuth [deg]')
+        ax1.axhline(0.0, color='0.5', ls='--', lw=1.5)
+        ax1.set_xlim(-180.0, 180.0)
+        ax1.set_xticks(np.arange(-180.0, 181.0, 30.0))
+
+        if np.isfinite(clip_sigma):
+            ax0.set_title(r'Harmonic fits with MAD %g clipping' % clip_sigma)
+        else:
+            ax0.set_title('Harmonic fits without MAD clipping')
+
+        fig.savefig(
+            'diagnostics_velocity_harmonics_%s.png' % tag,
+            bbox_inches='tight',
+            dpi=200,
+        )
+        plt.close(fig)
         
     def get_average(self, surface='upper', 
                     av_func=np.nanmean,

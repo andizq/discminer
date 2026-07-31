@@ -30,6 +30,9 @@ if __name__ == '__main__':
     parser = _mining_radial_profiles(None)
     args = parser.parse_args()
 
+if args.moment!='velocity' and args.velocity_method!='integral':
+    raise ValueError("--velocity_method harmonics is only available with -m velocity")
+
 figsize1row = (11,4)
 figsize2row = (11,6)    
 
@@ -208,6 +211,15 @@ kw_ylabel = dict(fontsize=MEDIUM_SIZE-2, labelpad=0)
 if args.moment=='velocity':
 
     mask_ang = args.mask_minor #+-mask around disc minor axis
+    if not 0.0 <= mask_ang < 90.0:
+        raise ValueError("-b/--mask_minor must satisfy 0 <= b < 90 degrees")
+
+    if args.velocity_method=='harmonics':
+        png_suffix = '_harmonics'
+        if np.isfinite(args.harmonic_clip):
+            png_suffix += '_mad%g'%args.harmonic_clip
+    else:
+        png_suffix = ''
 
     #*******************
     #VELOCITY COMPONENTS
@@ -220,48 +232,99 @@ if args.moment=='velocity':
             pass
             moment_data = np.where(np.abs(moment_data-vsys)>5, np.nan, moment_data)    
     """
-    if args.kernel in ['doublebell', 'doublegaussian']:
-        mask_map_ref = np.abs((moment_data-vsys)/(np.cos(model.projected_coords['phi'][args.surface])*np.sin(incl)))
+    if args.velocity_method=='harmonics':
+        if args.min_samples < 3:
+            raise ValueError("--min-samples must be at least 3")
+        if np.isnan(args.harmonic_clip) or args.harmonic_clip <= 0:
+            raise ValueError("--harmonic-clip must be positive or inf")
+
+        #Use identical finite support for data and model, including pixels
+        #lost through data-only moment-fit failures.
+        common_valid = np.isfinite(moment_data) & np.isfinite(moment_model)
+        moment_data_harmonics = np.where(common_valid, moment_data, np.nan)
+        moment_model_harmonics = np.where(common_valid, moment_model, np.nan)
+
+        kw_harmonics = dict(
+            inclination=incl,
+            vsys=vsys,
+            surface=ref_surf,
+            mask_ang=mask_ang,
+            min_samples=args.min_samples,
+            interpgrid=bool(args.interpgrid),
+        )
+        rail_data = Rail(model, moment_data_harmonics, R_prof)
+        data_harmonics = rail_data.get_velocity_harmonics(
+            clip_sigma=args.harmonic_clip,
+            plot_diagnostics=True,
+            tag=tag_base+png_suffix.replace('_harmonics', ''),
+            **kw_harmonics
+        )
+        rail_model = Rail(model, moment_model_harmonics, R_prof)
+        model_harmonics = rail_model.get_velocity_harmonics(
+            clip_sigma=np.inf,
+            sample_masks=data_harmonics['accepted'],
+            **kw_harmonics
+        )
+
+        R_prof = data_harmonics['radius']
+        if (R_prof.shape != model_harmonics['radius'].shape or
+                not np.allclose(R_prof, model_harmonics['radius'])):
+            raise RuntimeError("Data and model annular radii do not match")
+        xlim0, xlim1 = 0.5*R_prof[0], 1.05*R_prof[-1]
+
+        A_data_signed, vel_r, vel_z = data_harmonics['coeff'].T
+        A_model_signed, _, _ = model_harmonics['coeff'].T
+        vel_rot = np.abs(A_data_signed)
+        vel_rot_model = np.abs(A_model_signed)
+
+        vel_rot_error, vel_r_error, vel_z_error = data_harmonics['error'].T
+        vel_rot_model_error = model_harmonics['error'][:, 0]
+        vel_phi = vel_rot-vel_rot_model
+        vel_phi_error = np.hypot(vel_rot_error, vel_rot_model_error)
+
     else:
-        mask_map_ref = None
+        if args.kernel in ['doublebell', 'doublegaussian']:
+            mask_map_ref = np.abs((moment_data-vsys)/(np.cos(model.projected_coords['phi'][args.surface])*np.sin(incl)))
+        else:
+            mask_map_ref = None
 
-    kw_avg = dict(surface=ref_surf, av_func=np.nanmean, mask_ang=mask_ang, sigma_thres=args.sigma, mask_from_map=mask_map_ref, interpgrid=args.interpgrid)
-    
-    #VZ
-    rail_vz = Rail(model, residuals, R_prof)
-    vel_z, vel_z_error = rail_vz.get_average(tag='vz', **kw_avg)
-    div_factor_z = get_normalisation(mask_ang, component='z')
+        kw_avg = dict(surface=ref_surf, av_func=np.nanmean, mask_ang=mask_ang, sigma_thres=args.sigma, mask_from_map=mask_map_ref, interpgrid=args.interpgrid)
 
-    vel_z /= div_factor_z
-    vel_z_error /= div_factor_z 
+        #VZ
+        rail_vz = Rail(model, residuals, R_prof)
+        vel_z, vel_z_error = rail_vz.get_average(tag='vz', **kw_avg)
+        div_factor_z = get_normalisation(mask_ang, component='z')
 
-    #DVPHI
-    rail_phi = Rail(model, residuals_abs, R_prof)
-    vel_phi, vel_phi_error = rail_phi.get_average(**kw_avg)
-    div_factor_phi = get_normalisation(mask_ang, component='phi')
+        vel_z /= div_factor_z
+        vel_z_error /= div_factor_z
 
-    vel_phi /= div_factor_phi
-    vel_phi_error /= div_factor_phi 
+        #DVPHI
+        rail_phi = Rail(model, residuals_abs, R_prof)
+        vel_phi, vel_phi_error = rail_phi.get_average(**kw_avg)
+        div_factor_phi = get_normalisation(mask_ang, component='phi')
 
-    #VPHI
-    rail_phi = Rail(model, np.abs(moment_data-vsys), R_prof)
-    vel_rot, vel_rot_error = rail_phi.get_average(tag=tag_base+'_vphi_data', plot_diagnostics=True, forward_error=True, **kw_avg)
-    vel_rot /= div_factor_phi
-    vel_rot_error = vel_phi_error
+        vel_phi /= div_factor_phi
+        vel_phi_error /= div_factor_phi
 
-    #VR
-    mask_r = mask | (np.abs(phi_s) < np.radians(args.mask_major)) | (np.abs(phi_s) > np.radians(180-args.mask_major))
-    moment_data_r = np.where(mask_r, np.nan, moment_data) 
+        #VPHI
+        rail_phi = Rail(model, np.abs(moment_data-vsys), R_prof)
+        vel_rot, vel_rot_error = rail_phi.get_average(tag=tag_base+'_vphi_data', plot_diagnostics=True, forward_error=True, **kw_avg)
+        vel_rot /= div_factor_phi
+        vel_rot_error = vel_phi_error
 
-    f_vp = interp1d(R_prof, vel_rot)
-    f_vz = interp1d(R_prof, vel_z)
-    R_interp = np.where((R_s>R_prof[0]) & (R_s<R_prof[-1]), R_s, R_prof[0])
+        #VR
+        mask_r = mask | (np.abs(phi_s) < np.radians(args.mask_major)) | (np.abs(phi_s) > np.radians(180-args.mask_major))
+        moment_data_r = np.where(mask_r, np.nan, moment_data)
 
-    vr = -1/(np.sin(phi_s)*np.sin(incl)) * (moment_data_r - vsys - vel_sign*f_vp(R_interp)*np.cos(phi_s)*np.sin(incl) + f_vz(R_interp)*np.cos(incl))
-    vr = np.where(np.abs(vr)>5, np.nan, vr) #hot pixels
-    
-    rail_vr = Rail(model, vr, R_prof)
-    vel_r, vel_r_error = rail_vr.get_average(mask_ang=0.0, surface=ref_surf, av_func=np.nanmedian, interpgrid=args.interpgrid)
+        f_vp = interp1d(R_prof, vel_rot)
+        f_vz = interp1d(R_prof, vel_z)
+        R_interp = np.where((R_s>R_prof[0]) & (R_s<R_prof[-1]), R_s, R_prof[0])
+
+        vr = -1/(np.sin(phi_s)*np.sin(incl)) * (moment_data_r - vsys - vel_sign*f_vp(R_interp)*np.cos(phi_s)*np.sin(incl) + f_vz(R_interp)*np.cos(incl))
+        vr = np.where(np.abs(vr)>5, np.nan, vr) #hot pixels
+
+        rail_vr = Rail(model, vr, R_prof)
+        vel_r, vel_r_error = rail_vr.get_average(mask_ang=0.0, surface=ref_surf, av_func=np.nanmedian, interpgrid=args.interpgrid)
     
     #Perfect Keplerian rotation
     coords = {'R': R_prof*u.au.to('m')}    
@@ -294,7 +357,7 @@ if args.moment=='velocity':
     make_1d_legend(ax, fontsize=MEDIUM_SIZE+1)    
     make_substructures(ax, gaps=gaps, rings=rings, label_gaps=True, label_rings=True)
     
-    plt.savefig('velocity_components_%s.png'%tag_base, bbox_inches='tight', dpi=200)
+    plt.savefig('velocity_components_%s%s.png'%(tag_base, png_suffix), bbox_inches='tight', dpi=200)
     show_output(args)
     
     #*******************
@@ -307,14 +370,22 @@ if args.moment=='velocity':
     make_profile(ax, R_prof, ysav_rot, vel_rot, vel_rot_error, kind='data')
 
     #MODEL CURVE
-    rail_phi = Rail(model, np.abs(moment_model-vsys), R_prof)
-    #vel_phi, _ = rail_phi.get_average(mask_ang=mask_ang, surface=ref_surf)
-    vel_phi, _ = rail_phi.get_average(surface=ref_surf, av_func=np.nanmean, mask_ang=mask_ang, sigma_thres=np.inf,
-                                      mask_from_map=mask_map_ref, tag=tag_base+'_vphi_model', interpgrid=args.interpgrid, plot_diagnostics=True)
-    div_factor_model = get_normalisation(mask_ang, component='phi')
-    vel_phi /= div_factor_model
+    if args.velocity_method=='harmonics':
+        vel_phi = vel_rot_model
+        vel_phi_model_error = vel_rot_model_error
+    else:
+        rail_phi = Rail(model, np.abs(moment_model-vsys), R_prof)
+        #vel_phi, _ = rail_phi.get_average(mask_ang=mask_ang, surface=ref_surf)
+        vel_phi, vel_phi_model_error = rail_phi.get_average(
+            surface=ref_surf, av_func=np.nanmean, mask_ang=mask_ang,
+            sigma_thres=np.inf, mask_from_map=mask_map_ref,
+            tag=tag_base+'_vphi_model', interpgrid=args.interpgrid,
+            plot_diagnostics=True
+        )
+        div_factor_model = get_normalisation(mask_ang, component='phi')
+        vel_phi /= div_factor_model
     ysav_phi, ysav_phi_deriv_mod = make_savgol(vel_phi)
-    make_profile(ax, R_prof, ysav_phi, vel_phi, _, kind='model')
+    make_profile(ax, R_prof, ysav_phi, vel_phi, vel_phi_model_error, kind='model')
     
     #PERFECT KEPLERIAN
     coords = {'R': R_prof*u.au.to('m')}
@@ -330,7 +401,7 @@ if args.moment=='velocity':
     make_1d_legend(ax, fontsize=MEDIUM_SIZE-3)
     make_substructures(ax, gaps=gaps, rings=rings, label_gaps=True, label_rings=True)  
     
-    plt.savefig('rotation_curve_%s.png'%tag_base, bbox_inches='tight', dpi=200)
+    plt.savefig('rotation_curve_%s%s.png'%(tag_base, png_suffix), bbox_inches='tight', dpi=200)
     show_output(args)
     
     """

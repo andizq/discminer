@@ -230,8 +230,15 @@ def _mining_radial_profiles(parserobj, prog='radprof', description='Extract and 
                         help="Apply a Savitzky-Golay filter to smooth out the plotted curves. DEFAULTS to False.")
     parser.add_argument('-vp', '--vphi_discminer', default=1, type=int,
                         help="Subtract model vphi or perfect Keplerian vphi? DEFAULTS to True (i.e. subtract model vphi).")
+    parser.add_argument('-vm', '--velocity_method', default='integral', type=str,
+                        choices=['integral', 'harmonics'],
+                        help="Method used to extract velocity components when -m velocity. DEFAULTS to 'integral'.")
+    parser.add_argument('--min-samples', default=6, type=int,
+                        help="Minimum annular samples for the harmonics method. DEFAULTS to 6.")
+    parser.add_argument('--harmonic-clip', default=5, type=float,
+                        help="Iterative clipping threshold in robust sigma units estimated from the MAD; inf disables clipping. DEFAULTS to 5.")
     parser.add_argument('-ig', '--interpgrid', default=0, type=int,
-                        help="Use linear grid interpolation for radial/azimuthal profile extraction. DEFAULTS to False (i.e. use native grid).")
+                        help="Use linear grid interpolation for radial/azimuthal profile extraction. DEFAULTS to 0 (native grid).")
     add_parser_args(parser, moment=True, kernel=True, channel_id=True, kind=True, surface=True, writetxt=True, mask_minor=True, mask_major=True, mask_R=True, mask_phi=True,
                     Rinner=True, absolute_Rinner=True, Router=True, absolute_Router=True, sigma=True, smooth=True)
     return parser
