@@ -16,3 +16,5 @@ build/
 dist/
 .vscode/
 .ipynb_checkpoints/
+_mining/
+template/
