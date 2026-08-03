@@ -2,6 +2,7 @@ from discminer.mining_control import _mining_radial_profiles
 from discminer.mining_utils import (init_data_and_model,
                                     get_noise_mask,
                                     get_1d_plot_decorators,
+                                    load_parfile,
                                     load_moments,
                                     load_disc_grid,
                                     show_output,
@@ -22,7 +23,6 @@ from scipy.signal import savgol_filter
 from scipy.interpolate import interp1d
 
 from astropy import units as u
-import json
 
 use_discminer_style()
 
@@ -44,18 +44,13 @@ if args.moment=='continuum':
 else:
     parfile = 'parfile.json'
     
-with open(parfile) as json_file:
-    pars = json.load(json_file)
+meta, params, custom = load_parfile(parfile=parfile)
 
-meta = pars['metadata']
-best = pars['best_fit']
-custom = pars['custom']
-
-Mstar = best['velocity']['Mstar']
-vsys = best['velocity']['vsys']
-vel_sign = best['velocity']['vel_sign']
-Rout = best['intensity']['Rout']
-incl = best['orientation']['incl']
+Mstar = params['velocity']['Mstar']
+vsys = params['velocity']['vsys']
+vel_sign = params['velocity']['vel_sign']
+Rout = params['intensity']['Rout']
+incl = params['orientation']['incl']
 
 gaps = custom['gaps']
 rings = custom['rings']

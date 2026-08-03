@@ -1,11 +1,10 @@
 from discminer.mining_control import _mining_moments2d
-from discminer.mining_utils import init_data_and_model
+from discminer.mining_utils import init_data_and_model, load_parfile
 from discminer.core import Data
 
 from astropy import units as u
 from astropy.io import fits
 
-import json
 
 if __name__ == '__main__':
     parser = _mining_moments2d(None)
@@ -14,14 +13,9 @@ if __name__ == '__main__':
 #**************************
 #JSON AND SOME DEFINITIONS
 #**************************    
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
+meta, params, custom = load_parfile()
 
-meta = pars['metadata']
-best = pars['best_fit']
-custom = pars['custom']
-
-Rout = best['intensity']['Rout']
+Rout = params['intensity']['Rout']
 
 file_data = meta['file_data']
 tag = meta['tag']

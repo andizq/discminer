@@ -2,6 +2,7 @@ from discminer.mining_control import _mining_radial_profiles_wedge
 from discminer.mining_utils import (init_data_and_model,
                                     get_noise_mask,
                                     get_1d_plot_decorators,
+                                    load_parfile,
                                     load_moments,
                                     load_disc_grid,
                                     show_output,
@@ -18,7 +19,6 @@ from discminer.plottools import (get_discminer_cmap,
                                  truncate_colormap,
                                  use_discminer_style)
                                  
-import json
 import numpy as np
 from astropy import units as u
 from matplotlib import patches
@@ -34,18 +34,13 @@ if __name__ == '__main__':
 #**************************
 #JSON AND SOME DEFINITIONS
 #**************************
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
+meta, params, custom = load_parfile()
 
-meta = pars['metadata']
-best = pars['best_fit']
-custom = pars['custom']
-
-Mstar = best['velocity']['Mstar']
-vsys = best['velocity']['vsys']
-vel_sign = best['velocity']['vel_sign']
-Rout = best['intensity']['Rout']
-incl = best['orientation']['incl']
+Mstar = params['velocity']['Mstar']
+vsys = params['velocity']['vsys']
+vel_sign = params['velocity']['vel_sign']
+Rout = params['intensity']['Rout']
+incl = params['orientation']['incl']
 
 gaps = custom['gaps']
 rings = custom['rings']

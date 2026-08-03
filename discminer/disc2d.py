@@ -40,6 +40,7 @@ from .grid import GridTools
 from . import cart
 
 from .diff_interp import get_griddata_sparse as get_griddata
+from ._version import __version__
 
 os.environ["OMP_NUM_THREADS"] = "1"
 
@@ -1619,8 +1620,16 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                        np.array([allp0, allpars, allerrneg, allerrpos]), fmt='%.6f', header=str(allheader))
 
             #Save json file
-            dicts_list = [p0pars, params, errneg, errpos]
-            keys_list = ['p0', 'params', 'errneg', 'errpos']
+            metadata = {
+                'v_discminer': __version__,
+                'file_data': self.datacube.filename,
+                'dpc': self.datacube.dpc.to(u.pc).value,
+                'npix': self.datacube.nx,
+                'nchan': self.datacube.nchan,
+                'image_center': self.datacube.get_image_center(),
+            }
+            dicts_list = [metadata, p0pars, params, errneg, errpos]
+            keys_list = ['metadata', 'p0', 'best_fit', 'errneg', 'errpos']
             master_dict = {key: dicts_list[i] for i,key in enumerate(keys_list)}
             
             with open('log_pars_%s_cube_%dwalkers_%dsteps.json'%(tag, nwalkers, backend.iteration), 'w', encoding='utf-8') as f:

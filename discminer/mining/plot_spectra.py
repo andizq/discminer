@@ -2,6 +2,7 @@ from discminer.mining_control import _mining_spectra
 from discminer.mining_utils import (get_noise_mask,
                                     get_2d_plot_decorators,
                                     init_data_and_model,
+                                    load_parfile,
                                     load_moments,
                                     show_output)
 
@@ -23,7 +24,6 @@ import matplotlib.patches as patches
 from astropy import units as u
 from astropy.io import fits
 
-import json
 import copy
 
 use_discminer_style()
@@ -36,13 +36,8 @@ if __name__ == '__main__':
 #**********************
 #JSON AND PARSER STUFF
 #**********************
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
-
-meta = pars['metadata']
-best = pars['best_fit']
-custom = pars['custom']
-Rout = best['intensity']['Rout']
+meta, params, custom = load_parfile()
+Rout = params['intensity']['Rout']
 
 ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get_2d_plot_decorators(args.moment, args=args)
 

@@ -1,8 +1,7 @@
 from discminer.mining_control import _mining_attributes
-from discminer.mining_utils import init_data_and_model, show_output
+from discminer.mining_utils import init_data_and_model, load_parfile, show_output
 from discminer.plottools import use_discminer_style, make_up_ax, make_1d_legend
 
-import json
 import numpy as np
 from astropy import units as u
 import matplotlib.pyplot as plt
@@ -17,13 +16,8 @@ if __name__ == '__main__':
 #**************************
 #JSON AND SOME DEFINITIONS
 #**************************    
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
-
-meta = pars['metadata']
-best = pars['best_fit']
-custom = pars['custom']
-Rout = best['intensity']['Rout']
+meta, params, custom = load_parfile()
+Rout = params['intensity']['Rout']
 
 file_data = meta['file_data']
 tag = meta['tag']

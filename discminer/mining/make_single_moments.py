@@ -1,10 +1,10 @@
 from discminer.mining_control import _mining_moments1d
+from discminer.mining_utils import load_parfile
 from discminer.core import Data
 
 from astropy import units as u
 
 import os
-import json
 
 if __name__ == '__main__':
     parser = _mining_moments1d(None)
@@ -13,10 +13,7 @@ if __name__ == '__main__':
 #**************************
 #JSON AND SOME DEFINITIONS
 #**************************    
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
-
-meta = pars['metadata']
+meta, _, _ = load_parfile()
 
 dpc = meta['dpc']*u.pc
 tag = meta['tag']

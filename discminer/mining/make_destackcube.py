@@ -1,10 +1,11 @@
 from discminer.mining_control import _mining_destackcube
 from discminer.core import Data
-from discminer.mining_utils import load_disc_grid, init_data_and_model
+from discminer.mining_utils import (
+    load_disc_grid, init_data_and_model, load_parfile
+)
 
 import os
 import sys
-import json
 import numpy as np
 from astropy import units as u
 from astropy.io import fits
@@ -110,16 +111,12 @@ def default_output_name(stackcube_filename):
 #**********************
 #JSON AND PARSER STUFF
 #**********************
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
+meta, params, _ = load_parfile()
 
-meta = pars['metadata']
-best = pars['best_fit']
-
-vel_sign = best['velocity']['vel_sign']
-vsys = best['velocity']['vsys']
-Rout = best['intensity']['Rout']
-incl = best['orientation']['incl']
+vel_sign = params['velocity']['vel_sign']
+vsys = params['velocity']['vsys']
+Rout = params['intensity']['Rout']
+incl = params['orientation']['incl']
 tag = meta['tag']
 
 au_to_m = u.au.to('m')
@@ -159,13 +156,13 @@ phi_s = np.degrees(phi[args.surface])
 #**********************************
 #LOAD / COMPUTE ROTATION CENTROIDS
 #**********************************
-zupi = model.z_upper_func({'R': R_s * au_to_m}, **best['height_upper'])
+zupi = model.z_upper_func({'R': R_s * au_to_m}, **params['height_upper'])
 
 vphi_datafile = 'radial_profile_velocity_data.dat'
 vphi_modelfile = 'radial_profile_velocity_model.dat'
 
 if args.keplerian==1:
-    vphii_data = model.velocity_func({'R': R_s * au_to_m, 'z': zupi}, **best['velocity'])
+    vphii_data = model.velocity_func({'R': R_s * au_to_m, 'z': zupi}, **params['velocity'])
 elif args.keplerian==2: #Use intensity-biased discminer Keplerian model to destack data
     vphi_interp_data = get_vphi_interp(vphi_modelfile)
     vphii_data = vel_sign * vphi_interp_data(R_s)    

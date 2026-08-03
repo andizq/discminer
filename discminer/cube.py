@@ -121,6 +121,34 @@ class Cube(_JSON):
             'v0': v0.value,
             'v1': v1.value
         }
+
+    def get_image_center(self):
+        """
+        Return the geometric centre of the spatial image and its celestial WCS.
+
+        Pixel coordinates follow the zero-based convention used by NumPy and
+        Astropy's pixel-to-world helpers.  For an even-sized image the centre
+        therefore lies halfway between the two central pixels.
+        """
+        xpix = 0.5 * (self.nx - 1)
+        ypix = 0.5 * (self.ny - 1)
+        celestial = self.wcs.celestial
+        skycoord = aputils.pixel_to_skycoord(xpix, ypix, celestial).icrs
+        wcs_header = {
+            key: value
+            for key, value in celestial.to_header(relax=True).items()
+        }
+
+        return {
+            'xpix': xpix,
+            'ypix': ypix,
+            'nx': self.nx,
+            'ny': self.ny,
+            'ra': skycoord.ra.deg,
+            'dec': skycoord.dec.deg,
+            'frame': 'icrs',
+            'wcs': wcs_header,
+        }
         
     def _init_sky_extent(self):
         self.pix_size = np.abs(self.header["CDELT1"]) * u.Unit(self.header["CUNIT1"])
@@ -366,38 +394,71 @@ class Cube(_JSON):
         kwargs_io = dict(overwrite=True)  # Default kwargs
         kwargs_io.update(kwargs)
 
-        nchan, nx0 = self.nchan, self.nx
-        nx = int(round(nx0 / npix))
+        npix = int(npix)
 
         if npix > 1:
-            av_data = np.zeros((nchan, nx, nx))  # assuming ny = nx
+            nchan, ny0, nx0 = self.nchan, self.ny, self.nx
+            nx = nx0 // npix
+            ny = ny0 // npix
+            if nx == 0 or ny == 0:
+                raise InputError(
+                    (npix, nx0, ny0),
+                    'Downsampling factor must not exceed either spatial image dimension.'
+                )
+
+            # Only complete blocks are included. Cropping approximately equal
+            # numbers of pixels from both edges keeps the image centre as close
+            # as possible to that of the input image without changing the
+            # requested downsampling factor or assigning a false WCS to a
+            # partial edge block.
+            nx_used = nx * npix
+            ny_used = ny * npix
+            xleft = (nx0 - nx_used) // 2
+            ybottom = (ny0 - ny_used) // 2
+
+            if nx_used != nx0 or ny_used != ny0:
+                warnings.warn(
+                    'Input spatial dimensions (%d, %d) are not divisible by '
+                    'the downsampling factor %d. Cropping to (%d, %d) before '
+                    'downsampling so that every output pixel contains a '
+                    'complete %dx%d block.'
+                    % (ny0, nx0, npix, ny_used, nx_used, npix, npix),
+                    Warning
+                )
+
+            av_data = np.zeros((nchan, ny, nx))
             di = npix
             dj = npix
             print("Averaging %dx%d pixels from datacube..." % (di, dj))
             for k in range(nchan):
                 _progress_bar(int(100 * k / nchan))
                 for i in range(nx):
-                    for j in range(nx):
+                    for j in range(ny):
                         av_data[k, j, i] = method(
-                            self.data[k, j * dj : j * dj + dj, i * di : i * di + di],
+                            self.data[
+                                k,
+                                ybottom + j * dj : ybottom + j * dj + dj,
+                                xleft + i * di : xleft + i * di + di
+                            ],
                             **kwargs_method
                         )
             _progress_bar(100); print('\n')
 
             self.nx = nx
-            self.ny = nx
+            self.ny = ny
             self.data = av_data
 
             # nf: number of pix between centre of first pix in the original img and centre of first downsampled pix
-            if npix % 2:  # if odd
-                nf = (npix - 1) / 2.0
-            else:
-                nf = 0.5 + (npix / 2 - 1)
+            nf = (npix - 1) / 2.0
 
             # will be the new CRPIX1 and CRPIX2 (origin is 1,1, not 0,0)
             refpix = 1
             # coords of reference pixel, using old pixels info
-            refpixval = aputils.pixel_to_skycoord(nf, nf, self.wcs) #referred to 0-based coords
+            refpixval = aputils.pixel_to_skycoord(
+                xleft + nf,
+                ybottom + nf,
+                self.wcs.celestial
+            ) #referred to 0-based coords
 
             CDELT1, CDELT2 = self.header["CDELT1"], self.header["CDELT2"]
             # equivalent to CRVAL1 - CDELT1 * (CRPIX1 - 1 - nf) but using right projection
@@ -408,17 +469,22 @@ class Cube(_JSON):
             self.header["CRPIX1"] = refpix
             self.header["CRPIX2"] = refpix
             self.header["NAXIS1"] = nx
-            self.header["NAXIS2"] = nx
+            self.header["NAXIS2"] = ny
 
             self.wcs = WCS(self.header)
 
             if crpix_to_center:
                 icenter = int(0.5 * nx)
-                refpixval = aputils.pixel_to_skycoord(icenter, icenter, self.wcs) #referred to new, downsampled wcs
+                jcenter = int(0.5 * ny)
+                refpixval = aputils.pixel_to_skycoord(
+                    icenter,
+                    jcenter,
+                    self.wcs.celestial
+                ) #referred to new, downsampled wcs
                 self.header["CRVAL1"] = refpixval.ra.value
                 self.header["CRVAL2"] = refpixval.dec.value
                 self.header["CRPIX1"] = icenter+1
-                self.header["CRPIX2"] = icenter+1
+                self.header["CRPIX2"] = jcenter+1
                 self.wcs = WCS(self.header)
 
             self._init_sky_extent()
@@ -459,7 +525,10 @@ class Cube(_JSON):
         
         icenter, jcenter : int, optional
             Reference centre for the clipped window. Must be integers referred to pixel ids from the input data. Must be one-based to keep fits header convention
-            If None, the reference centre is determined from the input header as ``icenter=int(header['CRPIX1'])`` and ``jcenter=int(header['CRPIX2'])``
+            If None, the window is placed as close as possible to the geometric
+            centre of the input image. For an odd-sized input and an even-sized
+            output, exact centring is impossible and the tie is resolved toward
+            higher pixel indices, matching the previous behaviour.
         
         channels : {"interval" : [i0, i1]} or {"indices" : [i0, i1,..., in]}, optional
             Dictionary of indices to clip velocity channels from data. If both entries are None, all velocity channels are considered.         
@@ -491,32 +560,40 @@ class Cube(_JSON):
 
         print ("Clipping datacube...")
         
-        if icenter is not None:
-            icenter = int(icenter)
-        else:  # Assume reference centre at the centre of the image
-            icenter = int(0.5 * self.header["NAXIS1"] + 1.0)
-        if jcenter is not None:
-            jcenter = int(jcenter)
-        else:
-            jcenter = int(0.5 * self.header["NAXIS2"] + 1.0)
-
         idchan = self._channel_picker(channels)
         self.data = self.data[idchan]
         self.vchannels = self.vchannels[idchan]
 
         # data shape: (NAXIS3, NAXIS2, NAXIS1)
         if npix > 0:
+            nside = 2 * npix
+
+            if icenter is None:
+                xstart = int(np.ceil(0.5 * (self.nx - nside)))
+            else:
+                icenter = int(icenter)
+                xstart = icenter - npix
+
+            if jcenter is None:
+                ystart = int(np.ceil(0.5 * (self.ny - nside)))
+            else:
+                jcenter = int(jcenter)
+                ystart = jcenter - npix
+
+            xstop = xstart + nside
+            ystop = ystart + nside
+            if xstart < 0 or ystart < 0 or xstop > self.nx or ystop > self.ny:
+                raise InputError(
+                    (xstart, xstop, ystart, ystop),
+                    'Requested spatial clipping window falls outside the input image.'
+                )
+
             self.data = self.data[
-                :, jcenter - npix : jcenter + npix, icenter - npix : icenter + npix
+                :, ystart:ystop, xstart:xstop
             ]
-            # The following line is wrong because the RA axis is distorted by the DEC:
-            #  self.header["CRVAL1"] = CRVAL1 + (icenter - CRPIX1) * CDELT1.
-            #   A proper conversion must use wcs:
-            newcr = aputils.pixel_to_skycoord(icenter-1, jcenter-1, self.wcs) #-1 to go back to 0-based convention
-            self.header["CRVAL1"] = newcr.ra.value
-            self.header["CRVAL2"] = newcr.dec.value
-            self.header["CRPIX1"] = npix #one-based
-            self.header["CRPIX2"] = npix
+            # Preserve the original WCS exactly under the NumPy slice.
+            self.header["CRPIX1"] -= xstart
+            self.header["CRPIX2"] -= ystart
 
         self.nchan, self.ny, self.nx = self.data.shape
         self.header["NAXIS1"] = self.nx
@@ -527,6 +604,7 @@ class Cube(_JSON):
         self.header["CDELT3"] = self.vchannels[1] - self.vchannels[0]
 
         self.wcs = WCS(self.header)
+        self._init_sky_extent()
         self.header[hdrkey] = (True, hdrcard)
         if writefits:
             self.writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)

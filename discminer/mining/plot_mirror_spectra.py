@@ -9,6 +9,7 @@ from discminer.plottools import (MEDIUM_SIZE,
 
 from discminer.mining_utils import (get_2d_plot_decorators,
                                     get_noise_mask,
+                                    load_parfile,
                                     load_moments,
                                     load_disc_grid,
                                     init_data_and_model,
@@ -37,20 +38,15 @@ integrate = 0
 #**********************
 #JSON AND PARSER STUFF
 #**********************
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
+meta, params, custom = load_parfile()
 
-meta = pars['metadata']
-best = pars['best_fit']
-custom = pars['custom']
-
-vsys = best['velocity']['vsys']
-Rout = best['intensity']['Rout']
-incl = best['orientation']['incl']
-PA = best['orientation']['PA']
-xc = best['orientation']['xc']
-yc = best['orientation']['yc']
-z_pars = best['height_upper']
+vsys = params['velocity']['vsys']
+Rout = params['intensity']['Rout']
+incl = params['orientation']['incl']
+PA = params['orientation']['PA']
+xc = params['orientation']['xc']
+yc = params['orientation']['yc']
+z_pars = params['height_upper']
 
 gaps = custom['gaps']
 rings = custom['rings']
@@ -563,4 +559,3 @@ def plot_projected_channel(chanid, tag=''):
 
 plot_projected_channel(args.channel_id, tag='reference')
 plot_projected_channel(get_mirror_channel_index(vchannels, args.channel_id, vsys), tag='mirror')
-

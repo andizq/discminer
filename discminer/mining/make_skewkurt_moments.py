@@ -1,5 +1,5 @@
 from discminer.mining_control import _mining_skewkurt
-from discminer.mining_utils import get_noise_mask, load_disc_grid
+from discminer.mining_utils import get_noise_mask, load_disc_grid, load_parfile
 from discminer.core import Data
 
 from astropy import units as u
@@ -7,7 +7,6 @@ from astropy.io import fits
 import numpy as np
 
 import os
-import json
 import subprocess
 
 if __name__ == '__main__':
@@ -17,11 +16,7 @@ if __name__ == '__main__':
 #**************************
 #JSON AND SOME DEFINITIONS
 #**************************    
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
-
-meta = pars['metadata']
-best = pars['metadata']
+meta, _, _ = load_parfile()
 
 dpc = meta['dpc']*u.pc
 tag = meta['tag']

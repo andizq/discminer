@@ -1,5 +1,7 @@
 from discminer.mining_control import _mining_channels
-from discminer.mining_utils import get_noise_mask, init_data_and_model, show_output
+from discminer.mining_utils import (
+    get_noise_mask, init_data_and_model, load_parfile, show_output
+)
 
 from discminer.cube import Cube
 from discminer.plottools import use_discminer_style
@@ -9,7 +11,6 @@ import matplotlib.pyplot as plt
 from astropy import units as u
 
 import warnings
-import json
 import copy
 import sys
 
@@ -22,13 +23,8 @@ if __name__ == '__main__':
 #**************************
 #JSON AND SOME DEFINITIONS
 #**************************    
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
-    
-meta = pars['metadata']
-best = pars['best_fit']
-custom = pars['custom']
-Rout = best['intensity']['Rout']
+meta, params, custom = load_parfile()
+Rout = params['intensity']['Rout']
 
 chan_step = custom['chan_step']
 nchans = custom['nchans']
@@ -101,7 +97,7 @@ if args.show_output:
 #PLOT CHANNEL MAPS
 #*****************    
 idlim = int(0.5*chan_step*(nchans-1))
-plot_channels = np.linspace(-idlim,idlim,nchans) + np.argmin(np.abs(vchannels-best['velocity']['vsys']))  #Channel ids to be plotted, selected around ~vsys channel
+plot_channels = np.linspace(-idlim,idlim,nchans) + np.argmin(np.abs(vchannels-params['velocity']['vsys']))  #Channel ids to be plotted, selected around ~vsys channel
 
 #DATA CHANNELS
 fig, ax, im, cbar = datacube.make_channel_maps(channels={'indices': plot_channels}, ncols=5, contours_from=model)
@@ -159,4 +155,3 @@ for axi in ax[1]:
 
 plt.savefig('channel_maps_residuals.png', bbox_inches = 'tight', dpi=200)
 plt.close()
-

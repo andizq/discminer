@@ -1,5 +1,6 @@
 from discminer.mining_control import _mining_azimuthal_profiles
 from discminer.mining_utils import (load_disc_grid,
+                                    load_parfile,
                                     load_moments,
                                     init_data_and_model,
                                     get_noise_mask,
@@ -13,7 +14,6 @@ from discminer.plottools import (get_discminer_cmap,
                                  mod_nticks_cbars,                                
                                  use_discminer_style)
 
-import json
 import numpy as np
 from astropy import units as u
 import matplotlib.pyplot as plt
@@ -28,16 +28,11 @@ if __name__ == '__main__':
 #**************************
 #JSON AND SOME DEFINITIONS
 #**************************
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
+meta, params, custom = load_parfile()
 
-meta = pars['metadata']
-best = pars['best_fit']
-custom = pars['custom']
-
-vsys = best['velocity']['vsys']
-incl = best['orientation']['incl']
-Rout = best['intensity']['Rout']
+vsys = params['velocity']['vsys']
+incl = params['orientation']['incl']
+Rout = params['intensity']['Rout']
 au_to_m = u.au.to('m')
 
 clabel, clabel_res, clim0, clim0_res, clim1, clim1_res, unit = get_1d_plot_decorators(args.moment, tag=args.type)

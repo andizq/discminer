@@ -1,7 +1,6 @@
 from discminer.mining_control import _mining_avg_velocity
-from discminer.mining_utils import get_moment_tag, load_disc_grid
+from discminer.mining_utils import get_moment_tag, load_disc_grid, load_parfile
 
-import json
 import os
 
 import numpy as np
@@ -118,11 +117,7 @@ def _set_product_header(header, moment, components, product):
 
 
 def make_average_velocity_maps(args):
-    with open('parfile.json') as json_file:
-        pars = json.load(json_file)
-
-    meta = pars['metadata']
-    best = pars['best_fit']
+    meta, params, _ = load_parfile()
     dir_data = meta.get('dir_data', './')
     dir_model = meta.get('dir_model', './')
 
@@ -167,8 +162,8 @@ def make_average_velocity_maps(args):
         for component, filename in profile_filenames.items()
     }
 
-    velocity_pars = best['velocity']
-    orientation = best['orientation']
+    velocity_pars = params['velocity']
+    orientation = params['orientation']
     incl = orientation['incl']
     vel_sign = velocity_pars['vel_sign']
     vsys = velocity_pars['vsys']

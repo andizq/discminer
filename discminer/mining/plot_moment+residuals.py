@@ -2,6 +2,7 @@ from discminer.mining_control import _mining_moment_residuals
 from discminer.mining_utils import (get_2d_plot_decorators,
                                     init_data_and_model,                                    
                                     get_noise_mask,
+                                    load_parfile,
                                     load_moments,
                                     load_disc_grid,
                                     mark_planet_location,
@@ -30,15 +31,10 @@ if __name__ == '__main__':
 #**************************
 #JSON AND SOME DEFINITIONS
 #**************************    
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
-
-meta = pars['metadata']
-best = pars['best_fit']
-custom = pars['custom']
+meta, params, custom = load_parfile()
 rings = custom['rings']
-vsys = best['velocity']['vsys']
-Rout = best['intensity']['Rout']
+vsys = params['velocity']['vsys']
+Rout = params['intensity']['Rout']
 
 ctitle, clabel, clim, cfmt, cmap_mom, cmap_res, levels_im, levels_cc, unit = get_2d_plot_decorators(args.moment, args=args)
 
@@ -147,4 +143,3 @@ mark_planet_location(ax[2], args, edgecolors='k', lw=2.0, s=200, coords='sky', m
 
 plt.savefig('moment+residuals_%s.png'%mtags['base'], bbox_inches='tight', dpi=200)
 show_output(args)
-

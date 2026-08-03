@@ -3,6 +3,7 @@ from discminer.mining_utils import (
     get_noise_mask,
     get_2d_plot_decorators,
     init_data_and_model,
+    load_parfile,
     load_moments,
     show_output
 )
@@ -18,7 +19,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from astropy import units as u
 
-import json
 
 use_discminer_style()
 
@@ -29,14 +29,9 @@ if __name__ == '__main__':
 #**************************
 #JSON AND SOME DEFINITIONS
 #**************************
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
-
-meta = pars['metadata']
-best = pars['best_fit']
-custom = pars['custom']
-Rout = best['intensity']['Rout']
-vsys = best['velocity']['vsys']
+meta, params, custom = load_parfile()
+Rout = params['intensity']['Rout']
+vsys = params['velocity']['vsys']
 
 nchans = args.nchans
 chan_step = args.step

@@ -5,6 +5,7 @@ from discminer.mining_utils import (init_data_and_model,
                                     make_and_save_filaments,                                    
                                     get_2d_plot_decorators,
                                     get_noise_mask,
+                                    load_parfile,
                                     load_moments,
                                     load_disc_grid,
                                     mark_planet_location,
@@ -38,18 +39,13 @@ spirals_neg = spids[spids<0]
 #**********************
 #JSON AND PARSER STUFF
 #**********************
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
+meta, params, custom = load_parfile()
 
-meta = pars['metadata']
-best = pars['best_fit']
-custom = pars['custom']
-
-Rout = best['intensity']['Rout']
-incl = best['orientation']['incl']
-PA = best['orientation']['PA']
-xc = best['orientation']['xc']
-yc = best['orientation']['yc']
+Rout = params['intensity']['Rout']
+incl = params['orientation']['incl']
+PA = params['orientation']['PA']
+xc = params['orientation']['xc']
+yc = params['orientation']['yc']
 
 gaps = custom['gaps']
 rings = custom['rings']
@@ -368,11 +364,11 @@ if args.projection=='cartesian':
     
     if args.surface in ['up', 'upper']:
         z_func = model.z_upper_func
-        z_pars = best['height_upper']
+        z_pars = params['height_upper']
 
     elif args.surface in ['low', 'lower']:
         z_func = model.z_lower_func
-        z_pars = best['height_lower']
+        z_pars = params['height_lower']
     
     fig, axr = make_round_map(residuals, levels_resid, Xproj*u.au, Yproj*u.au, args.Router*Rout*u.au,
                               fig=fig, ax=axr, 

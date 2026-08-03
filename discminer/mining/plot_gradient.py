@@ -1,5 +1,6 @@
 from discminer.mining_control import _mining_gradient
 from discminer.mining_utils import (load_disc_grid,
+                                    load_parfile,
                                     init_data_and_model,
                                     get_noise_mask,
                                     get_2d_plot_decorators,
@@ -13,7 +14,6 @@ from discminer.plottools import (make_polar_map,
                                  make_1d_legend,
                                  use_discminer_style)
 
-import json
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy import units as u
@@ -29,19 +29,14 @@ args.projection = 'polar'
 #**************************
 #JSON AND SOME DEFINITIONS
 #**************************
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
+meta, params, custom = load_parfile()
 
-meta = pars['metadata']
-best = pars['best_fit']
-custom = pars['custom']
-
-vsys = best['velocity']['vsys']
-Rout = best['intensity']['Rout']
-incl = best['orientation']['incl']
-PA = best['orientation']['PA']
-xc = best['orientation']['xc']
-yc = best['orientation']['yc']
+vsys = params['velocity']['vsys']
+Rout = params['intensity']['Rout']
+incl = params['orientation']['incl']
+PA = params['orientation']['PA']
+xc = params['orientation']['xc']
+yc = params['orientation']['yc']
 
 gaps = custom['gaps']
 rings = custom['rings']
@@ -105,7 +100,7 @@ if args.surface in ['up', 'upper']:
         z_func = cart.z_upper_irregular
     else:
         z_func = cart.z_upper_exp_tapered
-    z_pars = best['height_upper']
+    z_pars = params['height_upper']
 
 elif args.surface in ['low', 'lower']:
     if 'surf2pwl' in meta['kind']:
@@ -114,7 +109,7 @@ elif args.surface in ['low', 'lower']:
         z_func = cart.z_lower_irregular            
     else:
         z_func = cart.z_lower_exp_tapered
-    z_pars = best['height_lower']
+    z_pars = params['height_lower']
 
 #**************
 #FIGURE LABELS

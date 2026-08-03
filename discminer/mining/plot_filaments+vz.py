@@ -2,6 +2,7 @@ from discminer.mining_control import _mining_filaments_vz
 from discminer.rail import Rail
 
 from discminer.mining_utils import (load_disc_grid,
+                                    load_parfile,
                                     load_moments,
                                     init_data_and_model,
                                     get_noise_mask,
@@ -46,20 +47,15 @@ filids_neg = np.abs(filids[filids<0])
 #**********************
 #JSON AND PARSER STUFF
 #**********************
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
+meta, params, custom = load_parfile()
 
-meta = pars['metadata']
-best = pars['best_fit']
-custom = pars['custom']
-
-z_pars = best['height_upper']
-vsys = best['velocity']['vsys']
-incl = best['orientation']['incl']
-PA = best['orientation']['PA']
-xc = best['orientation']['xc']
-yc = best['orientation']['yc']
-Rout = best['intensity']['Rout']
+z_pars = params['height_upper']
+vsys = params['velocity']['vsys']
+incl = params['orientation']['incl']
+PA = params['orientation']['PA']
+xc = params['orientation']['xc']
+yc = params['orientation']['yc']
+Rout = params['intensity']['Rout']
 au_to_m = u.au.to('m')
 
 gaps = custom['gaps']

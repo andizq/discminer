@@ -3,9 +3,15 @@ from discminer._version import __version__
 
 import os
 import json
+import re
 import warnings
 import numpy as np
 from pathlib import Path
+
+from astropy import units as u
+from astropy.io import fits
+from astropy.wcs import WCS
+from astropy.wcs import utils as aputils
 
 if __name__ == '__main__':
     parser = _mining_parfile(None)
@@ -138,20 +144,66 @@ kinks_dict = {
 #**************************
 #GET TAGS AND PARS FROM LOG 
 #**************************
-files_dir = os.listdir()
 file_data = ''
 
-if args.log_file == '':
-    log_file = os.path.join(
-        args.dir_log,
-        files_dir[np.argmax(['log_pars' in f for f in files_dir])]
+
+def get_log_file(dir_log):
+    """
+    Select a log_pars file from ``dir_log`` when none is provided explicitly.
+
+    Files containing ``default`` take precedence. Otherwise, the file with the
+    largest number of steps encoded in its name is selected, with JSON taking
+    precedence over text when the step counts are equal.
+    """
+    path_log = Path(dir_log)
+    if not path_log.is_dir():
+        raise FileNotFoundError(
+            "Log directory not found: %s" % path_log
+        )
+
+    candidates = sorted(
+        path
+        for path in path_log.iterdir()
+        if (
+            path.is_file()
+            and path.name.startswith('log_pars_')
+            and path.suffix.lower() in ['.json', '.txt']
+        )
     )
-    for f in files_dir:
-        if 'log_pars' in f and 'default' in f and 'converted' not in f:
-            log_file = os.path.join(args.dir_log, f)
-            break        
+    if not candidates:
+        raise FileNotFoundError(
+            "No log_pars JSON or text file was found in %s" % path_log
+        )
+    if len(candidates) == 1:
+        return str(candidates[0])
+
+    default_candidates = [
+        path for path in candidates if 'default' in path.name.lower()
+    ]
+    if default_candidates:
+        candidates = default_candidates
+
+    def selection_key(path):
+        match = re.search(
+            r'_(\d+)steps(?=\.(?:json|txt)$)',
+            path.name,
+            flags=re.IGNORECASE
+        )
+        nsteps = int(match.group(1)) if match else -1
+        isjson = path.suffix.lower() == '.json'
+        return nsteps, isjson, path.name
+
+    return str(max(candidates, key=selection_key))
+
+
+if args.log_file:
+    if os.path.isabs(args.log_file):
+        log_file = args.log_file
+    else:
+        log_file = os.path.join(args.dir_log, args.log_file)
 else:
-    log_file = args.log_file
+    log_file = get_log_file(args.dir_log)
+    print("Using automatically selected log file: %s" % log_file)
     
 def get_tags_dict(log_file):
     global file_data
@@ -229,7 +281,12 @@ def get_base_pars(log_file, tags_dict):
         if suffix == '.json':
 
             with open(log_file) as jf:
-                log_pars = json.load(jf)['params']
+                log_dict = json.load(jf)
+            if 'best_fit' in log_dict:
+                log_pars = log_dict['best_fit']
+            else:
+                log_pars = log_dict['params']
+            log_metadata = log_dict.get('metadata', {})
 
             header = []                
             isjson = True
@@ -240,15 +297,16 @@ def get_base_pars(log_file, tags_dict):
             header[1] = header[1][1:] #Remove first bracket of first entry
             header = [hdr[1:-2] for hdr in header[1:]] #Jump # and remove brackets and commas
             isjson = False
+            log_metadata = {}
             
-        return log_pars, header, isjson
+        return log_pars, header, isjson, log_metadata
     
     try:
         head, tail = os.path.split(log_file)
         log_file_split = np.asarray(tail.split('_'))
         tag_disc = log_file_split[2]
 
-        log_pars, header, isjson = read_logpars(log_file)
+        log_pars, header, isjson, log_metadata = read_logpars(log_file)
 
         if isjson:
             par_dict_att = log_pars
@@ -278,7 +336,7 @@ def get_base_pars(log_file, tags_dict):
                     
                     uni_dict_att[att][hdr] = unit
                     
-            return par_dict_att, uni_dict_att
+            return par_dict_att, uni_dict_att, log_metadata
         
         #RENAME REPEATED TAGS IN HEADER
         hdr_arr = np.array(header)
@@ -321,7 +379,9 @@ def get_base_pars(log_file, tags_dict):
             if not founddefault:
                 raise FileNotFoundError('No default parameter file was found in the 12CO folder of the disc you wish to analyse. Make sure one of your parameter files is tagged as exoalmav1default.')
 
-            log_pars_12co, header_12co = read_logpars(os.path.join(path_12co, log_file_12co))
+            log_pars_12co, header_12co, _, _ = read_logpars(
+                os.path.join(path_12co, log_file_12co)
+            )
             hdr_arr_12co = np.array(header_12co)
 
             if 'fixincl' in kind:
@@ -425,12 +485,115 @@ def get_base_pars(log_file, tags_dict):
             if key in ['bmaj', 'bmin', 'bpa']:
                 update_dict('beam', key)
                 
-        return par_dict_att, uni_dict_att
+        return par_dict_att, uni_dict_att, log_metadata
     
     except FileNotFoundError:
         message = 'Log par file not found: %s'%log_file
         warnings.warn(message)
-        return None, None
+        return None, None, {}
+
+
+def get_image_center_from_header(header):
+    nx = int(header['NAXIS1'])
+    ny = int(header['NAXIS2'])
+    xpix = 0.5 * (nx - 1)
+    ypix = 0.5 * (ny - 1)
+    celestial = WCS(header).celestial
+    skycoord = aputils.pixel_to_skycoord(xpix, ypix, celestial).icrs
+
+    return {
+        'xpix': xpix,
+        'ypix': ypix,
+        'nx': nx,
+        'ny': ny,
+        'ra': skycoord.ra.deg,
+        'dec': skycoord.dec.deg,
+        'frame': 'icrs',
+        'wcs': {
+            key: value
+            for key, value in celestial.to_header(relax=True).items()
+        },
+    }
+
+
+def get_pix_size_au(wcs_header, dpc):
+    angle = abs(float(wcs_header['CDELT1'])) * u.Unit(
+        wcs_header.get('CUNIT1', 'deg')
+    )
+    return (float(dpc) * u.pc * np.tan(angle.to(u.rad))).to(u.au).value
+
+
+def shift_orientation_to_data_image(pars_dict, tags_dict, log_metadata):
+    """
+    Refer fitted xc and yc offsets to the geometric centre of the data image
+    selected for the prototype model.
+    """
+    image_center_fit = log_metadata.get('image_center')
+    if image_center_fit is None:
+        warnings.warn(
+            'No image_center metadata was found in the input log file. '
+            'Keeping the fitted xc and yc offsets unchanged for legacy '
+            'compatibility.',
+            Warning
+        )
+        return
+
+    try:
+        wcs_header_fit = image_center_fit['wcs']
+        dpc_fit = log_metadata['dpc']
+    except KeyError as exc:
+        warnings.warn(
+            'Incomplete image_center metadata in the input log file (%s). '
+            'Keeping the fitted xc and yc offsets unchanged.'
+            % exc,
+            Warning
+        )
+        return
+
+    file_data = tags_dict['file_data']
+    header_pro = fits.getheader(file_data)
+    image_center_pro = get_image_center_from_header(header_pro)
+    header_fit = fits.Header()
+    header_fit.update(wcs_header_fit)
+    wcs_fit = WCS(header_fit).celestial
+    wcs_pro = WCS(header_pro).celestial
+
+    pix_size_fit = get_pix_size_au(wcs_header_fit, dpc_fit)
+    pix_size_pro = get_pix_size_au(image_center_pro['wcs'], tags_dict['dpc'])
+
+    orientation = pars_dict['orientation']
+    xc_fit = float(orientation['xc'])
+    yc_fit = float(orientation['yc'])
+    xdisc_fit = image_center_fit['xpix'] + xc_fit / pix_size_fit
+    ydisc_fit = image_center_fit['ypix'] + yc_fit / pix_size_fit
+
+    disc_sky = aputils.pixel_to_skycoord(
+        xdisc_fit,
+        ydisc_fit,
+        wcs_fit
+    )
+    xdisc_pro, ydisc_pro = aputils.skycoord_to_pixel(
+        disc_sky,
+        wcs_pro,
+        origin=0,
+        mode='all'
+    )
+
+    orientation['xc'] = (
+        xdisc_pro - image_center_pro['xpix']
+    ) * pix_size_pro
+    orientation['yc'] = (
+        ydisc_pro - image_center_pro['ypix']
+    ) * pix_size_pro
+
+    tags_dict.update({
+        'image_center_fit': image_center_fit,
+        'image_center_pro': image_center_pro,
+        'xc_fit': xc_fit,
+        'yc_fit': yc_fit,
+        'v_discminer_fit': log_metadata.get('v_discminer', 'unknown'),
+        'notes': 'shifted xc, yc based on the provided data image',
+    })
 
 #*************
 #MAKE PAR FILE
@@ -469,7 +632,8 @@ def make_json(dicts_list=[], keys_list=[], filename=args.json_file):
 
 def make_all():
     tags_dict = get_tags_dict(log_file)
-    pars_dict, units_dict = get_base_pars(log_file, tags_dict)
+    pars_dict, units_dict, log_metadata = get_base_pars(log_file, tags_dict)
+    shift_orientation_to_data_image(pars_dict, tags_dict, log_metadata)
     for tk in tags_dict['kind']:
         if 'nosurf' in tk:
             pars_dict['intensity'].update({'q': 0.0})
@@ -486,7 +650,7 @@ def make_all():
     except KeyError:
         custom_dict.update(gaps=[], rings=[0], kinks=[])
             
-    make_json(dicts_list = [custom_dict, tags_dict, pars_dict, units_dict], keys_list = ['custom', 'metadata', 'best_fit', 'units'])
+    make_json(dicts_list = [custom_dict, tags_dict, pars_dict, units_dict], keys_list = ['custom', 'metadata', 'params', 'units'])
 
 if args.download_cube:
     from urllib.request import urlretrieve

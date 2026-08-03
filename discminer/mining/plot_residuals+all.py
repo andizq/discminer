@@ -2,6 +2,7 @@ from discminer.mining_control import _mining_residuals_all
 from discminer.mining_utils import (init_data_and_model,
                                     get_2d_plot_decorators,
                                     get_noise_mask,
+                                    load_parfile,
                                     load_moments,
                                     load_disc_grid,
                                     mark_planet_location,
@@ -33,18 +34,13 @@ if args.coords=='disk':
 #**************************
 #JSON AND SOME DEFINITIONS
 #**************************
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
+meta, params, custom = load_parfile()
 
-meta = pars['metadata']
-best = pars['best_fit']
-custom = pars['custom']
-
-Rout = best['intensity']['Rout']
-incl = best['orientation']['incl']
-PA = best['orientation']['PA']
-xc = best['orientation']['xc']
-yc = best['orientation']['yc']
+Rout = params['intensity']['Rout']
+incl = params['orientation']['incl']
+PA = params['orientation']['PA']
+xc = params['orientation']['xc']
+yc = params['orientation']['yc']
 
 gaps = custom['gaps']
 rings = custom['rings']

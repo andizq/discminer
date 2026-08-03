@@ -237,8 +237,8 @@ def _mining_radial_profiles(parserobj, prog='radprof', description='Extract and 
                         help="Minimum annular samples for the harmonics method. DEFAULTS to 6.")
     parser.add_argument('--harmonic-clip', default=5, type=float,
                         help="Iterative clipping threshold in robust sigma units estimated from the MAD; inf disables clipping. DEFAULTS to 5.")
-    parser.add_argument('-ig', '--interpgrid', default=0, type=int,
-                        help="Use linear grid interpolation for radial/azimuthal profile extraction. DEFAULTS to 0 (native grid).")
+    parser.add_argument('-ig', '--interpgrid', default=1, type=int,
+                        help="Use linear grid interpolation for radial/azimuthal profile extraction. DEFAULTS to 1 (use 0 for native grid).")
     add_parser_args(parser, moment=True, kernel=True, channel_id=True, kind=True, surface=True, writetxt=True, mask_minor=True, mask_major=True, mask_R=True, mask_phi=True,
                     Rinner=True, absolute_Rinner=True, Router=True, absolute_Router=True, sigma=True, smooth=True)
     return parser
@@ -258,8 +258,8 @@ def _mining_azimuthal_profiles(parserobj, prog='azimprof', description='Extract 
                         help="Reference annulus shown as a solid black line. DEFAULTS to 100 au.")
     parser.add_argument('-t', '--type', default='residuals', type=str, choices=['data', 'model', 'residuals'],
                         help="Compute profiles on data, model or residual moment map. DEFAULTS to 'residuals'.")
-    parser.add_argument('-ig', '--interpgrid', default=0, type=int,
-                        help="Use linear grid interpolation for radial/azimuthal profile extraction. DEFAULTS to False (i.e. use native grid).")
+    parser.add_argument('-ig', '--interpgrid', default=1, type=int,
+                        help="Use linear grid interpolation for radial/azimuthal profile extraction. DEFAULTS to 1 (use 0 for native grid).")
     add_parser_args(parser, moment=True, kernel=True, channel_id=True, kind=True, surface=True, Rinner=True, Router=True, smooth=True, writetxt=True)
     return parser
 
@@ -442,16 +442,22 @@ def _mining_parcube(parserobj, prog='parcube', description='Show cube reconstruc
     add_parser_args(parser, kernel=True, kind=True, surface='both')
     return parser
 
-def _mining_parfile(parserobj, prog='parfile', description='Make JSON parameter file based on input log_pars.txt and prepare_data.py'):
+def _mining_parfile(parserobj, prog='parfile', description='Make JSON parameter file based on an input log_pars file and prepare_data.py'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
-    parser.add_argument('-dir_log', '--dir_log', default='./', type=str, help="Directory where log_pars.txt is located. DEFAULTS to './'")
+    parser.add_argument('-dir_log', '--dir_log', default='./', type=str, help="Directory where the input log_pars file is located. DEFAULTS to './'")
     parser.add_argument('-dir_data', '--dir_data', default='./', type=str, help="Directory where the input datacube.fits is located. DEFAULTS to './'")
     parser.add_argument('-dir_model', '--dir_model', default='./', type=str, help="Directory where model files will be stored. DEFAULTS to './'")    
-    parser.add_argument('-f', '--log_file', default='', type=str, help="If empty, try to guess input log_pars.txt with existing files. DEFAULTS to empty.")
+    parser.add_argument(
+        '-f',
+        '--log_file',
+        default='',
+        type=str,
+        help="Input log_pars JSON or legacy text file. If omitted, select a default log in --dir_log, otherwise the log with the most steps, preferring JSON when step counts match."
+    )
     parser.add_argument('-p', '--prepare_data', default='prepare_data.py', type=str, help="Script employed to clip and downsample the cube of interest. DEFAULTS to prepare_data.py.")
     parser.add_argument('-j', '--json_file', default='parfile.json', type=str, help="Name of output JSON file. DEFAULTS to parfile.json.")
     parser.add_argument('-fd', '--file_data', default='', type=str, help="If empty, try to guess the input datacube.fits from prepara_data.py. DEFAULTS to empty.")    
-    parser.add_argument('-o', '--overwrite', default=0, type=int, help="overwrite if parfile.json exists. DEFAULTS to 0.")
+    parser.add_argument('-o', '--overwrite', default=1, type=int, help="overwrite if parfile.json exists. DEFAULTS to 1.")
     parser.add_argument('-r', '--reset', default=0, type=int,
                         help="If (1) AND --overwrite, rewrite parfile.json. If (0) AND --overwrite, forward 'custom' dictionary, and rewrite metadata and model parameters only. DEFAULTS to 0.")
     parser.add_argument('-d', '--download_cube', default=0, type=int, help="Download reduced ready-to-use cube from the NRAO server (valid for exoALMA data). DEFAULTS to 0.")

@@ -77,12 +77,12 @@ class _JSON(object):
         'bmaj_au': u.au
     }
     
-    def make_parfile(self, keys = ['custom', 'metadata', 'best_fit', 'funcs']):
+    def make_parfile(self, keys = ['custom', 'metadata', 'params', 'funcs']):
 
         master_dict = {
             'custom': self.json_custom,
             'metadata': self.json_metadata,
-            'best_fit': self.json_params,
+            'params': self.json_params,
             'funcs': self.json_funcs
         }
         json_dict = {key: master_dict[key] for key in keys}

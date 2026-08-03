@@ -2,6 +2,7 @@ from discminer.mining_control import _mining_stackcube
 from discminer.core import Data
 from discminer.mining_utils import (_get_mask_tuples,
                                     get_noise_mask,
+                                    load_parfile,
                                     load_disc_grid,
                                     get_2d_plot_decorators,
                                     init_data_and_model,
@@ -10,7 +11,6 @@ from discminer.mining_utils import (_get_mask_tuples,
 
 import os
 import sys
-import json
 import numpy as np
 from astropy import units as u
 from astropy.io import fits
@@ -50,20 +50,15 @@ def update_spectral_header(header, vcenters):
 #**********************
 #JSON AND PARSER STUFF
 #**********************
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
+meta, params, custom = load_parfile()
 
-meta = pars['metadata']
-best = pars['best_fit']
-custom = pars['custom']
-
-vel_sign = best['velocity']['vel_sign']
-vsys = best['velocity']['vsys']
-Rout = best['intensity']['Rout']
-incl = best['orientation']['incl']
-PA = best['orientation']['PA']
-xc = best['orientation']['xc']
-yc = best['orientation']['yc']
+vel_sign = params['velocity']['vel_sign']
+vsys = params['velocity']['vsys']
+Rout = params['intensity']['Rout']
+incl = params['orientation']['incl']
+PA = params['orientation']['PA']
+xc = params['orientation']['xc']
+yc = params['orientation']['yc']
 
 gaps = custom['gaps']
 rings = custom['rings']
@@ -162,10 +157,10 @@ bins   = np.arange(vmin, vmax + 0.1*dv_native, dv_native)
 vcenters = 0.5*(bins[:-1] + bins[1:])
 
 #GET VPHI CENTROID
-zupi = model.z_upper_func({'R': R_s*au_to_m}, **best['height_upper'])
+zupi = model.z_upper_func({'R': R_s*au_to_m}, **params['height_upper'])
 
 if args.keplerian==1:
-    vphii_data = vphii_model = model.velocity_func({'R': R_s*au_to_m, 'z': zupi}, **best['velocity'])
+    vphii_data = vphii_model = model.velocity_func({'R': R_s*au_to_m, 'z': zupi}, **params['velocity'])
 elif args.keplerian==2: #Use intensity-biased discminer Keplerian model for both data and model
     vphi_interp_data = get_vphi_interp(vphi_modelfile)
     vphi_interp_model = get_vphi_interp(vphi_modelfile)    

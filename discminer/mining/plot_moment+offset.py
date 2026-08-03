@@ -1,6 +1,7 @@
 from discminer.mining_control import _mining_moment_offset
 from discminer.mining_utils import (get_2d_plot_decorators,
                                     get_noise_mask,
+                                    load_parfile,
                                     load_moments,
                                     load_disc_grid,
                                     init_data_and_model,
@@ -32,14 +33,9 @@ if __name__ == '__main__':
 #**************************
 #JSON AND SOME DEFINITIONS
 #**************************
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
-
-meta = pars['metadata']
-best = pars['best_fit']
-custom = pars['custom']
-vsys = best['velocity']['vsys']
-Rout = best['intensity']['Rout']
+meta, params, custom = load_parfile()
+vsys = params['velocity']['vsys']
+Rout = params['intensity']['Rout']
 
 rings = custom['rings']
 gaps = custom['gaps']
@@ -96,7 +92,7 @@ def make_plot(ax, xlim=xlim, tickcolor='k', labelcolor='k'):
 for i,axi in enumerate(ax):
     if i==1:
         im = make_plot(axi, xlim=zoomwidth, tickcolor=zoomlabelcolor, labelcolor=zoomlabelcolor)
-        axi.scatter(best['orientation']['xc'], best['orientation']['yc'],
+        axi.scatter(params['orientation']['xc'], params['orientation']['yc'],
                     ec='k', fc='w', marker='X', lw=0.5+i, s=60*(i+1), zorder=20)                
     else:
         im = make_plot(axi, xlim=xlim)
@@ -179,7 +175,7 @@ if args.show_continuum in ['all', 'band7']:
 #*************
 kwargs_sc = dict(s=400, lw=3.0, edgecolors='limegreen', midplane=True)
 for axi in ax:
-    mark_planet_location(axi, args, dpc=dpc, coords='sky', zfunc=model.z_upper_func, zpars=best['height_upper'], **best['orientation'], **kwargs_sc)
+    mark_planet_location(axi, args, dpc=dpc, coords='sky', zfunc=model.z_upper_func, zpars=params['height_upper'], **params['orientation'], **kwargs_sc)
 
 plt.savefig('moment+offset_%s.png'%mtags['base'], bbox_inches='tight', dpi=200)
 show_output(args)

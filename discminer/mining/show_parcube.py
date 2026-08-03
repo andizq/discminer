@@ -1,4 +1,5 @@
 from discminer.mining_control import _mining_parcube
+from discminer.mining_utils import load_parfile
 from discminer.plottools import use_discminer_style
 from discminer.tools import fit_kernel
 from discminer.core import Data
@@ -21,11 +22,7 @@ if __name__ == '__main__':
 #**************************
 #JSON AND SOME DEFINITIONS
 #**************************
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
-
-custom = pars['custom']
-meta = pars['metadata']
+meta, _, custom = load_parfile()
 file_data = meta['file_data']
 tag = meta['tag']
 Ilim = custom['Ilim']

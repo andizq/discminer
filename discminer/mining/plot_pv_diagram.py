@@ -1,6 +1,7 @@
 from discminer.mining_control import _mining_pv_diagram
 from discminer.mining_utils import (get_2d_plot_decorators,
                                     get_noise_mask,
+                                    load_parfile,
                                     load_moments,
                                     load_disc_grid,
                                     init_data_and_model,
@@ -31,21 +32,16 @@ if __name__ == '__main__':
 #**********************
 #JSON AND PARSER STUFF
 #**********************
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
+meta, params, custom = load_parfile()
 
-meta = pars['metadata']
-best = pars['best_fit']
-custom = pars['custom']
-
-Mstar = best['velocity']['Mstar']
-vsys = best['velocity']['vsys']
-Rout = best['intensity']['Rout']
-incl = best['orientation']['incl']
-PA = best['orientation']['PA']
-xc = best['orientation']['xc']
-yc = best['orientation']['yc']
-vel_pars = best['velocity']
+Mstar = params['velocity']['Mstar']
+vsys = params['velocity']['vsys']
+Rout = params['intensity']['Rout']
+incl = params['orientation']['incl']
+PA = params['orientation']['PA']
+xc = params['orientation']['xc']
+yc = params['orientation']['yc']
+vel_pars = params['velocity']
 
 rings = custom['rings']
 gaps = custom['gaps']
@@ -83,11 +79,11 @@ beam_au = datacube.beam_size.to('au').value
 
 if args.surface in ['up', 'upper']:
     z_func = model.z_upper_func
-    z_pars = best['height_upper']
+    z_pars = params['height_upper']
     
 elif args.surface in ['low', 'lower']:
     z_func = model.z_lower_func
-    z_pars = best['height_lower']
+    z_pars = params['height_lower']
 
 #**********************
 #DISC REFERENCE SYSTEM
@@ -231,7 +227,7 @@ if args.surface!='lower':
     cc = ax[0].contour(moment_data, **kwargs_cc)
 make_up_ax(ax[0], xlims=(-xlim, xlim), ylims=(-xlim, xlim), labelsize=13, color='k', labelcolor='k')
 
-ax[0].scatter(best['orientation']['xc'], best['orientation']['yc'],
+ax[0].scatter(params['orientation']['xc'], params['orientation']['yc'],
             ec='k', fc='w', marker='X', lw=0.5, s=60, zorder=20)        
 datacube.plot_beam(ax[0], fc='0.8')
 mod_major_ticks(ax[0], axis='both', nbins=8)

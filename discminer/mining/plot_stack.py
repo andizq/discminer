@@ -5,6 +5,7 @@ from discminer.mining_utils import (_get_mask_tuples,
                                     _merge_R_phi_mask,
                                     make_masks,
                                     get_noise_mask,
+                                    load_parfile,
                                     load_disc_grid,
                                     get_2d_plot_decorators,
                                     init_data_and_model,
@@ -17,7 +18,6 @@ from discminer.plottools import (make_up_ax,
                                  use_discminer_style)
 
 import sys
-import json
 import random
 import numpy as np
 from astropy import units as u
@@ -36,20 +36,15 @@ stat_func = getattr(np, args.stat)
 #**********************
 #JSON AND PARSER STUFF
 #**********************
-with open('parfile.json') as json_file:
-    pars = json.load(json_file)
+meta, params, custom = load_parfile()
 
-meta = pars['metadata']
-best = pars['best_fit']
-custom = pars['custom']
-
-vel_sign = best['velocity']['vel_sign']
-vsys = best['velocity']['vsys']
-Rout = best['intensity']['Rout']
-incl = best['orientation']['incl']
-PA = best['orientation']['PA']
-xc = best['orientation']['xc']
-yc = best['orientation']['yc']
+vel_sign = params['velocity']['vel_sign']
+vsys = params['velocity']['vsys']
+Rout = params['intensity']['Rout']
+incl = params['orientation']['incl']
+PA = params['orientation']['PA']
+xc = params['orientation']['xc']
+yc = params['orientation']['yc']
 
 gaps = custom['gaps']
 rings = custom['rings']
@@ -275,10 +270,10 @@ for i in range(nmasks):
     draws.append(drawsi)
 
     Rmask_au = Rgrid[masks[i]]
-    zupi = model.z_upper_func({'R': Rmask_au*au_to_m}, **best['height_upper'])
+    zupi = model.z_upper_func({'R': Rmask_au*au_to_m}, **params['height_upper'])
 
     if args.keplerian:
-        vphii = model.velocity_func({'R': Rmask_au*au_to_m, 'z': zupi}, **best['velocity'])
+        vphii = model.velocity_func({'R': Rmask_au*au_to_m, 'z': zupi}, **params['velocity'])
     else:
         vphii = vel_sign * vphi_interp(Rmask_au)
         
@@ -386,11 +381,11 @@ kwargs_im = dict(cmap=cmap_mom, extent=extent, levels=levels_im)
 
 if args.surface in ['up', 'upper']:
     z_func = model.z_upper_func
-    z_pars = best['height_upper']
+    z_pars = params['height_upper']
 
 elif args.surface in ['low', 'lower']:
     z_func = model.z_lower_func
-    z_pars = best['height_lower']
+    z_pars = params['height_lower']
 
 levels_resid = np.linspace(-clim, clim, 32)
 
@@ -443,4 +438,3 @@ mark_planet_location(axr, args, edgecolors='k', lw=0, s=550, coords='disc', mode
 
 plt.savefig('line_stacking_%s_%s_kepler%d_%s.png'%(meta['disc'], meta['mol'], args.keplerian, args.stat), bbox_inches='tight', dpi=200)    
 show_output(args)
-

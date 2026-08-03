@@ -73,12 +73,7 @@ def init_data_and_model(
 ):
     #Rmin: If dimensionless, fraction of beam_size
     #Rmax: If dimensionless, fraction of Rout    
-    with open(parfile) as jf:
-        pars = json.load(jf)
-
-    meta = pars['metadata']
-    best = pars['best_fit']
-    custom = pars['custom']
+    meta, params, _ = load_parfile(parfile=parfile)
 
     try:
         dir_data = meta['dir_data']
@@ -93,7 +88,7 @@ def init_data_and_model(
                     subpixels = int(tmp[0])
 
     file_data = os.path.join(dir_data, meta['file_data'])
-    Rout = best['intensity']['Rout']
+    Rout = params['intensity']['Rout']
     dpc = meta['dpc']*u.pc
 
     datacube = Data(file_data, dpc, twodim=twodim, disc=meta['disc'], mol=meta['mol']) # Read data and convert to Cube object
@@ -191,7 +186,7 @@ def init_data_and_model(
         #****************
         #PROTOTYPE PARAMS
         #****************
-        model.params = copy.copy(best)
+        model.params = copy.copy(params)
 
         #if datacube.beam is not None:
         try:
@@ -214,6 +209,19 @@ def read_json(parfile='parfile.json', decimals=True): #Read json file again but 
     with open(parfile) as json_file: 
         pars = json.load(json_file, parse_float=parse_func)
     return pars
+
+
+def load_parfile(parfile='parfile.json', decimals=False):
+    """
+    Load the metadata, model parameters, and custom settings from a parfile.
+
+    New parfiles store model parameters under ``params``. The ``best_fit``
+    fallback keeps parfiles written by discminer versions older than 0.5.0
+    readable.
+    """
+    pars = read_json(parfile=parfile, decimals=decimals)
+    params = pars['params'] if 'params' in pars else pars['best_fit']
+    return pars['metadata'], params, pars['custom']
             
 def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fmt_vertical=False, args=None):    
     I_res2abs = 3.0
@@ -221,10 +229,8 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
     L_res2abs = 5.0
     Ls_res2abs = 3.0
 
-    pars = read_json(parfile=parfile)
-    vsys = float(pars['best_fit']['velocity']['vsys'])
-    custom = pars['custom']
-    meta = pars['metadata']
+    meta, params, custom = load_parfile(parfile=parfile, decimals=True)
+    vsys = float(params['velocity']['vsys'])
 
     try:
         ctitle = disctex[meta['disc']]+' '+moltex[meta['mol']]        
@@ -435,10 +441,8 @@ def get_1d_plot_decorators(moment, parfile='parfile.json', tag='', args=None):
     L_res2abs = 7.0
     Ls_res2abs = 3.0
         
-    pars = read_json(parfile=parfile, decimals=False)
-    vsys = float(pars['best_fit']['velocity']['vsys'])
-    custom = pars['custom']
-    meta = pars['metadata']
+    meta, params, custom = load_parfile(parfile=parfile, decimals=False)
+    vsys = float(params['velocity']['vsys'])
 
     if len(tag)>0: tag = tag+' '
         
@@ -713,8 +717,7 @@ def load_moments(
         deltas=False, parfile='parfile.json', mask_comp=None
 ):
 
-    pars = read_json(parfile=parfile, decimals=False)
-    meta = pars['metadata']
+    meta, _, _ = load_parfile(parfile=parfile)
     
     if moment is None:
         moment = args.moment
