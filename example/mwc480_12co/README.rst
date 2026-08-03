@@ -24,7 +24,7 @@ Folder contents
    ├── README.rst
    ├── download_MAPS.sh
    ├── prepare_data.py
-   ├── log_pars_mwc480_12co_0p2_maps_cube_256walkers_10000steps.txt
+   ├── log_pars_mwc480_12co_0p2_maps_cube_230walkers_10000steps.json
    ├── png/
    └── fit/
        ├── README.rst
@@ -93,9 +93,10 @@ clips it spatially, and produces two downsampled versions:
 Create the Discminer parameter file
 -----------------------------------
 
-The ``discminer`` analysis tools require a JSON parameter file generated from
-the available ``log_pars.txt`` file and the local ``prepare_data.py`` script.
-From inside this folder, run:
+The ``discminer`` analysis tools require a ``parfile.json`` generated from the
+provided best-fit log,
+``log_pars_mwc480_12co_0p2_maps_cube_230walkers_10000steps.json``, and the
+local ``prepare_data.py`` script. From inside this folder, run:
 
 .. code-block:: bash
 
@@ -103,11 +104,20 @@ From inside this folder, run:
 
 The option ``-o 1`` overwrites any existing ``parfile.json``.
 
-If multiple files are available, the desired ones can be selected explicitly:
+If ``-f`` is omitted, ``discminer`` first looks for a log filename containing
+``default``. Otherwise, it selects the log with the largest number of MCMC
+steps, preferring JSON over legacy text when step counts match.
+
+The input log file and preparation script can instead be selected explicitly:
 
 .. code-block:: bash
 
-   discminer parfile -o 1 -f log_file2.txt -p prepare_data2.py
+   discminer parfile -o 1 \
+     -f log_pars_mwc480_12co_0p2_maps_cube_230walkers_10000steps.json \
+     -p prepare_data.py
+
+Legacy ``log_pars`` text files remain supported for older fits, but this
+example uses the JSON format so that fit metadata are retained.
 
 Inspect model attributes (Optional)
 -----------------------------------
@@ -271,4 +281,3 @@ radial substructures in the line emission.
 Details on the physical interpretation of the substructures identified in this and other discs from the MAPS sample can be found in `Izquierdo et al. (2023)`_.
 
 .. _Izquierdo et al. (2023): https://ui.adsabs.harvard.edu/abs/arXiv:2304.03607
-

@@ -5,6 +5,7 @@
 *.dat
 *.log
 *.png
+*.txt
 *.json
 *.npy
 

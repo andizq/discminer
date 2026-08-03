@@ -21,6 +21,29 @@ Available examples
    * - ``mwc480_12co``
      - Basic analysis workflow using the MAPS 12CO J=2-1 datacube of MWC 480.
 
+Workflow overview
+-----------------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 35 45
+
+   * - Stage
+     - Typical tool
+     - Main output
+   * - Prepare data
+     - A ``prepare_data.py`` script, optionally generated with ``discminer prepare``
+     - Clipped and downsampled datacubes
+   * - Fit the model
+     - A fit script using ``Model.run_mcmc``
+     - ``log_pars_*.json`` with fitted parameters and image metadata
+   * - Configure analysis
+     - ``discminer parfile``
+     - ``parfile.json`` configured for the analysis datacube
+   * - Analyse results
+     - ``discminer channels``, ``discminer moments1d``, and other mining commands
+     - Model cubes, moment maps, residual maps, and radial or azimuthal profiles
+
 Discminer commands
 ------------------
 
@@ -34,7 +57,7 @@ At the time this example set was written, the main commands include:
 
 .. code-block:: text
 
-    parfile             Make JSON parameter file based on input log_pars.txt and prepare_data.py
+    parfile             Create a JSON parameter file from a log_pars JSON or legacy text file and prepare_data.py
     channels            Make model channel maps and compare to data
     moments1d           Make (gaussian, bell, or quadratic) moment maps and save output into .fits files
     moments2d           Make (double Gauss or double Bell) moment maps and save output into .fits files
@@ -61,6 +84,7 @@ At the time this example set was written, the main commands include:
     skewkurt            Make skewness and kurtosis maps, and save output into .fits files
     intensdistrib       Extract and display the intensity distribution of pixels within selected radial regions
     stack               Azimuthally stack line profiles across the disc radial extent
+    avgvel              Make axisymmetric data-derived velocity moment maps
     stackcube           Make stacked cube with lines shifted to their centroid velocity
     destackcube         Undo stacked cube with lines shifted to their original centroid velocity
 

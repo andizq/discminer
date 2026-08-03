@@ -1498,6 +1498,11 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                 print("MPI multiprocessing took {0:.1f} seconds".format(multi_time))
 
         else:
+            ncores = nthreads
+            if ncores is None:
+                ncores = getattr(os, "process_cpu_count", os.cpu_count)() or 1
+            print("Using %d core(s) for MCMC sampling" % ncores)
+
             with Pool(processes=nthreads) as pool:
                 sampler = sampler_id.EnsembleSampler(nwalkers, ndim, self.ln_likelihood, pool=pool, backend=backend, kwargs=kwargs_model)                                                        
                 start = time.time()

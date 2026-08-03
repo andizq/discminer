@@ -2,16 +2,25 @@ from discminer.core import Data
 from discminer.disc2d import Model
 
 import numpy as np
-import matplotlib.pyplot as plt
-
 from astropy import units as u
 import emcee
 
 from argparse import ArgumentParser
+import os
 
 parser = ArgumentParser(prog='Handle emcee backend', description='Handle emcee backend')
 parser.add_argument('-b', '--backend', default=1, type=int, choices=[0, 1], help="If 0, create new backend. If 1, reuse existing backend")
+parser.add_argument('-s', '--seed', default=12345, type=int, help='Random seed for MCMC sampling')
+parser.add_argument('-nt', '--nthreads', default=None, type=int, help='Number of worker processes. If omitted, use SLURM_CPUS_PER_TASK when set or all available cores')
+
 args = parser.parse_args()
+
+nthreads = args.nthreads
+if nthreads is None:
+    try:
+        nthreads = int(os.environ["SLURM_CPUS_PER_TASK"])
+    except (KeyError, TypeError, ValueError):
+        nthreads = None #Consider all available cores
 
 #*********************
 #REQUIREd DEFINITIONS
@@ -21,7 +30,7 @@ tag_out = 'mwc480_12co_0p2_maps' #PREFERRED FORMAT: disc_mol_chan_program_extrat
 tag_in = tag_out
 
 nwalkers = 230
-nsteps = 5000
+nsteps = 10000
 
 dpc = 162.0*u.pc
 vel_sign = -1 #Rotation direction: -1 or 1
@@ -161,12 +170,13 @@ print("Backend Initial size: {0} steps".format(backend.iteration))
 # Noise in each pixel is stddev of intensity from first and last 5 channels 
 noise = np.std( np.append(datacube.data[:5,:,:], datacube.data[-5:,:,:], axis=0), axis=0) 
 
+np.random.seed(args.seed)
 #Run Emcee
 model.run_mcmc(datacube.data, vchannels,
                p0_mean=p0, nwalkers=nwalkers, nsteps=nsteps,
                backend=backend,
                tag=tag_out,
-               #nthreads=96, # If not specified considers maximum possible number of cores
+               nthreads=nthreads,
                frac_stats=0.1,
                frac_stddev=1e-2,
                noise_stddev=noise) 

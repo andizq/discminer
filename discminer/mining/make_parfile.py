@@ -536,7 +536,7 @@ def shift_orientation_to_data_image(pars_dict, tags_dict, log_metadata):
             'compatibility.',
             Warning
         )
-        return
+        return None
 
     try:
         wcs_header_fit = image_center_fit['wcs']
@@ -548,7 +548,7 @@ def shift_orientation_to_data_image(pars_dict, tags_dict, log_metadata):
             % exc,
             Warning
         )
-        return
+        return None
 
     file_data = tags_dict['file_data']
     header_pro = fits.getheader(file_data)
@@ -586,14 +586,73 @@ def shift_orientation_to_data_image(pars_dict, tags_dict, log_metadata):
         ydisc_pro - image_center_pro['ypix']
     ) * pix_size_pro
 
+    note = (
+        'shifted xc, yc to the centre of the provided analysis datacube'
+    )
+    v_discminer = tags_dict.pop('v_discminer')
     tags_dict.update({
-        'image_center_fit': image_center_fit,
-        'image_center_pro': image_center_pro,
+        'v_discminer': v_discminer,
+        'v_discminer_fit': log_metadata.get('v_discminer', 'unknown'),
         'xc_fit': xc_fit,
         'yc_fit': yc_fit,
-        'v_discminer_fit': log_metadata.get('v_discminer', 'unknown'),
-        'notes': 'shifted xc, yc based on the provided data image',
+        'notes': note,
     })
+
+    return {
+        'metadata': {
+            'v_discminer': __version__,
+            'v_discminer_fit': log_metadata.get(
+                'v_discminer',
+                'unknown',
+            ),
+            'log_file': tags_dict['log_file'],
+            'file_data_fit': log_metadata.get(
+                'file_data',
+                'unknown',
+            ),
+            'file_data_pro': tags_dict['file_data'],
+            'dpc_fit': float(dpc_fit),
+            'dpc_pro': float(tags_dict['dpc']),
+            'notes': note,
+        },
+        'image_center': {
+            'fit': image_center_fit,
+            'pro': image_center_pro,
+        },
+        'orientation': {
+            'fit': {
+                'xc': xc_fit,
+                'yc': yc_fit,
+            },
+            'pro': {
+                'xc': float(orientation['xc']),
+                'yc': float(orientation['yc']),
+            },
+        },
+        'units': {
+            'orientation': {
+                'xc': 'au',
+                'yc': 'au',
+            },
+        },
+    }
+
+
+def write_image_center_json(image_center_dict):
+    output_file = Path(args.json_file).resolve().parent / 'image_center.json'
+    with open(output_file, 'w', encoding='utf-8') as json_file:
+        json.dump(
+            image_center_dict,
+            json_file,
+            ensure_ascii=False,
+            indent=4,
+        )
+    print(
+        'Writing image-centre provenance to %s'
+        % output_file
+    )
+    return output_file.name
+
 
 #*************
 #MAKE PAR FILE
@@ -604,6 +663,7 @@ def make_json(dicts_list=[], keys_list=[], filename=args.json_file):
     def make():
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(master_dict, f, ensure_ascii=False, indent=4)
+        return True
 
     if args.overwrite:
         if args.json_file in os.listdir():
@@ -621,19 +681,37 @@ def make_json(dicts_list=[], keys_list=[], filename=args.json_file):
                 print ('*'*10 + message)
                     
                 master_dict['custom'].update(pars['custom'])
-        make()
+        return make()
         
     else:
         if args.json_file in os.listdir():
             message = '\n********JSON parfile exists and overwrite mode is off, therefore NO output was produced********'
             warnings.warn(message)
+            return False
         else:
-            make()
+            return make()
 
 def make_all():
     tags_dict = get_tags_dict(log_file)
     pars_dict, units_dict, log_metadata = get_base_pars(log_file, tags_dict)
-    shift_orientation_to_data_image(pars_dict, tags_dict, log_metadata)
+    image_center_dict = shift_orientation_to_data_image(
+        pars_dict,
+        tags_dict,
+        log_metadata,
+    )
+    write_image_center = bool(
+        args.image_center and image_center_dict is not None
+    )
+    if args.image_center and image_center_dict is None:
+        warnings.warn(
+            'image_center.json was not written because the input log '
+            'does not contain complete image-centre metadata. Any '
+            'existing image_center.json file was left untouched.',
+            Warning,
+        )
+    if write_image_center:
+        tags_dict['image_center_file'] = 'image_center.json'
+
     for tk in tags_dict['kind']:
         if 'nosurf' in tk:
             pars_dict['intensity'].update({'q': 0.0})
@@ -650,7 +728,12 @@ def make_all():
     except KeyError:
         custom_dict.update(gaps=[], rings=[0], kinks=[])
             
-    make_json(dicts_list = [custom_dict, tags_dict, pars_dict, units_dict], keys_list = ['custom', 'metadata', 'params', 'units'])
+    parfile_written = make_json(
+        dicts_list=[custom_dict, tags_dict, pars_dict, units_dict],
+        keys_list=['custom', 'metadata', 'params', 'units'],
+    )
+    if parfile_written and write_image_center:
+        write_image_center_json(image_center_dict)
 
 if args.download_cube:
     from urllib.request import urlretrieve

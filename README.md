@@ -4,6 +4,7 @@
 <h2 align="center">The Channel Map Modelling Code</h2>
 
 <div align="center">
+<a href="https://pypi.org/project/discminer/"><img alt="PyPI version" src="https://img.shields.io/pypi/v/discminer.svg?style=for-the-badge"></a>
 <a href="https://github.com/andizq/discminer/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-FEE440.svg?style=for-the-badge"></a>
 <a href="https://github.com/andizq/discminer/pulls"><img alt="Pull request?" src="https://img.shields.io/badge/Become%20a-miner%20%e2%9a%92-00BBF9.svg?style=for-the-badge"></a>
 <a href="https://github.com/andizq"><img alt="andizq" src="https://img.shields.io/badge/with%20%e2%99%a1%20by-andizq-ff1414.svg?style=for-the-badge"></a>
@@ -12,7 +13,7 @@
 
 
 <div align="center">
-  Welcome to the discminer repository! Looking for quick examples and tutorials? Check out the <mark>example/</mark> folder.
+  Welcome to the discminer repository! Looking for quick examples and tutorials? Check out the <a href="example/README.rst">example workflows</a>.
   <br />
   <a href="https://github.com/andizq/discminer/issues/new?assignees=&labels=bug&title=bug%3A+">Report a Bug</a>
   ·
@@ -21,13 +22,16 @@
   <a href="https://github.com/andizq/discminer/issues/new?assignees=&labels=question&title=question%3A+">Ask a Question</a>
 </div>
 
-- Model channel maps from molecular line emission of discs by fitting intensity **and** rotation velocity
-- Analyse the disc's dynamics by modelling Keplerian motion, and optionally pressure support + self-gravity
-- Investigate the disc vertical structure by modelling front and back side emission surfaces
-- Compute moment maps that accurately capture complex line profile morphologies
-- Extract rotation curves, radial and meridional velocities, intensity, and line width profiles
-- Identify velocity and intensity substructures, and examine their coherence and degree of localisation
-- Support non-axisymmetric models; all attributes can be described in three-dimensional coordinates
+`discminer` is a Python package for fitting three-dimensional parametric models directly to molecular-line channel maps of protoplanetary discs, then using model–data residuals to reveal their kinematic and intensity substructure.
+
+It enables you to:
+
+- Fit intensity and rotation velocity simultaneously across an entire channel-map cube or a selected subset of channels
+- Model Keplerian rotation, with optional pressure support and disc self-gravity
+- Reconstruct front- and back-side emitting surfaces and use flexible, non-axisymmetric prescriptions for model attributes
+- Fit complex line profiles to derive peak-intensity, centroid-velocity, line-width, and line-slope moment maps
+- Extract rotation curves and radial profiles of intensity, line width, and azimuthal, radial, and vertical velocity
+- Detect and quantify coherent, localised structures in intensity and velocity residuals
 
 
 <img
@@ -94,7 +98,7 @@ To run the examples on your local machine, clone this repository and follow the 
 
 ```bash
 git clone https://github.com/andizq/discminer.git
-cd discminer/template
+cd discminer/example/mwc480_12co
 less README.rst
 ```
 

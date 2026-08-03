@@ -442,21 +442,16 @@ def _mining_parcube(parserobj, prog='parcube', description='Show cube reconstruc
     add_parser_args(parser, kernel=True, kind=True, surface='both')
     return parser
 
-def _mining_parfile(parserobj, prog='parfile', description='Make JSON parameter file based on an input log_pars file and prepare_data.py'):
+def _mining_parfile(parserobj, prog='parfile', description='Create a JSON parameter file from a log_pars JSON or legacy text file and prepare_data.py'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     parser.add_argument('-dir_log', '--dir_log', default='./', type=str, help="Directory where the input log_pars file is located. DEFAULTS to './'")
     parser.add_argument('-dir_data', '--dir_data', default='./', type=str, help="Directory where the input datacube.fits is located. DEFAULTS to './'")
     parser.add_argument('-dir_model', '--dir_model', default='./', type=str, help="Directory where model files will be stored. DEFAULTS to './'")    
-    parser.add_argument(
-        '-f',
-        '--log_file',
-        default='',
-        type=str,
-        help="Input log_pars JSON or legacy text file. If omitted, select a default log in --dir_log, otherwise the log with the most steps, preferring JSON when step counts match."
-    )
+    parser.add_argument('-f', '--log_file', default='', type=str, help="Input log_pars JSON or legacy text file. If omitted, select a default log in --dir_log, otherwise the log with the most steps, preferring JSON when step counts match.")
     parser.add_argument('-p', '--prepare_data', default='prepare_data.py', type=str, help="Script employed to clip and downsample the cube of interest. DEFAULTS to prepare_data.py.")
     parser.add_argument('-j', '--json_file', default='parfile.json', type=str, help="Name of output JSON file. DEFAULTS to parfile.json.")
-    parser.add_argument('-fd', '--file_data', default='', type=str, help="If empty, try to guess the input datacube.fits from prepara_data.py. DEFAULTS to empty.")    
+    parser.add_argument('-fd', '--file_data', default='', type=str, help="If empty, try to infer the input datacube.fits from prepare_data.py. DEFAULTS to empty.")
+    parser.add_argument('-ic', '--image-center', dest='image_center', default=0, type=int, choices=[0, 1], help="Write full fit/prototype image-centre provenance to image_center.json. DEFAULTS to 0.")
     parser.add_argument('-o', '--overwrite', default=1, type=int, help="overwrite if parfile.json exists. DEFAULTS to 1.")
     parser.add_argument('-r', '--reset', default=0, type=int,
                         help="If (1) AND --overwrite, rewrite parfile.json. If (0) AND --overwrite, forward 'custom' dictionary, and rewrite metadata and model parameters only. DEFAULTS to 0.")

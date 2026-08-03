@@ -26,6 +26,10 @@ The script defines the prescriptions used in the example:
 * free parameters for orientation, velocity, intensity, linewidth, line slope,
   and both emitting surfaces.
 
-The fitting step can be computationally expensive. For this reason, the
-example folder contains a precomputed ``log_pars.txt`` file so that the
-analysis workflow can be reproduced without rerunning the MCMC fit.
+The fitting step can be computationally expensive (the precomputed
+230walker, 10000-step run took ~6 hours on 48 cores and used
+about 600 MB of memory per core; performance will vary by system). For this
+reason, the parent example folder contains the precomputed
+``log_pars_mwc480_12co_0p2_maps_cube_230walkers_10000steps.json`` file so that
+the analysis workflow can be reproduced without rerunning the MCMC fit while
+retaining the fit metadata.

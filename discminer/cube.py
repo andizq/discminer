@@ -448,26 +448,28 @@ class Cube(_JSON):
             self.ny = ny
             self.data = av_data
 
-            # nf: number of pix between centre of first pix in the original img and centre of first downsampled pix
-            nf = (npix - 1) / 2.0
-
-            # will be the new CRPIX1 and CRPIX2 (origin is 1,1, not 0,0)
-            refpix = 1
-            # coords of reference pixel, using old pixels info
-            refpixval = aputils.pixel_to_skycoord(
-                xleft + nf,
-                ybottom + nf,
-                self.wcs.celestial
-            ) #referred to 0-based coords
-
             CDELT1, CDELT2 = self.header["CDELT1"], self.header["CDELT2"]
-            # equivalent to CRVAL1 - CDELT1 * (CRPIX1 - 1 - nf) but using right projection
-            self.header["CRVAL1"] = refpixval.ra.value
-            self.header["CRVAL2"] = refpixval.dec.value
+            CRPIX1, CRPIX2 = self.header["CRPIX1"], self.header["CRPIX2"]
+
+            # Preserve the original celestial projection exactly. Output
+            # pixel j represents the centre of the corresponding npix-wide
+            # input block, after removing xleft/ybottom pixels. In the
+            # one-based FITS convention this maps the reference pixels as:
+            #
+            # CRPIX_new = (CRPIX_old - crop - 0.5) / npix + 0.5
+            #
+            # Keeping CRVAL fixed is important for non-linear celestial
+            # projections: assigning a new CRVAL at the first output pixel
+            # changes the projection reference point and introduces small
+            # coordinate differences between downsampling factors.
             self.header["CDELT1"] = CDELT1 * npix
             self.header["CDELT2"] = CDELT2 * npix
-            self.header["CRPIX1"] = refpix
-            self.header["CRPIX2"] = refpix
+            self.header["CRPIX1"] = (
+                CRPIX1 - xleft - 0.5
+            ) / npix + 0.5
+            self.header["CRPIX2"] = (
+                CRPIX2 - ybottom - 0.5
+            ) / npix + 0.5
             self.header["NAXIS1"] = nx
             self.header["NAXIS2"] = ny
 
