@@ -174,63 +174,245 @@ def plot_components(
     return Path(output)
 
 
+def weighted_log_width_fit(spatial, spectral, spectral_error):
+    """Fit ``log10(spectral) = slope * log10(spatial) + intercept``.
+
+    This reproduces the custom weighted least-squares calculation used by the
+    original PCA width script. Only the spectral uncertainties set the
+    weights; spatial uncertainties are retained for plotting.
+    """
+
+    spatial = np.asarray(spatial, dtype=float)
+    spectral = np.asarray(spectral, dtype=float)
+    spectral_error = np.asarray(spectral_error, dtype=float)
+    if not (
+        spatial.shape == spectral.shape == spectral_error.shape
+        and spatial.ndim == 1
+    ):
+        raise ValueError("Fit inputs must be one-dimensional matching arrays")
+    if spatial.size < 2:
+        raise ValueError("At least two valid components are required for a fit")
+    if (
+        np.any(~np.isfinite(spatial))
+        or np.any(~np.isfinite(spectral))
+        or np.any(~np.isfinite(spectral_error))
+        or np.any(spatial <= 0)
+        or np.any(spectral <= 0)
+        or np.any(spectral_error <= 0)
+    ):
+        raise ValueError("Fit inputs must be finite and strictly positive")
+
+    log_spatial = np.log10(spatial)
+    log_spectral = np.log10(spectral)
+    log_spectral_error = spectral_error / (
+        spectral * np.log(10.0)
+    )
+
+    design = np.column_stack((log_spatial, np.ones_like(log_spatial)))
+    weights = 1.0 / log_spectral_error**2
+    normal = design.T @ (weights[:, np.newaxis] * design)
+    if np.linalg.matrix_rank(normal) < 2:
+        raise ValueError("The selected spatial widths cannot define a fit")
+
+    covariance = np.linalg.inv(normal)
+    parameters = covariance @ (
+        design.T @ (weights * log_spectral)
+    )
+    slope, intercept = parameters
+    slope_error, intercept_error = np.sqrt(np.diag(covariance))
+    amplitude = 10.0**intercept
+    amplitude_error = amplitude * np.log(10.0) * intercept_error
+
+    return {
+        "slope": slope,
+        "intercept": intercept,
+        "slope_error": slope_error,
+        "intercept_error": intercept_error,
+        "amplitude": amplitude,
+        "amplitude_error": amplitude_error,
+        "covariance": covariance,
+    }
+
+
+def _beam_size_au(result):
+    """Return the major-axis FWHM in au using discminer's convention."""
+
+    bmaj_degrees = result.source_header.get("BMAJ")
+    if bmaj_degrees is None:
+        return None
+    bmaj_arcsec = float(bmaj_degrees) * 3600.0
+    return bmaj_arcsec * result.distance_pc
+
+
 def plot_widths(
     result: PCAResult,
     output,
+    beam_multiple=1.0,
+    n_fit_components=6,
+    spectral_error_scale=0.2,
     dpi=200,
     show=False,
 ):
-    """Plot valid spectral widths against spatial widths."""
+    """Plot and fit spectral widths against spatial widths."""
 
     use_discminer_style()
+    if beam_multiple < 0:
+        raise ValueError("beam_multiple must be non-negative")
+    if n_fit_components < 2:
+        raise ValueError("n_fit_components must be at least 2")
+    if spectral_error_scale <= 0:
+        raise ValueError("spectral_error_scale must be positive")
+
     spatial = result.spatial_width.copy()
     spatial_error = result.spatial_width_error.copy()
+    spectral = result.spectral_width.copy()
+    spectral_error = spectral_error_scale * result.spectral_width_error
+    components = np.arange(result.n_components)
     xlabel = "Spatial width [au]"
+    beam_scale = _beam_size_au(result)
 
     if result.outer_radius_au is not None:
         spatial *= 100.0 / result.outer_radius_au
         spatial_error *= 100.0 / result.outer_radius_au
         xlabel = r"Spatial width [% $R_{\rm out}$]"
+        if beam_scale is not None:
+            beam_scale *= 100.0 / result.outer_radius_au
 
     valid = (
         np.isfinite(spatial)
         & np.isfinite(spatial_error)
-        & np.isfinite(result.spectral_width)
-        & np.isfinite(result.spectral_width_error)
+        & np.isfinite(spectral)
+        & np.isfinite(spectral_error)
         & (spatial > 0)
-        & (result.spectral_width > 0)
+        & (spatial_error > 0)
+        & (spectral > 0)
+        & (spectral_error > 0)
     )
     if not np.any(valid):
         raise ValueError("The artifact has no valid spatial-spectral widths")
 
-    components = np.arange(result.n_components)[valid]
-    spectral = result.spectral_width[valid]
-    spectral_error = result.spectral_width_error[valid]
+    spatial = spatial[valid]
+    spatial_error = spatial_error[valid]
+    spectral = spectral[valid]
+    spectral_error = spectral_error[valid]
+    components = components[valid]
 
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fit_mask = components < n_fit_components
+    if beam_scale is not None:
+        fit_mask &= spatial > beam_multiple * beam_scale
+    if np.count_nonzero(fit_mask) < 2:
+        raise ValueError(
+            "Fewer than two components satisfy the fit selection. Increase "
+            "--n-fit-components or reduce --beam-multiple."
+        )
+
+    fit = weighted_log_width_fit(
+        spatial[fit_mask],
+        spectral[fit_mask],
+        spectral_error[fit_mask],
+    )
+
+    beam_threshold = (
+        None if beam_scale is None else beam_multiple * beam_scale
+    )
+    if beam_scale is not None:
+        print(f"Beam size      = {_beam_size_au(result):.1f} au")
+        if result.outer_radius_au is not None:
+            print(
+                f"Frac beam size = {beam_threshold:.1f} % Rout"
+            )
+    print(f"Number of fitted points = {np.count_nonzero(fit_mask)}")
+    print("Best-fit relation in log10 space:")
+    print(
+        "log10(spectral) = "
+        f"({fit['slope']:.4f} ± {fit['slope_error']:.4f}) "
+        "log10(spatial) + "
+        f"({fit['intercept']:.4f} ± {fit['intercept_error']:.4f})"
+    )
+    print("\nEquivalent linear-space relation:")
+    print(
+        "spectral = "
+        f"({fit['amplitude']:.4e} ± {fit['amplitude_error']:.4e}) * "
+        f"spatial^({fit['slope']:.4f} ± {fit['slope_error']:.4f})"
+    )
+
+    fig, ax = plt.subplots(figsize=(12, 5))
     ax.errorbar(
-        spatial[valid],
+        spatial,
         spectral,
-        xerr=spatial_error[valid],
+        xerr=spatial_error,
         yerr=spectral_error,
+        ecolor="k",
         fmt="o",
+        ms=6,
+        alpha=0.3,
+        markeredgecolor="k",
+        markerfacecolor="w",
+        capsize=2,
+        label="All points",
+    )
+    ax.errorbar(
+        spatial[fit_mask],
+        spectral[fit_mask],
+        xerr=spatial_error[fit_mask],
+        yerr=spectral_error[fit_mask],
+        fmt="o",
+        ms=9,
+        capsize=2,
+        markeredgewidth=1.5,
         markeredgecolor="k",
         markerfacecolor="tomato",
-        capsize=2,
+        label="Fit sample",
     )
     for xvalue, yvalue, component in zip(
-        spatial[valid], spectral, components
+        spatial[fit_mask],
+        spectral[fit_mask],
+        components[fit_mask],
     ):
-        ax.annotate(
+        ax.text(
+            xvalue + 0.3,
+            yvalue,
             str(component),
-            (xvalue, yvalue),
-            xytext=(4, -4),
-            textcoords="offset points",
+            ha="left",
+            va="top",
+            fontsize=15,
+        )
+
+    xline = np.linspace(np.min(spatial), np.max(spatial), 500)
+    yline = fit["amplitude"] * xline ** fit["slope"]
+    ax.plot(
+        xline,
+        yline,
+        lw=3,
+        color="tomato",
+        alpha=0.3,
+        label=(
+            rf"Fit: $y = {fit['amplitude']:.2e}\,"
+            rf"x^{{{fit['slope']:.2f}}}$"
+        ),
+    )
+    if beam_threshold is not None:
+        beam_unit = (
+            r"% $R_{\rm out}$"
+            if result.outer_radius_au is not None
+            else "au"
+        )
+        ax.axvline(
+            beam_threshold,
+            ls="--",
+            lw=2.0,
+            color="magenta",
+            label=f"Beam = {beam_threshold:.1f} {beam_unit}",
         )
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(r"Spectral width [km s$^{-1}$]")
     ax.set_title("PCA spatial and spectral widths")
+    ax.set_ylim(
+        0.2 * np.min(spectral[fit_mask]),
+        1.5 * np.max(spectral[fit_mask]),
+    )
+    ax.legend(frameon=False)
     ax.grid(alpha=0.3)
     fig.savefig(output, dpi=dpi, bbox_inches="tight")
     if show:

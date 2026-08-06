@@ -136,6 +136,17 @@ discminer pca reconstruct pca_cube_data_TAG_convtb_stackedcube.fits \
 discminer pca plot-channels reconstructed_without_pc2.fits
 ```
 
+The width plot reproduces the original custom weighted fit in log space. By
+default it considers the first six components resolved above one major-axis
+beam FWHM and applies the original `0.2` scaling to the TurbuStat spectral
+width errors. These choices can be adjusted with:
+
+```bash
+discminer pca plot-widths pca_cube_data_TAG_convtb_stackedcube.fits \
+    --n-fit-components 6 --beam-multiple 1 \
+    --spectral-error-scale 0.2
+```
+
 PCA component indices remain zero-based. Use `discminer pca <command> -h` for
 the complete set of options, including explicit distance, covariance velocity
 limits, beam correction, and component selection.

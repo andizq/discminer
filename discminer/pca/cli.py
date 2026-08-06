@@ -177,6 +177,36 @@ def add_pca_parser(subparsers):
         "--output",
         help="Output figure. Default: pca_widths_<input>.png",
     )
+    widths.add_argument(
+        "-i",
+        "--beam-multiple",
+        "--Rinner",
+        dest="beam_multiple",
+        type=float,
+        default=1.0,
+        help=(
+            "Minimum resolved spatial width in major-axis beam FWHM units. "
+            "Default: 1"
+        ),
+    )
+    widths.add_argument(
+        "-ne",
+        "--n-fit-components",
+        "--neigs",
+        dest="n_fit_components",
+        type=int,
+        default=6,
+        help="Number of leading PCA components considered for the fit. Default: 6",
+    )
+    widths.add_argument(
+        "--spectral-error-scale",
+        type=float,
+        default=0.2,
+        help=(
+            "Multiplier applied to TurbuStat spectral-width errors, matching "
+            "the original PCA width script. Default: 0.2"
+        ),
+    )
     widths.add_argument("--dpi", type=int, default=200)
     widths.add_argument("--show", action="store_true")
 
@@ -330,6 +360,9 @@ def run_from_namespace(args):
         plot_widths(
             result,
             output,
+            beam_multiple=args.beam_multiple,
+            n_fit_components=args.n_fit_components,
+            spectral_error_scale=args.spectral_error_scale,
             dpi=args.dpi,
             show=args.show,
         )

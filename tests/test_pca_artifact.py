@@ -31,6 +31,9 @@ def make_source_header(n_channels=3, ny=2, nx=2):
             "CDELT2": 1.0 / 3600.0,
             "CDELT3": 1.0,
             "BUNIT": "K",
+            "BMAJ": 0.01 / 3600.0,
+            "BMIN": 0.01 / 3600.0,
+            "BPA": 0.0,
         }
     )
 
