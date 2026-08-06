@@ -101,13 +101,37 @@ def run_pca(
         n_eigs=width_components,
         show_progress=show_progress,
     )
-    pca.find_spatial_widths(
-        method=spatial_method,
-        beam_fwhm=None,
-        brunt_beamcorrect=beam_correct,
-        diagnosticplots=False,
-    )
+    try:
+        pca.find_spatial_widths(
+            method=spatial_method,
+            beam_fwhm=None,
+            brunt_beamcorrect=beam_correct,
+            diagnosticplots=False,
+        )
+    except TypeError as exc:
+        if "0-dimensional arrays" not in str(exc):
+            raise
+        raise RuntimeError(
+            "TurbuStat 1.3's contour spatial-width fit is incompatible with "
+            f"NumPy {np.__version__}. Install the compatible PCA dependencies "
+            "with: python -m pip install 'numpy<2' 'astropy<8'"
+        ) from exc
     pca.find_spectral_widths(method=spectral_method)
+
+    spatial_autocorrelation = np.asarray(
+        pca.autocorr_images(n_eigs=width_components),
+        dtype=float,
+    )
+    if spatial_autocorrelation.ndim == 2:
+        spatial_autocorrelation = spatial_autocorrelation[np.newaxis, ...]
+    spatial_autocorrelation -= np.asarray(pca.noise_ACF(), dtype=float)
+
+    spectral_autocorrelation = np.asarray(
+        pca.autocorr_spec(n_eigs=width_components),
+        dtype=float,
+    )
+    if spectral_autocorrelation.ndim == 1:
+        spectral_autocorrelation = spectral_autocorrelation[:, np.newaxis]
 
     eigenimages = np.asarray(pca.eigimages(n_channels), dtype=float)
     if eigenimages.ndim == 2:
@@ -152,6 +176,8 @@ def run_pca(
         spectral_width=spectral_width,
         spectral_width_error=spectral_width_error,
         valid_mask=np.isfinite(data),
+        spatial_autocorrelation=spatial_autocorrelation,
+        spectral_autocorrelation=spectral_autocorrelation,
         outer_radius_au=outer_radius_au,
         eigen_cut_method="components",
         min_eigenvalue=None,

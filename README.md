@@ -124,17 +124,25 @@ discminer pca run cube_data_TAG_convtb_stackedcube.fits
 ```
 
 The `run` command writes `pca_<cube>.fits` and a covariance plot whose axes and
-central zoom are derived from the input velocity axis. The artifact can then
-be reused without repeating the decomposition:
+central zoom are derived from the input velocity axis. The artifact includes
+the spatial and spectral autocorrelations used for the width measurements, so
+all plots can be regenerated without repeating the decomposition:
 
 ```bash
 discminer pca plot-widths pca_cube_data_TAG_convtb_stackedcube.fits
+discminer pca plot-diagnostics \
+    pca_cube_data_TAG_convtb_stackedcube.fits
 discminer pca plot-components pca_cube_data_TAG_convtb_stackedcube.fits \
     --components 0,1,2,3,4,5
 discminer pca reconstruct pca_cube_data_TAG_convtb_stackedcube.fits \
     --exclude 2 --output reconstructed_without_pc2.fits
 discminer pca plot-channels reconstructed_without_pc2.fits
 ```
+
+The diagnostics command plots up to the first nine components and writes
+`pca_spatialwidths_<cube>.png` and `pca_spectralwidths_<cube>.png`. Use
+`--n-components` to show fewer components or `--max-lag` to zoom the spectral
+autocorrelation axes.
 
 The width plot reproduces the original custom weighted fit in log space. By
 default it considers the first six components resolved above one major-axis

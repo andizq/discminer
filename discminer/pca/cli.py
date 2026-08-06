@@ -196,7 +196,10 @@ def add_pca_parser(subparsers):
         dest="n_fit_components",
         type=int,
         default=6,
-        help="Number of leading PCA components considered for the fit. Default: 6",
+        help=(
+            "Number of leading PCA components considered for the fit. "
+            "Default: 6"
+        ),
     )
     widths.add_argument(
         "--spectral-error-scale",
@@ -209,6 +212,44 @@ def add_pca_parser(subparsers):
     )
     widths.add_argument("--dpi", type=int, default=200)
     widths.add_argument("--show", action="store_true")
+
+    diagnostics = commands.add_parser(
+        "plot-diagnostics",
+        help="Plot spatial and spectral width-fitting diagnostics",
+    )
+    diagnostics.add_argument("artifact", help="Input PCA artifact")
+    diagnostics.add_argument(
+        "--spatial-output",
+        help=(
+            "Output spatial figure. "
+            "Default: pca_spatialwidths_<input>.png"
+        ),
+    )
+    diagnostics.add_argument(
+        "--spectral-output",
+        help=(
+            "Output spectral figure. "
+            "Default: pca_spectralwidths_<input>.png"
+        ),
+    )
+    diagnostics.add_argument(
+        "-n",
+        "--n-components",
+        type=int,
+        default=9,
+        help="Number of leading components to plot, at most 9. Default: 9",
+    )
+    diagnostics.add_argument(
+        "--max-lag",
+        type=float,
+        default=None,
+        help=(
+            "Maximum spectral lag in channels. "
+            "Default: full non-negative lag range"
+        ),
+    )
+    diagnostics.add_argument("--dpi", type=int, default=200)
+    diagnostics.add_argument("--show", action="store_true")
 
     reconstruct = commands.add_parser(
         "reconstruct", help="Reconstruct a cube from selected components"
@@ -287,6 +328,8 @@ def run_from_namespace(args):
         plot_channels,
         plot_components,
         plot_covariance,
+        plot_spatial_width_diagnostics,
+        plot_spectral_width_diagnostics,
         plot_widths,
     )
 
@@ -367,6 +410,45 @@ def run_from_namespace(args):
             show=args.show,
         )
         print(f"Wrote width plot to {output}")
+        return 0
+
+    if command == "plot-diagnostics":
+        result = read_pca_artifact(args.artifact)
+        spatial_output = (
+            Path(args.spatial_output)
+            if args.spatial_output
+            else _default_output(
+                args.artifact,
+                "spatialwidths",
+                ".png",
+            )
+        )
+        spectral_output = (
+            Path(args.spectral_output)
+            if args.spectral_output
+            else _default_output(
+                args.artifact,
+                "spectralwidths",
+                ".png",
+            )
+        )
+        plot_spatial_width_diagnostics(
+            result,
+            spatial_output,
+            n_components=args.n_components,
+            dpi=args.dpi,
+            show=args.show,
+        )
+        plot_spectral_width_diagnostics(
+            result,
+            spectral_output,
+            n_components=args.n_components,
+            max_lag=args.max_lag,
+            dpi=args.dpi,
+            show=args.show,
+        )
+        print(f"Wrote spatial-width diagnostics to {spatial_output}")
+        print(f"Wrote spectral-width diagnostics to {spectral_output}")
         return 0
 
     if command == "reconstruct":

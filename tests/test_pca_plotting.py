@@ -9,6 +9,8 @@ from discminer.pca.cli import _default_output  # noqa: E402
 from discminer.pca.plotting import (  # noqa: E402
     covariance_velocity_window,
     plot_covariance,
+    plot_spatial_width_diagnostics,
+    plot_spectral_width_diagnostics,
     plot_widths,
     weighted_log_width_fit,
 )
@@ -50,9 +52,13 @@ def test_covariance_plot_is_written(tmp_path):
 def test_default_pca_products_use_prefixes_without_duplication():
     artifact = _default_output("cube_data.fits", None, ".fits")
     covariance = _default_output(artifact, "covariance", ".png")
+    spatial = _default_output(artifact, "spatialwidths", ".png")
+    spectral = _default_output(artifact, "spectralwidths", ".png")
 
     assert artifact.name == "pca_cube_data.fits"
     assert covariance.name == "pca_covariance_cube_data.png"
+    assert spatial.name == "pca_spatialwidths_cube_data.png"
+    assert spectral.name == "pca_spectralwidths_cube_data.png"
 
 
 def test_weighted_log_width_fit_recovers_power_law():
@@ -73,3 +79,17 @@ def test_width_plot_with_custom_fit_is_written(tmp_path):
 
     assert output.is_file()
     assert output.stat().st_size > 0
+
+
+def test_diagnostic_plots_are_written(tmp_path):
+    spatial_output = tmp_path / "spatial.png"
+    spectral_output = tmp_path / "spectral.png"
+    result = make_result()
+
+    plot_spatial_width_diagnostics(result, spatial_output)
+    plot_spectral_width_diagnostics(result, spectral_output)
+
+    assert spatial_output.is_file()
+    assert spatial_output.stat().st_size > 0
+    assert spectral_output.is_file()
+    assert spectral_output.stat().st_size > 0

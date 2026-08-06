@@ -62,6 +62,19 @@ def make_result(mean_sub=False):
         spectral_width=np.array([0.4, 0.2, np.nan]),
         spectral_width_error=np.array([0.04, 0.02, np.nan]),
         valid_mask=np.ones_like(cube, dtype=bool),
+        spatial_autocorrelation=np.array(
+            [
+                [[0.2, 0.4], [0.4, 1.0]],
+                [[0.1, 0.3], [0.3, 1.0]],
+            ]
+        ),
+        spectral_autocorrelation=np.array(
+            [
+                [1.0, 1.0],
+                [0.3, 0.2],
+                [0.0, -0.1],
+            ]
+        ),
         outer_radius_au=50.0,
         beam_correct=True,
     )
@@ -83,6 +96,14 @@ def test_artifact_round_trip(tmp_path):
     np.testing.assert_allclose(actual.eigenvectors, expected.eigenvectors)
     np.testing.assert_allclose(actual.eigenvalues, expected.eigenvalues)
     np.testing.assert_allclose(actual.covariance, expected.covariance)
+    np.testing.assert_allclose(
+        actual.spatial_autocorrelation,
+        expected.spatial_autocorrelation,
+    )
+    np.testing.assert_allclose(
+        actual.spectral_autocorrelation,
+        expected.spectral_autocorrelation,
+    )
     np.testing.assert_allclose(
         actual.spatial_width, expected.spatial_width, equal_nan=True
     )
@@ -109,3 +130,5 @@ def test_artifact_component_axis_is_not_a_velocity_axis(tmp_path):
         assert "CUNIT3" not in header
         assert "RESTFRQ" not in header
         assert hdul["MEAN"].data.shape == (3,)
+        assert hdul["SPATIAL_ACF"].data.shape == (2, 2, 2)
+        assert hdul["SPECTRAL_ACF"].data.shape == (3, 2)

@@ -34,6 +34,8 @@ class PCAResult:
     spatial_width_error: np.ndarray
     spectral_width: np.ndarray
     spectral_width_error: np.ndarray
+    spatial_autocorrelation: np.ndarray
+    spectral_autocorrelation: np.ndarray
     valid_mask: np.ndarray
     outer_radius_au: Optional[float] = None
     eigen_cut_method: str = "components"
@@ -60,6 +62,8 @@ class PCAResult:
             "spatial_width_error",
             "spectral_width",
             "spectral_width_error",
+            "spatial_autocorrelation",
+            "spectral_autocorrelation",
         ):
             setattr(self, name, _as_float_array(getattr(self, name)))
 
@@ -114,6 +118,23 @@ class PCAResult:
         if self.valid_mask.shape != (n_channels, ny, nx):
             raise ValueError(
                 "valid_mask must match the reconstructed cube shape"
+            )
+        if self.spatial_autocorrelation.shape != (
+            self.selected_components,
+            ny,
+            nx,
+        ):
+            raise ValueError(
+                "spatial_autocorrelation must have shape "
+                "(selected_components, ny, nx)"
+            )
+        if self.spectral_autocorrelation.shape != (
+            n_channels,
+            self.selected_components,
+        ):
+            raise ValueError(
+                "spectral_autocorrelation must have shape "
+                "(n_channels, selected_components)"
             )
         if not 1 <= self.selected_components <= n_components:
             raise ValueError(
@@ -327,6 +348,18 @@ def write_pca_artifact(result, filename, overwrite=True):
         ),
         _source_header_hdu(result.source_header),
     ]
+    hdus.append(
+        fits.ImageHDU(
+            data=result.spatial_autocorrelation,
+            name="SPATIAL_ACF",
+        )
+    )
+    hdus.append(
+        fits.ImageHDU(
+            data=result.spectral_autocorrelation,
+            name="SPECTRAL_ACF",
+        )
+    )
     fits.HDUList(hdus).writeto(filename, overwrite=overwrite)
     return filename
 
@@ -370,6 +403,14 @@ def read_pca_artifact(filename):
                 summary["SPECTRAL_ERROR"], dtype=float
             ),
             valid_mask=np.array(hdul["VALIDMASK"].data, dtype=bool),
+            spatial_autocorrelation=np.array(
+                hdul["SPATIAL_ACF"].data,
+                dtype=float,
+            ),
+            spectral_autocorrelation=np.array(
+                hdul["SPECTRAL_ACF"].data,
+                dtype=float,
+            ),
             outer_radius_au=primary.get("ROUTAU"),
             eigen_cut_method=primary.get("ECUTMETH", "components"),
             min_eigenvalue=primary.get("MINEIG"),

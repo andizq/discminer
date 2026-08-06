@@ -26,7 +26,9 @@ def covariance_velocity_window(
     vmin = np.min(finite)
     vmax = np.max(finite)
     if not 0 < central_fraction <= 1:
-        raise ValueError("central_fraction must be greater than 0 and at most 1")
+        raise ValueError(
+            "central_fraction must be greater than 0 and at most 1"
+        )
 
     if vmin <= 0 <= vmax:
         center = finite[np.argmin(np.abs(finite))]
@@ -174,6 +176,238 @@ def plot_components(
     return Path(output)
 
 
+def _diagnostic_component_count(result, n_components):
+    if not 1 <= n_components <= 9:
+        raise ValueError("n_components must be between 1 and 9")
+    return min(n_components, result.selected_components)
+
+
+def _normalized_autocorrelation(values):
+    values = np.asarray(values, dtype=float).copy()
+    finite = values[np.isfinite(values)]
+    if finite.size == 0:
+        return values
+    peak = np.nanmax(finite)
+    if peak != 0:
+        values /= peak
+    return values
+
+
+def _lag_axis(size):
+    return np.fft.fftshift(np.fft.fftfreq(size) * size)
+
+
+def _fit_autocorrelation_ellipse(image, xlag, ylag):
+    from matplotlib.path import Path as MatplotlibPath
+    from skimage.measure import EllipseModel, find_contours
+
+    contours = find_contours(image, np.exp(-1))
+    for contour in contours:
+        xvalues = np.interp(
+            contour[:, 1],
+            np.arange(image.shape[1]),
+            xlag,
+        )
+        yvalues = np.interp(
+            contour[:, 0],
+            np.arange(image.shape[0]),
+            ylag,
+        )
+        points = np.column_stack((xvalues, yvalues))
+        if not MatplotlibPath(points).contains_point((0.0, 0.0)):
+            continue
+        ellipse = EllipseModel()
+        if ellipse.estimate(points):
+            return ellipse.predict_xy(np.linspace(0.0, 2.0 * np.pi, 200))
+    return None
+
+
+def plot_spatial_width_diagnostics(
+    result: PCAResult,
+    output,
+    n_components=9,
+    dpi=200,
+    show=False,
+):
+    """Plot the spatial autocorrelation width diagnostics."""
+
+    use_discminer_style()
+    count = _diagnostic_component_count(
+        result,
+        n_components,
+    )
+    autocorrelations = result.spatial_autocorrelation
+    ylag = _lag_axis(autocorrelations.shape[1])
+    xlag = _lag_axis(autocorrelations.shape[2])
+    xedge0, xedge1 = _velocity_edges(xlag)
+    yedge0, yedge1 = _velocity_edges(ylag)
+
+    fig, axes = plt.subplots(
+        3,
+        3,
+        figsize=(9, 9),
+        sharex=True,
+        sharey=True,
+        squeeze=False,
+    )
+    for component, axis in enumerate(axes.ravel()):
+        if component >= count:
+            axis.axis("off")
+            continue
+
+        image = _normalized_autocorrelation(
+            autocorrelations[component]
+        )
+        axis.imshow(
+            image,
+            origin="lower",
+            interpolation="nearest",
+            cmap="afmhot",
+            extent=[xedge0, xedge1, yedge0, yedge1],
+            aspect="equal",
+        )
+        finite = image[np.isfinite(image)]
+        if (
+            finite.size
+            and np.nanmin(finite) <= np.exp(-1) <= np.nanmax(finite)
+        ):
+            axis.contour(
+                xlag,
+                ylag,
+                image,
+                levels=[np.exp(-1)],
+                colors="cyan",
+                linewidths=1.5,
+            )
+            if result.spatial_method == "contour":
+                ellipse = _fit_autocorrelation_ellipse(
+                    image,
+                    xlag,
+                    ylag,
+                )
+                if ellipse is not None:
+                    axis.plot(
+                        ellipse[:, 0],
+                        ellipse[:, 1],
+                        color="limegreen",
+                        linestyle="--",
+                        linewidth=1.5,
+                    )
+        axis.set_title(f"PC {component}")
+
+    fig.text(0.5, 0.01, "Spatial lag x [pixels]", ha="center")
+    fig.text(
+        0.01,
+        0.5,
+        "Spatial lag y [pixels]",
+        ha="center",
+        va="center",
+        rotation="vertical",
+    )
+    fig.suptitle(
+        rf"Spatial-width diagnostics: $1/e={np.exp(-1):.3f}$",
+        y=0.995,
+    )
+    fig.tight_layout()
+    fig.savefig(output, dpi=dpi, bbox_inches="tight")
+    if show:
+        plt.show()
+    plt.close(fig)
+    return Path(output)
+
+
+def _spectral_channel_width(velocity):
+    differences = np.abs(np.diff(np.asarray(velocity, dtype=float)))
+    differences = differences[np.isfinite(differences) & (differences > 0)]
+    if differences.size == 0:
+        raise ValueError(
+            "At least two distinct velocity channels are required"
+        )
+    return np.median(differences)
+
+
+def plot_spectral_width_diagnostics(
+    result: PCAResult,
+    output,
+    n_components=9,
+    max_lag=None,
+    dpi=200,
+    show=False,
+):
+    """Plot spectral autocorrelations and their fitted widths."""
+
+    use_discminer_style()
+    count = _diagnostic_component_count(
+        result,
+        n_components,
+    )
+    autocorrelations = result.spectral_autocorrelation
+    lag = np.fft.rfftfreq(result.n_channels) * result.n_channels
+    channel_width = _spectral_channel_width(result.velocity)
+    fitted_widths = result.spectral_width / channel_width
+
+    if max_lag is None:
+        plot_limit = lag[-1]
+    else:
+        plot_limit = float(max_lag)
+        if not np.isfinite(plot_limit) or plot_limit <= 0:
+            raise ValueError("max_lag must be finite and positive")
+        plot_limit = min(plot_limit, lag[-1])
+
+    fig, axes = plt.subplots(
+        3,
+        3,
+        figsize=(9, 9),
+        sharex=True,
+        sharey=True,
+        squeeze=False,
+    )
+    for component, axis in enumerate(axes.ravel()):
+        if component >= count:
+            axis.axis("off")
+            continue
+
+        values = _normalized_autocorrelation(
+            autocorrelations[:lag.size, component]
+        )
+        axis.plot(lag, values, color="dodgerblue")
+        axis.axhline(
+            np.exp(-1),
+            color="red",
+            linestyle="--",
+            label=r"$\exp(-1)$",
+        )
+        axis.axhline(0.0, color="black", linestyle=":")
+        if np.isfinite(fitted_widths[component]):
+            axis.axvline(
+                fitted_widths[component],
+                color="limegreen",
+                linestyle="-.",
+                label="Fitted width",
+            )
+        axis.set_title(f"PC {component}")
+        axis.set_xlim(0.0, plot_limit)
+        if component == 0:
+            axis.legend(frameon=False)
+
+    fig.text(0.5, 0.01, "Spectral lag [channels]", ha="center")
+    fig.text(
+        0.01,
+        0.5,
+        "Normalized autocorrelation",
+        ha="center",
+        va="center",
+        rotation="vertical",
+    )
+    fig.suptitle("Spectral-width diagnostics", y=0.995)
+    fig.tight_layout()
+    fig.savefig(output, dpi=dpi, bbox_inches="tight")
+    if show:
+        plt.show()
+    plt.close(fig)
+    return Path(output)
+
+
 def weighted_log_width_fit(spatial, spectral, spectral_error):
     """Fit ``log10(spectral) = slope * log10(spatial) + intercept``.
 
@@ -191,7 +425,9 @@ def weighted_log_width_fit(spatial, spectral, spectral_error):
     ):
         raise ValueError("Fit inputs must be one-dimensional matching arrays")
     if spatial.size < 2:
-        raise ValueError("At least two valid components are required for a fit")
+        raise ValueError(
+            "At least two valid components are required for a fit"
+        )
     if (
         np.any(~np.isfinite(spatial))
         or np.any(~np.isfinite(spectral))

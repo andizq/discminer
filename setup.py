@@ -75,6 +75,10 @@ setup(
     ],
     extras_require={
         'pca': [
+            # TurbuStat 1.3's contour-width fit relies on NumPy 1.x scalar
+            # conversion. Astropy 8 requires NumPy 2, so constrain both.
+            'numpy<2',
+            'astropy<8',
             'turbustat>=1.3',
             # TurbuStat 1.3 imports pkg_resources, removed in setuptools 82.
             'setuptools<82',
