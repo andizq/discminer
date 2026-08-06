@@ -68,6 +68,15 @@ Discminer offers a wide range of analysis and visualisation tools to fully explo
 - Easily overlay disc geometry (considering orientation and vertical structure) onto any observable product.
 - Load in 1D profiles or 2D maps from external data e.g. to highlight the presence of dust substructures.
 
+### pca
+
+- Decompose stacked spectral-line cubes into principal-component eigenimages
+  and eigenvectors.
+- Measure the spatial and spectral width associated with each component.
+- Store the decomposition, widths, covariance matrix, source velocity axis,
+  mask, and reconstruction metadata in one FITS artifact.
+- Reconstruct cubes after including or excluding selected components.
+
 
 ## Installation
 
@@ -83,6 +92,8 @@ pip install -U discminer
 
 #### Optional dependencies
 
+- [TurbuStat](https://turbustat.readthedocs.io/) (install with
+  `pip install "discminer[pca]"`)
 - [termplotlib](https://pypi.org/project/termplotlib)
 - [FilFinder](https://pypi.org/project/fil-finder)
 - [bettermoments](https://bettermoments.readthedocs.io/en/latest/)
@@ -101,6 +112,33 @@ git clone https://github.com/andizq/discminer.git
 cd discminer/example/mwc480_12co
 less README.rst
 ```
+
+### PCA workflow
+
+After removing the disc rotation component with `stackcube`, run PCA and save
+the complete result:
+
+```bash
+discminer stackcube
+discminer pca run cube_data_TAG_convtb_stackedcube.fits
+```
+
+The `run` command writes `pca_<cube>.fits` and a covariance plot whose axes and
+central zoom are derived from the input velocity axis. The artifact can then
+be reused without repeating the decomposition:
+
+```bash
+discminer pca plot-widths pca_cube_data_TAG_convtb_stackedcube.fits
+discminer pca plot-components pca_cube_data_TAG_convtb_stackedcube.fits \
+    --components 0,1,2,3,4,5
+discminer pca reconstruct pca_cube_data_TAG_convtb_stackedcube.fits \
+    --exclude 2 --output reconstructed_without_pc2.fits
+discminer pca plot-channels reconstructed_without_pc2.fits
+```
+
+PCA component indices remain zero-based. Use `discminer pca <command> -h` for
+the complete set of options, including explicit distance, covariance velocity
+limits, beam correction, and component selection.
 
 ## Citation
 

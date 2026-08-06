@@ -51,7 +51,7 @@ setup(
     ],
     keywords='astronomy, discs, disks, planets, detection',  # Optional
     #package_dir={'discminer': 'discminer'},  # Optional
-    packages=['discminer', 'discminer.tools', 'discminer.mining'],  # Required
+    packages=['discminer', 'discminer.tools', 'discminer.mining', 'discminer.pca'],  # Required
     # https://packaging.python.org/guides/distributing-packages-using-setuptools/#python-requires
     python_requires='>=3.6, <4',
     # https://packaging.python.org/discussions/install-requires-vs-requirements/
@@ -70,8 +70,16 @@ setup(
         'spectral-cube>=0.6',
         'packaging>=20.9',
         'termtables',
-        'pathos'
-    ], 
+        'pathos',
+        'dataclasses; python_version<"3.7"',  # Install backport only on Python < 3.7.
+    ],
+    extras_require={
+        'pca': [
+            'turbustat>=1.3',
+            # TurbuStat 1.3 imports pkg_resources, removed in setuptools 82.
+            'setuptools<82',
+        ],
+    },
     # If there are data files included in your packages that need to be
     # installed, specify them here.
     package_data={  # Optional

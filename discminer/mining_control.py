@@ -571,11 +571,17 @@ def main():
     for key in scripts:
         _mining_parser_func[key](subparsers) #Append subparsers
 
+    from discminer.pca.cli import add_pca_parser
+    add_pca_parser(subparsers)
+
     args = parser.parse_args()
     _adjust_args(args)
     options = argparse.Namespace(**vars(args)) #Organised set of arguments passed as globals to the script
-    
-    if args.make in scripts:
+
+    if args.make == 'pca':
+        from discminer.pca.cli import run_from_namespace
+        return run_from_namespace(options)
+    elif args.make in scripts:
         script_path = os.path.join(path_mining, scripts[args.make])
         script_args = {k: v for k, v in vars(args).items() if v is not None and k not in ('make',)}
         
