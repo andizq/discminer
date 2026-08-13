@@ -83,6 +83,8 @@ def run_pca(
         raise ValueError(
             f"Expected a three-dimensional cube, got shape {data.shape}"
         )
+    valid_mask = np.isfinite(data)
+    pca_data = np.nan_to_num(data, nan=0.0)
 
     n_channels = data.shape[0]
     if n_components == -1:
@@ -94,7 +96,7 @@ def run_pca(
     else:
         width_components = int(n_components)
 
-    hdu = fits.PrimaryHDU(data=data, header=datacube.header)
+    hdu = fits.PrimaryHDU(data=pca_data, header=datacube.header)
     pca = PCA(hdu, distance=distance)
     pca.compute_pca(
         mean_sub=mean_sub,
@@ -142,7 +144,7 @@ def run_pca(
     eigenimages = eigenimages.transpose(0, 2, 1)
 
     if mean_sub:
-        channel_mean = np.nanmean(data, axis=(1, 2))
+        channel_mean = np.mean(pca_data, axis=(1, 2))
     else:
         channel_mean = np.zeros(n_channels, dtype=float)
 
@@ -175,7 +177,7 @@ def run_pca(
         spatial_width_error=spatial_width_error,
         spectral_width=spectral_width,
         spectral_width_error=spectral_width_error,
-        valid_mask=np.isfinite(data),
+        valid_mask=valid_mask,
         spatial_autocorrelation=spatial_autocorrelation,
         spectral_autocorrelation=spectral_autocorrelation,
         outer_radius_au=outer_radius_au,
