@@ -58,6 +58,33 @@ def _resolve_context(args):
     return context
 
 
+def _resolve_characterization_parfiles(
+    artifacts,
+    explicit_parfiles=None,
+    circular_sky=False,
+):
+    if circular_sky:
+        return [None] * len(artifacts)
+    if explicit_parfiles is not None:
+        parfiles = [Path(value) for value in explicit_parfiles]
+        if len(parfiles) == 1:
+            return parfiles * len(artifacts)
+        if len(parfiles) != len(artifacts):
+            raise ValueError(
+                "--parfile must contain one shared path or one path per "
+                "PCA artifact"
+            )
+        return parfiles
+
+    cwd_parfile = Path("parfile.json")
+    return [
+        artifact.parent / "parfile.json"
+        if (artifact.parent / "parfile.json").exists()
+        else cwd_parfile if cwd_parfile.exists() else None
+        for artifact in artifacts
+    ]
+
+
 def add_pca_parser(subparsers):
     """Register ``discminer pca`` and its nested subcommands."""
 
@@ -250,6 +277,153 @@ def add_pca_parser(subparsers):
     )
     diagnostics.add_argument("--dpi", type=int, default=200)
     diagnostics.add_argument("--show", action="store_true")
+
+    characterize = commands.add_parser(
+        "characterize",
+        help="Measure variance and ACF morphology of PCA components",
+    )
+    characterize.add_argument(
+        "artifacts",
+        nargs="+",
+        help="One or more PCA artifacts to characterize",
+    )
+    characterize.add_argument(
+        "--labels",
+        nargs="+",
+        default=None,
+        help="Labels corresponding to the input artifacts",
+    )
+    selection = characterize.add_mutually_exclusive_group()
+    selection.add_argument(
+        "-c",
+        "--components",
+        nargs="+",
+        default=None,
+        help="Zero-based components, separated by spaces or commas",
+    )
+    selection.add_argument(
+        "-n",
+        "--n-components",
+        type=int,
+        default=9,
+        help="Number of leading components to measure. Default: 9",
+    )
+    characterize.add_argument(
+        "--acf-level",
+        type=float,
+        default=0.36787944117144233,
+        help=(
+            "Fraction of the ACF peak used for the ellipse contour and "
+            "multipole core. Default: 1/e"
+        ),
+    )
+    characterize.add_argument(
+        "--azimuth-samples",
+        type=int,
+        default=360,
+        help="Angular samples per radial ring. Default: 360",
+    )
+    characterize.add_argument(
+        "--minimum-azimuthal-coverage",
+        type=float,
+        default=0.75,
+        help=(
+            "Minimum valid fraction of an eigenimage ring used for angular "
+            "metrics. Default: 0.75"
+        ),
+    )
+    characterize.add_argument(
+        "--phase-minimum-relative-power",
+        type=float,
+        default=0.01,
+        help=(
+            "Minimum ring-mode power relative to its peak used for phase "
+            "coherence. Default: 0.01"
+        ),
+    )
+    characterize.add_argument(
+        "--excursion-percentile",
+        type=float,
+        default=90.0,
+        help=(
+            "Percentile of absolute eigenimage amplitude defining the "
+            "compactness and Euler excursion set. Default: 90"
+        ),
+    )
+    characterize.add_argument(
+        "--maximum-angular-mode",
+        type=int,
+        default=6,
+        help=(
+            "Highest mode in the simultaneous eigenimage angular spectrum. "
+            "Default: 6"
+        ),
+    )
+    ring_geometry = characterize.add_mutually_exclusive_group()
+    ring_geometry.add_argument(
+        "--parfile",
+        nargs="+",
+        default=None,
+        help=(
+            "One shared DiscMiner parfile or one per PCA artifact. By "
+            "default, search beside each artifact and then in the working "
+            "directory"
+        ),
+    )
+    ring_geometry.add_argument(
+        "--circular-deproj",
+        "--circular-sky",
+        action="store_true",
+        dest="circular_deproj",
+        help="Use legacy circular sky-plane rings instead of deprojection",
+    )
+    characterize.add_argument(
+        "--deprojection-surface",
+        "--surface",
+        choices=("upper", "lower", "midplane"),
+        default="upper",
+        dest="deprojection_surface",
+        help=(
+            "Emission surface used to project disc-plane rings. "
+            "Default: upper"
+        ),
+    )
+    characterize.add_argument(
+        "--plot-group",
+        choices=("all", "variance", "acf", "eigenimage", "angularmode"),
+        default="all",
+        help="Retained diagnostic group to plot. Default: all",
+    )
+    characterize.add_argument(
+        "--plot-prefix",
+        help=(
+            "Shared path prefix for retained diagnostic figures. Default: "
+            "the ECSV output path without its suffix"
+        ),
+    )
+    characterize.add_argument(
+        "--include-pc0-cumulative",
+        action="store_true",
+        help="Include PC 0 in the cumulative-variance panel",
+    )
+    characterize.add_argument(
+        "-o",
+        "--output",
+        help=(
+            "Output ECSV table. For one artifact the default is "
+            "pca_characterization_<input>.ecsv; for multiple artifacts it "
+            "is pca_characterization.ecsv."
+        ),
+    )
+    characterize.add_argument("--dpi", type=int, default=200)
+    characterize.add_argument("--show", action="store_true")
+    characterize.add_argument(
+        "--no-overwrite",
+        action="store_false",
+        dest="overwrite",
+        help="Fail instead of replacing an existing ECSV table",
+    )
+    characterize.set_defaults(overwrite=True)
 
     reconstruct = commands.add_parser(
         "reconstruct", help="Reconstruct a cube from selected components"
@@ -449,6 +623,148 @@ def run_from_namespace(args):
         )
         print(f"Wrote spatial-width diagnostics to {spatial_output}")
         print(f"Wrote spectral-width diagnostics to {spectral_output}")
+        return 0
+
+    if command == "characterize":
+        from astropy.table import vstack
+
+        from .characterization import (
+            characterize_result,
+            core_characterization_paths,
+            load_disc_ring_geometry,
+            plot_core_characterization,
+            write_characterization_table,
+        )
+
+        artifacts = [Path(value) for value in args.artifacts]
+        if args.labels is None:
+            labels = [str(value) for value in artifacts]
+        elif len(args.labels) != len(artifacts):
+            raise ValueError("--labels must contain one label per artifact")
+        else:
+            labels = args.labels
+
+        explicit_components = _component_values(args.components)
+        parfiles = _resolve_characterization_parfiles(
+            artifacts,
+            explicit_parfiles=args.parfile,
+            circular_sky=args.circular_deproj,
+        )
+        tables = []
+        for artifact, label, parfile in zip(artifacts, labels, parfiles):
+            result = read_pca_artifact(artifact)
+            if parfile is None:
+                ring_geometry = None
+                reason = (
+                    "requested by --circular-deproj"
+                    if args.circular_deproj
+                    else "no DiscMiner parfile was found"
+                )
+                print(
+                    f"Using circular sky-plane rings for {artifact}; "
+                    f"{reason}"
+                )
+            else:
+                ring_geometry = load_disc_ring_geometry(
+                    parfile,
+                    result.source_header,
+                    surface=args.deprojection_surface,
+                )
+                print(
+                    f"Using deprojected {args.deprojection_surface}-surface "
+                    f"rings from {parfile} for {artifact}"
+                )
+            if explicit_components is None:
+                if args.n_components < 1:
+                    raise ValueError("--n-components must be positive")
+                components = range(
+                    min(args.n_components, result.n_components)
+                )
+            else:
+                components = explicit_components
+            tables.append(
+                characterize_result(
+                    result,
+                    label=label,
+                    artifact=artifact,
+                    components=components,
+                    acf_level=args.acf_level,
+                    n_azimuth=args.azimuth_samples,
+                    minimum_azimuthal_coverage=(
+                        args.minimum_azimuthal_coverage
+                    ),
+                    phase_minimum_relative_power=(
+                        args.phase_minimum_relative_power
+                    ),
+                    excursion_percentile=args.excursion_percentile,
+                    maximum_angular_mode=args.maximum_angular_mode,
+                    ring_geometry=ring_geometry,
+                )
+            )
+
+        table = vstack(tables, metadata_conflicts="silent")
+        if args.output:
+            output = Path(args.output)
+        elif len(artifacts) == 1:
+            output = _default_output(
+                artifacts[0], "characterization", ".ecsv"
+            )
+        else:
+            output = Path("pca_characterization.ecsv")
+        plot_prefix = (
+            Path(args.plot_prefix)
+            if args.plot_prefix
+            else output.with_suffix("")
+        )
+        group_keys = {
+            "variance": ("component_importance",),
+            "acf": ("acf_morphology",),
+            "eigenimage": ("eigenimage_structure",),
+            "angularmode": ("angularmode",),
+            "all": (
+                "component_importance",
+                "acf_morphology",
+                "eigenimage_structure",
+                "angularmode",
+            ),
+        }
+        available_outputs = core_characterization_paths(plot_prefix)
+        plot_outputs = [
+            available_outputs[key]
+            for key in group_keys[args.plot_group]
+        ]
+
+        if not args.overwrite:
+            existing = [
+                path for path in [output] + plot_outputs if path.exists()
+            ]
+            if existing:
+                raise FileExistsError(
+                    "Output already exists: "
+                    + ", ".join(str(path) for path in existing)
+                )
+
+        write_characterization_table(
+            table,
+            output,
+            overwrite=args.overwrite,
+        )
+        print(f"Wrote PCA characterization table to {output}")
+        groups = (
+            ("variance", "acf", "eigenimage", "angularmode")
+            if args.plot_group == "all"
+            else (args.plot_group,)
+        )
+        outputs = plot_core_characterization(
+            table,
+            plot_prefix,
+            groups=groups,
+            include_pc0_cumulative=args.include_pc0_cumulative,
+            dpi=args.dpi,
+            show=args.show,
+        )
+        for plot_output in outputs.values():
+            print(f"Wrote PCA characterization plot to {plot_output}")
         return 0
 
     if command == "reconstruct":

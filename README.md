@@ -70,12 +70,7 @@ Discminer offers a wide range of analysis and visualisation tools to fully explo
 
 ### pca
 
-- Decompose stacked spectral-line cubes into principal-component eigenimages
-  and eigenvectors.
-- Measure the spatial and spectral width associated with each component.
-- Store the decomposition, widths, covariance matrix, source velocity axis,
-  mask, and reconstruction metadata in one FITS artifact.
-- Reconstruct cubes after including or excluding selected components.
+- See the dedicated [PCA workflow documentation](discminer/pca/README.md).
 
 
 ## Installation
@@ -92,8 +87,6 @@ pip install -U discminer
 
 #### Optional dependencies
 
-- [TurbuStat](https://turbustat.readthedocs.io/) (install with
-  `pip install "discminer[pca]"`)
 - [termplotlib](https://pypi.org/project/termplotlib)
 - [FilFinder](https://pypi.org/project/fil-finder)
 - [bettermoments](https://bettermoments.readthedocs.io/en/latest/)
@@ -112,52 +105,6 @@ git clone https://github.com/andizq/discminer.git
 cd discminer/example/mwc480_12co
 less README.rst
 ```
-
-### PCA workflow
-
-After removing the disc rotation component with `stackcube`, run PCA and save
-the complete result:
-
-```bash
-discminer stackcube
-discminer pca run cube_data_TAG_convtb_stackedcube.fits
-```
-
-The `run` command writes `pca_<cube>.fits` and a covariance plot whose axes and
-central zoom are derived from the input velocity axis. The artifact includes
-the spatial and spectral autocorrelations used for the width measurements, so
-all plots can be regenerated without repeating the decomposition:
-
-```bash
-discminer pca plot-widths pca_cube_data_TAG_convtb_stackedcube.fits
-discminer pca plot-diagnostics \
-    pca_cube_data_TAG_convtb_stackedcube.fits
-discminer pca plot-components pca_cube_data_TAG_convtb_stackedcube.fits \
-    --components 0,1,2,3,4,5
-discminer pca reconstruct pca_cube_data_TAG_convtb_stackedcube.fits \
-    --exclude 2 --output reconstructed_without_pc2.fits
-discminer pca plot-channels reconstructed_without_pc2.fits
-```
-
-The diagnostics command plots up to the first nine components and writes
-`pca_spatialwidths_<cube>.png` and `pca_spectralwidths_<cube>.png`. Use
-`--n-components` to show fewer components or `--max-lag` to zoom the spectral
-autocorrelation axes.
-
-The width plot reproduces the original custom weighted fit in log space. By
-default it considers the first six components resolved above one major-axis
-beam FWHM and applies the original `0.2` scaling to the TurbuStat spectral
-width errors. These choices can be adjusted with:
-
-```bash
-discminer pca plot-widths pca_cube_data_TAG_convtb_stackedcube.fits \
-    --n-fit-components 6 --beam-multiple 1 \
-    --spectral-error-scale 0.2
-```
-
-PCA component indices remain zero-based. Use `discminer pca <command> -h` for
-the complete set of options, including explicit distance, covariance velocity
-limits, beam correction, and component selection.
 
 ## Citation
 
