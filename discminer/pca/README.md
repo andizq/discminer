@@ -96,6 +96,14 @@ from the core figures. Use `--plot-group variance`, `--plot-group acf`,
 `--plot-group eigenimage`, or `--plot-group angularmode` to write only one
 figure.
 
+Pass `--plot-excursions` to additionally write
+`_eigenimage_excursions.png`. This optional grid shows the analyzed
+eigenimages with solid red positive contours, dashed blue negative contours,
+and a thin black boundary around the combined absolute excursion set. Rows
+correspond to input artifacts and columns to the selected PCA components. The
+contours use the same threshold set by `--excursion-percentile` as the
+compactness calculation and are not included by `--plot-group all`.
+
 By default PC 0 is omitted from the cumulative-variance curve without
 renormalizing the remaining variance. Pass `--include-pc0-cumulative` to
 restore the conventional cumulative curve. The right-hand panels divide the
@@ -116,7 +124,9 @@ Phase coherence measures how closely those phases follow one logarithmic
 winding. The table also records the fitted phase slope against `log(radius)`.
 Compactness is `4*pi*area/perimeter**2` for the strongest absolute eigenimage
 excursions. It uses `abs(eigenimage)`, so it is invariant to the arbitrary sign
-of a PCA component.
+of a PCA component. The red and blue signs in the optional excursion plot may
+therefore swap between PCA analyses; their relative spatial arrangement, the
+combined boundary, and compactness remain meaningful.
 
 The angular-mode spectrum fits modes simultaneously from `m=1` through
 `--maximum-angular-mode`, which defaults to 6. All modes use the same
@@ -138,6 +148,17 @@ the modeled fraction: the modeled fraction measures the combined power in all
 modes from `m=1` through `m_max`, whereas the peak fraction measures only the
 strongest of those modes. The total-power bookkeeping columns separate the
 axisymmetric, modeled low-order, and unresolved or higher-order contributions.
+
+Phase coherence and physical orientation slope are conditional on the
+dominant angular mode being appreciable and distinct. In the angular-mode
+figure, a normal colored marker requires
+`eigenimage_f_peak_total >= 0.10` and `eigenimage_mode_entropy <= 0.85`.
+The orientation slope additionally requires phase coherence of at least 0.70
+and at least 10 fitted rings. Markers that fail these provisional quality
+checks use a translucent gray face with the dataset-colored edge. Their
+measurements remain in the plot and ECSV table, but should be treated with
+care. The quality check always uses the total-power peak fraction, regardless
+of the displayed angular normalization.
 
 ### Disc-plane ring geometry
 

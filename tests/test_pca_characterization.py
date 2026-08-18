@@ -11,6 +11,7 @@ import pytest  # noqa: E402
 from astropy.table import Table  # noqa: E402
 
 from discminer.pca.characterization import (  # noqa: E402
+    _phase_diagnostic_support,
     _polar_sampling_grid,
     acf_ellipse_metrics,
     acf_multipole_metrics,
@@ -20,9 +21,11 @@ from discminer.pca.characterization import (  # noqa: E402
     azimuthal_phase_coherence,
     characterize_result,
     core_characterization_paths,
+    excursion_characterization_path,
     excursion_set_metrics,
     load_disc_ring_geometry,
     plot_core_characterization,
+    plot_excursion_sets,
     write_characterization_table,
 )
 from discminer.pca.cli import (  # noqa: E402
@@ -434,6 +437,32 @@ def test_characterization_outputs_are_written(tmp_path):
     assert table_output.stat().st_size > 0
 
 
+def test_phase_diagnostic_support_applies_provisional_quality_rule():
+    table = Table(
+        {
+            "eigenimage_f_peak_total": [0.10, 0.09, 0.20, 0.20, 0.20],
+            "eigenimage_mode_entropy": [0.85, 0.50, 0.86, 0.50, 0.50],
+            "eigenimage_mpeak_phase_coherence": [
+                0.70,
+                0.90,
+                0.90,
+                0.69,
+                0.90,
+            ],
+            "eigenimage_mpeak_phase_rings": [10, 20, 20, 20, 9],
+        }
+    )
+
+    np.testing.assert_array_equal(
+        _phase_diagnostic_support(table),
+        [True, False, False, True, True],
+    )
+    np.testing.assert_array_equal(
+        _phase_diagnostic_support(table, require_slope_quality=True),
+        [True, False, False, False, False],
+    )
+
+
 def test_core_characterization_writes_four_grouped_figures(tmp_path):
     result = make_result()
     result.selected_components = 2
@@ -476,6 +505,23 @@ def test_core_characterization_writes_four_grouped_figures(tmp_path):
         )
 
 
+def test_excursion_plot_highlights_selected_eigenimage_regions(tmp_path):
+    result = make_result()
+    output = excursion_characterization_path(tmp_path / "pca_core.png")
+
+    restored = plot_excursion_sets(
+        [result, result],
+        ["smooth", "spiral"],
+        [[0, 1], [1, 2]],
+        output,
+        percentile=85.0,
+    )
+
+    assert restored == output
+    assert restored.name == "pca_core_eigenimage_excursions.png"
+    assert restored.stat().st_size > 0
+
+
 def test_characterize_parser_exposes_pc0_cumulative_flag():
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command")
@@ -493,6 +539,7 @@ def test_characterize_parser_exposes_pc0_cumulative_flag():
             "180",
             "--excursion-percentile",
             "85",
+            "--plot-excursions",
             "--maximum-angular-mode",
             "5",
             "--angular-normalization",
@@ -509,6 +556,7 @@ def test_characterize_parser_exposes_pc0_cumulative_flag():
     assert args.plot_group == "eigenimage"
     assert args.azimuth_samples == 180
     assert args.excursion_percentile == 85
+    assert args.plot_excursions
     assert args.maximum_angular_mode == 5
     assert args.angular_normalization == "nonaxisymmetric"
     assert args.parfile == ["fit/parfile.json"]
@@ -519,6 +567,7 @@ def test_characterize_parser_exposes_pc0_cumulative_flag():
     )
     assert circular.circular_deproj
     assert circular.angular_normalization == "total"
+    assert not circular.plot_excursions
 
 
 def test_characterize_parfiles_are_discovered_per_artifact(tmp_path):

@@ -351,6 +351,15 @@ def add_pca_parser(subparsers):
         ),
     )
     characterize.add_argument(
+        "--plot-excursions",
+        action="store_true",
+        help=(
+            "Write an optional eigenimage grid showing the positive, "
+            "negative, and combined excursion-set contours used for "
+            "compactness"
+        ),
+    )
+    characterize.add_argument(
         "--maximum-angular-mode",
         type=int,
         default=6,
@@ -641,8 +650,10 @@ def run_from_namespace(args):
         from .characterization import (
             characterize_result,
             core_characterization_paths,
+            excursion_characterization_path,
             load_disc_ring_geometry,
             plot_core_characterization,
+            plot_excursion_sets,
             write_characterization_table,
         )
 
@@ -661,6 +672,8 @@ def run_from_namespace(args):
             circular_sky=args.circular_deproj,
         )
         tables = []
+        results = []
+        component_lists = []
         for artifact, label, parfile in zip(artifacts, labels, parfiles):
             result = read_pca_artifact(artifact)
             if parfile is None:
@@ -692,6 +705,9 @@ def run_from_namespace(args):
                 )
             else:
                 components = explicit_components
+            components = list(components)
+            results.append(result)
+            component_lists.append(components)
             tables.append(
                 characterize_result(
                     result,
@@ -743,6 +759,9 @@ def run_from_namespace(args):
             available_outputs[key]
             for key in group_keys[args.plot_group]
         ]
+        excursion_output = excursion_characterization_path(plot_prefix)
+        if args.plot_excursions:
+            plot_outputs.append(excursion_output)
 
         if not args.overwrite:
             existing = [
@@ -776,6 +795,20 @@ def run_from_namespace(args):
         )
         for plot_output in outputs.values():
             print(f"Wrote PCA characterization plot to {plot_output}")
+        if args.plot_excursions:
+            plot_excursion_sets(
+                results,
+                labels,
+                component_lists,
+                excursion_output,
+                percentile=args.excursion_percentile,
+                dpi=args.dpi,
+                show=args.show,
+            )
+            print(
+                "Wrote PCA excursion-set plot to "
+                f"{excursion_output}"
+            )
         return 0
 
     if command == "reconstruct":

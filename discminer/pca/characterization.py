@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy import units as u
 from astropy.table import Table
+from matplotlib.lines import Line2D
 from matplotlib.path import Path as MatplotlibPath
 from scipy.ndimage import map_coordinates
 from skimage.measure import (
@@ -16,6 +17,13 @@ from skimage.measure import (
 )
 
 from discminer.plottools import use_discminer_style
+
+
+_PHASE_MINIMUM_PEAK_TOTAL = 0.10
+_PHASE_MAXIMUM_MODE_ENTROPY = 0.85
+_SLOPE_MINIMUM_PHASE_COHERENCE = 0.70
+_SLOPE_MINIMUM_PHASE_RINGS = 10
+_CONDITIONAL_MARKER_ALPHA = 0.4
 
 
 def _empty_acf_ellipse_metrics():
@@ -1521,6 +1529,80 @@ def _plot_component_series(axis, table, column):
         )
 
 
+def _phase_diagnostic_support(table, require_slope_quality=False):
+    """Return rows whose dominant mode supports phase interpretation."""
+
+    peak_fraction = np.asarray(
+        table["eigenimage_f_peak_total"],
+        dtype=float,
+    )
+    entropy = np.asarray(table["eigenimage_mode_entropy"], dtype=float)
+    supported = (
+        np.isfinite(peak_fraction)
+        & np.isfinite(entropy)
+        & (peak_fraction >= _PHASE_MINIMUM_PEAK_TOTAL)
+        & (entropy <= _PHASE_MAXIMUM_MODE_ENTROPY)
+    )
+    if require_slope_quality:
+        coherence = np.asarray(
+            table["eigenimage_mpeak_phase_coherence"],
+            dtype=float,
+        )
+        rings = np.asarray(
+            table["eigenimage_mpeak_phase_rings"],
+            dtype=float,
+        )
+        supported &= (
+            np.isfinite(coherence)
+            & np.isfinite(rings)
+            & (coherence >= _SLOPE_MINIMUM_PHASE_COHERENCE)
+            & (rings >= _SLOPE_MINIMUM_PHASE_RINGS)
+        )
+    return supported
+
+
+def _plot_conditional_phase_series(
+    axis,
+    table,
+    column,
+    require_slope_quality=False,
+):
+    """Plot phase values while fading rows with weak angular support."""
+
+    labels = list(dict.fromkeys(str(value) for value in table["label"]))
+    for label in labels:
+        subset = table[np.asarray(table["label"] == label)]
+        order = np.argsort(np.asarray(subset["component"], dtype=int))
+        subset = subset[order]
+        components = np.asarray(subset["component"], dtype=int)
+        values = np.asarray(subset[column], dtype=float)
+        line = axis.plot(components, values, label=label)[0]
+        color = line.get_color()
+        finite = np.isfinite(values)
+        supported = _phase_diagnostic_support(
+            subset,
+            require_slope_quality=require_slope_quality,
+        )
+        axis.scatter(
+            components[finite & supported],
+            values[finite & supported],
+            s=36,
+            facecolors=color,
+            edgecolors="black",
+            linewidths=0.6,
+            zorder=3,
+        )
+        axis.scatter(
+            components[finite & ~supported],
+            values[finite & ~supported],
+            s=36,
+            facecolors="0.75",
+            edgecolors=color,
+            alpha=_CONDITIONAL_MARKER_ALPHA,
+            zorder=3,
+        )
+
+
 def _finite_column(table, column):
     values = np.asarray(table[column], dtype=float)
     return values[np.isfinite(values)]
@@ -1560,6 +1642,208 @@ def core_characterization_paths(prefix):
             f"{prefix.name}_angularmode.png"
         ),
     }
+
+
+def excursion_characterization_path(prefix):
+    """Return the optional eigenimage-excursion figure path."""
+
+    prefix = Path(prefix)
+    if prefix.suffix:
+        prefix = prefix.with_suffix("")
+    return prefix.with_name(f"{prefix.name}_eigenimage_excursions.png")
+
+
+def plot_excursion_sets(
+    results,
+    labels,
+    component_lists,
+    output,
+    percentile=90.0,
+    dpi=200,
+    show=False,
+):
+    """Plot eigenimages with the excursion sets used for compactness."""
+
+    if not 0.0 < percentile < 100.0:
+        raise ValueError("percentile must be between zero and 100")
+    results = list(results)
+    labels = [str(label) for label in labels]
+    component_lists = [list(values) for values in component_lists]
+    if not results:
+        raise ValueError("results must contain at least one PCA result")
+    if len(labels) != len(results):
+        raise ValueError("labels must contain one value per PCA result")
+    if len(component_lists) != len(results):
+        raise ValueError(
+            "component_lists must contain one sequence per PCA result"
+        )
+
+    validated_components = [
+        result._validate_component_indices(components, "components")
+        for result, components in zip(results, component_lists)
+    ]
+    if any(len(components) == 0 for components in validated_components):
+        raise ValueError(
+            "each component list must select at least one component"
+        )
+    displayed_components = sorted(
+        {
+            int(component)
+            for components in validated_components
+            for component in components
+        }
+    )
+    if not displayed_components:
+        raise ValueError("component_lists must select at least one component")
+
+    use_discminer_style()
+    nrows = len(results)
+    ncols = len(displayed_components)
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=(3.0 * ncols, 3.0 * nrows),
+        squeeze=False,
+    )
+
+    for row, (result, label, components) in enumerate(
+        zip(results, labels, validated_components)
+    ):
+        component_set = set(int(component) for component in components)
+        first_component = next(
+            component
+            for component in displayed_components
+            if component in component_set
+        )
+        support = np.any(result.valid_mask, axis=0)
+        for column, component in enumerate(displayed_components):
+            axis = axes[row, column]
+            if component not in component_set:
+                axis.axis("off")
+                continue
+
+            values = np.asarray(result.eigenimages[component], dtype=float)
+            metrics = excursion_set_metrics(
+                values,
+                mask=support,
+                percentile=percentile,
+            )
+            threshold = metrics["eigenimage_excursion_threshold"]
+            finite_values = np.abs(values[support & np.isfinite(values)])
+            color_limit = (
+                float(np.percentile(finite_values, 99.5))
+                if finite_values.size
+                else 1.0
+            )
+            if not np.isfinite(color_limit) or color_limit <= 0.0:
+                color_limit = 1.0
+            if np.isfinite(threshold):
+                color_limit = max(color_limit, float(threshold))
+
+            axis.imshow(
+                np.ma.masked_where(~support, values),
+                origin="lower",
+                interpolation="nearest",
+                cmap="RdBu_r",
+                vmin=-color_limit,
+                vmax=color_limit,
+            )
+            if np.isfinite(threshold):
+                excursion = support & (np.abs(values) >= threshold)
+                axis.contour(
+                    excursion.astype(float),
+                    levels=[0.5],
+                    colors=["black"],
+                    linewidths=0.8,
+                    origin="lower",
+                )
+                if np.any(support & (values >= threshold)):
+                    axis.contour(
+                        np.where(support, values, np.nan),
+                        levels=[threshold],
+                        colors=["#D62728"],
+                        linewidths=1.5,
+                        origin="lower",
+                    )
+                if np.any(support & (values <= -threshold)):
+                    axis.contour(
+                        np.where(support, values, np.nan),
+                        levels=[-threshold],
+                        colors=["#1F77B4"],
+                        linewidths=1.5,
+                        linestyles="dashed",
+                        origin="lower",
+                    )
+
+            compactness = metrics["eigenimage_compactness"]
+            compactness_text = (
+                f"{compactness:.3f}"
+                if np.isfinite(compactness)
+                else "undefined"
+            )
+            axis.text(
+                0.03,
+                0.04,
+                f"P{percentile:g}  |  C={compactness_text}",
+                transform=axis.transAxes,
+                fontsize=9,
+                color="black",
+                bbox={
+                    "boxstyle": "round,pad=0.25",
+                    "facecolor": "white",
+                    "edgecolor": "0.5",
+                    "alpha": 0.85,
+                },
+            )
+            if row == 0:
+                axis.set_title(f"PC {component}")
+            if component == first_component:
+                axis.set_ylabel(label)
+            axis.set_xticks([])
+            axis.set_yticks([])
+
+    legend = [
+        Line2D(
+            [0],
+            [0],
+            color="#D62728",
+            linewidth=1.5,
+            label="positive excursion",
+        ),
+        Line2D(
+            [0],
+            [0],
+            color="#1F77B4",
+            linewidth=1.5,
+            linestyle="--",
+            label="negative excursion",
+        ),
+        Line2D(
+            [0],
+            [0],
+            color="black",
+            linewidth=0.8,
+            label="combined excursion boundary",
+        ),
+    ]
+    fig.legend(
+        handles=legend,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 0.005),
+        ncol=3,
+        frameon=False,
+    )
+    fig.suptitle(
+        rf"Eigenimage excursion sets: $|\mathrm{{PC}}| \geq "
+        rf"P_{{{percentile:g}}}(|\mathrm{{PC}}|)$"
+    )
+    fig.tight_layout(rect=(0.0, 0.06, 1.0, 0.94), pad=0.6)
+    output = Path(output)
+    fig.savefig(output, dpi=dpi, bbox_inches="tight")
+    if show:
+        plt.show()
+    plt.close(fig)
+    return output
 
 
 def _plot_core_variance(
@@ -1819,13 +2103,19 @@ def _plot_core_angularmode(
         (peak_fraction_axis, peak_fraction_column),
         (entropy_axis, "eigenimage_mode_entropy"),
         (model_fraction_axis, model_fraction_column),
-        (coherence_axis, "eigenimage_mpeak_phase_coherence"),
-        (
-            slope_axis,
-            "eigenimage_mpeak_orientation_slope_logr",
-        ),
     ):
         _plot_component_series(axis, table, column)
+    _plot_conditional_phase_series(
+        coherence_axis,
+        table,
+        "eigenimage_mpeak_phase_coherence",
+    )
+    _plot_conditional_phase_series(
+        slope_axis,
+        table,
+        "eigenimage_mpeak_orientation_slope_logr",
+        require_slope_quality=True,
+    )
 
     maximum_mode_values = _finite_column(
         table,
@@ -1878,6 +2168,22 @@ def _plot_core_angularmode(
     slope_axis.set_ylabel(r"$d\phi_{\rm peak}/d\ln r$ [rad]")
     slope_axis.set_title("Physical orientation slope")
     peak_axis.legend(frameon=False)
+    slope_axis.legend(
+        handles=[
+            Line2D(
+                [0],
+                [0],
+                linestyle="none",
+                marker="o",
+                markerfacecolor="0.75",
+                markeredgecolor="0.35",
+                alpha=_CONDITIONAL_MARKER_ALPHA,
+                label="conditional: weak or complex mode",
+            )
+        ],
+        frameon=False,
+        fontsize="small",
+    )
     for axis in axes.ravel():
         axis.set_xlabel("PCA component")
         axis.grid(alpha=0.3)
