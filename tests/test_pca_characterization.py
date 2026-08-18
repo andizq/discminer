@@ -108,9 +108,24 @@ def test_azimuthal_mode_fraction_separates_strength_from_phase():
     mixed_fraction = azimuthal_mode_fraction(mixed, center=center)
     m3_fraction = azimuthal_mode_fraction(pure_m3, center=center)
 
-    assert m2_fraction["eigenimage_f_m2"] > 0.99
-    assert mixed_fraction["eigenimage_f_m2"] == pytest.approx(0.5, abs=0.03)
-    assert m3_fraction["eigenimage_f_m2"] < 0.01
+    assert m2_fraction[
+        "eigenimage_f_m2_nonaxisymmetric"
+    ] > 0.99
+    assert m2_fraction["eigenimage_f_m2_total"] == pytest.approx(
+        1.0 / 3.0,
+        abs=0.02,
+    )
+    assert mixed_fraction[
+        "eigenimage_f_m2_nonaxisymmetric"
+    ] == pytest.approx(0.5, abs=0.03)
+    assert mixed_fraction["eigenimage_f_m2_total"] == pytest.approx(
+        0.1,
+        abs=0.02,
+    )
+    assert m3_fraction[
+        "eigenimage_f_m2_nonaxisymmetric"
+    ] < 0.01
+    assert m3_fraction["eigenimage_f_m2_total"] < 0.01
 
 
 def test_axisymmetric_fraction_measures_ring_mean_power():
@@ -276,16 +291,42 @@ def test_angular_mode_metrics_find_dominant_mode_and_orientation_slope():
     )
 
     assert fixed_m3["eigenimage_m_peak"] == 3
-    assert fixed_m3["eigenimage_f_peak"] > 0.99
+    assert fixed_m3["eigenimage_f_peak_fitted"] > 0.99
+    assert fixed_m3[
+        "eigenimage_f_peak_nonaxisymmetric"
+    ] > 0.99
+    assert fixed_m3["eigenimage_f_peak_total"] == pytest.approx(
+        1.0 / 3.0,
+        abs=0.02,
+    )
     assert fixed_m3["eigenimage_mode_entropy"] < 0.02
-    assert fixed_m3["eigenimage_angular_model_fraction"] > 0.99
+    assert fixed_m3[
+        "eigenimage_angular_model_fraction_nonaxisymmetric"
+    ] > 0.99
+    assert fixed_m3[
+        "eigenimage_angular_model_fraction_total"
+    ] == pytest.approx(1.0 / 3.0, abs=0.02)
+    assert fixed_m3["eigenimage_f_nonaxisymmetric"] == pytest.approx(
+        1.0 / 3.0,
+        abs=0.02,
+    )
+    assert fixed_m3[
+        "eigenimage_angular_unresolved_fraction_total"
+    ] < 0.01
+    assert (
+        fixed_m3["eigenimage_angular_model_fraction_total"]
+        + fixed_m3["eigenimage_angular_unresolved_fraction_total"]
+    ) == pytest.approx(
+        fixed_m3["eigenimage_f_nonaxisymmetric"],
+        abs=1.0e-12,
+    )
     assert fixed_m3["eigenimage_mpeak_phase_coherence"] > 0.99
     assert fixed_m3[
         "eigenimage_mpeak_orientation_slope_logr"
     ] == pytest.approx(0.0, abs=0.02)
 
     assert winding_m2["eigenimage_m_peak"] == 2
-    assert winding_m2["eigenimage_f_peak"] > 0.99
+    assert winding_m2["eigenimage_f_peak_fitted"] > 0.99
     assert winding_m2["eigenimage_mpeak_phase_coherence"] > 0.98
     assert winding_m2[
         "eigenimage_mpeak_orientation_slope_logr"
@@ -334,18 +375,44 @@ def test_characterization_keeps_eigenvalues_independent_of_widths():
     np.testing.assert_allclose(
         table["cumulative_variance_no_pc0"][1:], [0.3, 0.4]
     )
+    assert np.isnan(table["variance_fraction_no_pc0_renormalized"][0])
+    np.testing.assert_allclose(
+        table["variance_fraction_no_pc0_renormalized"][1:],
+        [0.75, 0.25],
+    )
+    np.testing.assert_allclose(
+        table["cumulative_variance_no_pc0_renormalized"][1:],
+        [0.75, 1.0],
+    )
+    np.testing.assert_allclose(
+        table["cumulative_variance_percent_no_pc0_renormalized"][1:],
+        [75.0, 100.0],
+    )
     assert np.isfinite(table["acf_axis_ratio"][0])
     assert np.isnan(table["acf_axis_ratio"][2])
     assert "acf_max_q2" in table.colnames
     assert "acf_max_q4" in table.colnames
     assert "eigenimage_f_m0" in table.colnames
-    assert "eigenimage_f_m2" in table.colnames
+    assert "eigenimage_f_m2_total" in table.colnames
+    assert "eigenimage_f_m2_nonaxisymmetric" in table.colnames
     assert "eigenimage_m2_phase_coherence" in table.colnames
     assert "eigenimage_compactness" in table.colnames
     assert "eigenimage_euler_characteristic" in table.colnames
     assert "eigenimage_m_peak" in table.colnames
-    assert "eigenimage_f_peak" in table.colnames
+    assert "eigenimage_f_peak_total" in table.colnames
+    assert "eigenimage_f_peak_nonaxisymmetric" in table.colnames
+    assert "eigenimage_f_peak_fitted" in table.colnames
     assert "eigenimage_mode_entropy" in table.colnames
+    assert "eigenimage_angular_model_fraction_total" in table.colnames
+    assert (
+        "eigenimage_angular_model_fraction_nonaxisymmetric"
+        in table.colnames
+    )
+    assert "eigenimage_f_nonaxisymmetric" in table.colnames
+    assert (
+        "eigenimage_angular_unresolved_fraction_total"
+        in table.colnames
+    )
     assert "eigenimage_mpeak_orientation_slope_logr" in table.colnames
     assert np.all(table["eigenimage_ring_geometry"] == "circular_sky")
     assert "eigenimage_ring_radial_bins" in table.colnames
@@ -396,9 +463,17 @@ def test_core_characterization_writes_four_grouped_figures(tmp_path):
         table,
         tmp_path / "selected",
         groups="angularmode",
+        angular_normalization="nonaxisymmetric",
     )
     assert set(selected) == {"angularmode"}
     assert selected["angularmode"].stat().st_size > 0
+
+    with pytest.raises(ValueError, match="angular_normalization"):
+        plot_core_characterization(
+            table,
+            tmp_path / "invalid",
+            angular_normalization="invalid",
+        )
 
 
 def test_characterize_parser_exposes_pc0_cumulative_flag():
@@ -420,6 +495,8 @@ def test_characterize_parser_exposes_pc0_cumulative_flag():
             "85",
             "--maximum-angular-mode",
             "5",
+            "--angular-normalization",
+            "nonaxisymmetric",
             "--parfile",
             "fit/parfile.json",
             "--surface",
@@ -433,6 +510,7 @@ def test_characterize_parser_exposes_pc0_cumulative_flag():
     assert args.azimuth_samples == 180
     assert args.excursion_percentile == 85
     assert args.maximum_angular_mode == 5
+    assert args.angular_normalization == "nonaxisymmetric"
     assert args.parfile == ["fit/parfile.json"]
     assert args.deprojection_surface == "lower"
 
@@ -440,6 +518,7 @@ def test_characterize_parser_exposes_pc0_cumulative_flag():
         ["pca", "characterize", "pca_cube.fits", "--circular-deproj"]
     )
     assert circular.circular_deproj
+    assert circular.angular_normalization == "total"
 
 
 def test_characterize_parfiles_are_discovered_per_artifact(tmp_path):

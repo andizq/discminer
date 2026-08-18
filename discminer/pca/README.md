@@ -81,14 +81,15 @@ discminer pca characterize pca_cube_data_TAG_convtb_stackedcube.fits \
 
 This writes:
 
-- `_component_importance.png`: variance spectrum and cumulative variance.
+- `_component_importance.png`: a two-by-two comparison of the absolute and
+  PC 0-excluded renormalized variance spectra and cumulative variances.
 - `_acf_morphology.png`: ACF axis ratio, ellipse residual, maximum `Q2`, and
   the radius of maximum `Q2`.
-- `_eigenimage_structure.png`: `m=0` fraction, `m=2` fraction, phase
-  coherence, winding slope, and compactness.
-- `_angularmode.png`: dominant mode, fractional power, mode entropy,
-  low-order modeled fraction, phase coherence, and physical orientation
-  slope.
+- `_eigenimage_structure.png`: `m=0` fraction, total or non-axisymmetric
+  `m=2` fraction, phase coherence, winding slope, and compactness.
+- `_angularmode.png`: dominant mode, total or non-axisymmetric peak-mode
+  power, mode entropy, low-order modeled fraction, phase coherence, and
+  physical orientation slope.
 
 `Q4` and Euler measurements remain available in the ECSV table but are omitted
 from the core figures. Use `--plot-group variance`, `--plot-group acf`,
@@ -97,14 +98,19 @@ figure.
 
 By default PC 0 is omitted from the cumulative-variance curve without
 renormalizing the remaining variance. Pass `--include-pc0-cumulative` to
-restore the conventional cumulative curve.
+restore the conventional cumulative curve. The right-hand panels divide the
+PC 1-and-above variance fractions by their total and show both their individual
+and cumulative contributions. This compares the distribution of subleading
+variance independently of the fraction carried by PC 0, while the left-hand
+panels preserve its absolute importance relative to the full cube.
 
 ### Eigenimage diagnostics
 
 The `m=0` fraction measures the area-weighted power in the azimuthal mean of
 each radial ring relative to the total eigenimage power. The `m=2` fraction
-measures two-fold strength within the remaining non-axisymmetric variance while
-allowing its phase to vary between radial rings.
+is stored both relative to the total eigenimage power and relative to the
+remaining non-axisymmetric power while allowing its phase to vary between
+radial rings.
 
 Phase coherence measures how closely those phases follow one logarithmic
 winding. The table also records the fitted phase slope against `log(radius)`.
@@ -117,6 +123,21 @@ The angular-mode spectrum fits modes simultaneously from `m=1` through
 beam-aware radial domain. The dominant-mode orientation slope divides the
 coefficient phase slope by the mode number, making winding rates comparable
 across modes.
+
+Both total and non-axisymmetric normalizations are always stored in the ECSV
+table. `--angular-normalization total`, the default, displays mode power
+relative to the complete eigenimage. Use `--angular-normalization
+nonaxisymmetric` to display mode power relative to the power remaining after
+the radial-ring mean is removed. This option changes the displayed `m=2`,
+peak-mode, and low-order modeled fractions; it does not allow `m=0` to become
+the dominant mode and does not change phase coherence or orientation slopes.
+
+The angular-mode table also stores `eigenimage_f_peak_fitted`, the share of
+the modeled low-order power carried by the dominant mode. This differs from
+the modeled fraction: the modeled fraction measures the combined power in all
+modes from `m=1` through `m_max`, whereas the peak fraction measures only the
+strongest of those modes. The total-power bookkeeping columns separate the
+axisymmetric, modeled low-order, and unresolved or higher-order contributions.
 
 ### Disc-plane ring geometry
 

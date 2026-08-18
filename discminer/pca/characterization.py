@@ -403,6 +403,7 @@ def _azimuthal_mode_profile(
     center=None,
     n_azimuth=360,
     minimum_coverage=0.75,
+    minimum_radius=2.0,
     ring_geometry=None,
 ):
     values = np.asarray(image, dtype=float)
@@ -429,6 +430,7 @@ def _azimuthal_mode_profile(
         values.shape,
         center=center,
         n_azimuth=n_azimuth,
+        minimum_radius=minimum_radius,
         ring_geometry=ring_geometry,
     )
     if radii.size == 0:
@@ -455,6 +457,7 @@ def _azimuthal_mode_profile(
         "coefficient": [],
         "explained_power": [],
         "nonaxisymmetric_power": [],
+        "total_power": [],
     }
     for radius, ring, valid in zip(radii, samples, sampled_support):
         coverage = np.mean(valid)
@@ -489,6 +492,9 @@ def _azimuthal_mode_profile(
         profile["nonaxisymmetric_power"].append(
             ring_weight * constant_sse
         )
+        profile["total_power"].append(
+            ring_weight * float(np.sum(ring**2))
+        )
 
     if not profile["radius"]:
         return None
@@ -505,9 +511,10 @@ def azimuthal_mode_fraction(
     center=None,
     n_azimuth=360,
     minimum_coverage=0.75,
+    minimum_radius=2.0,
     ring_geometry=None,
 ):
-    """Return the non-axisymmetric image variance explained by one mode.
+    """Return total and non-axisymmetric power fractions for one mode.
 
     A constant plus sine/cosine pair is fitted independently on every radial
     ring. Allowing the phase to vary with radius keeps this strength statistic
@@ -515,7 +522,8 @@ def azimuthal_mode_fraction(
     """
 
     output = {
-        f"eigenimage_f_m{mode}": np.nan,
+        f"eigenimage_f_m{mode}_total": np.nan,
+        f"eigenimage_f_m{mode}_nonaxisymmetric": np.nan,
         f"eigenimage_m{mode}_rings": 0,
         f"eigenimage_m{mode}_max_radius_pix": np.nan,
     }
@@ -526,6 +534,7 @@ def azimuthal_mode_fraction(
         center=center,
         n_azimuth=n_azimuth,
         minimum_coverage=minimum_coverage,
+        minimum_radius=minimum_radius,
         ring_geometry=ring_geometry,
     )
     if profile is None:
@@ -533,12 +542,21 @@ def azimuthal_mode_fraction(
 
     explained_power = np.sum(profile["explained_power"])
     nonaxisymmetric_power = np.sum(profile["nonaxisymmetric_power"])
-    fraction = (
+    total_power = np.sum(profile["total_power"])
+    nonaxisymmetric_fraction = (
         explained_power / nonaxisymmetric_power
         if nonaxisymmetric_power > 0.0
         else 0.0
     )
-    output[f"eigenimage_f_m{mode}"] = float(np.clip(fraction, 0.0, 1.0))
+    total_fraction = (
+        explained_power / total_power if total_power > 0.0 else 0.0
+    )
+    output[f"eigenimage_f_m{mode}_total"] = float(
+        np.clip(total_fraction, 0.0, 1.0)
+    )
+    output[f"eigenimage_f_m{mode}_nonaxisymmetric"] = float(
+        np.clip(nonaxisymmetric_fraction, 0.0, 1.0)
+    )
     output[f"eigenimage_m{mode}_rings"] = profile["radius"].size
     output[f"eigenimage_m{mode}_max_radius_pix"] = float(
         profile["radius"][-1]
@@ -552,6 +570,7 @@ def azimuthal_axisymmetric_fraction(
     center=None,
     n_azimuth=360,
     minimum_coverage=0.75,
+    minimum_radius=2.0,
     ring_geometry=None,
 ):
     """Return the area-weighted axisymmetric eigenimage power fraction.
@@ -589,6 +608,7 @@ def azimuthal_axisymmetric_fraction(
         values.shape,
         center=center,
         n_azimuth=n_azimuth,
+        minimum_radius=minimum_radius,
         ring_geometry=ring_geometry,
     )
     if radii.size == 0:
@@ -647,6 +667,7 @@ def azimuthal_phase_coherence(
     n_azimuth=360,
     minimum_coverage=0.75,
     minimum_relative_power=0.01,
+    minimum_radius=2.0,
     ring_geometry=None,
 ):
     """Measure how closely modal phases follow one logarithmic winding.
@@ -671,6 +692,7 @@ def azimuthal_phase_coherence(
         center=center,
         n_azimuth=n_azimuth,
         minimum_coverage=minimum_coverage,
+        minimum_radius=minimum_radius,
         ring_geometry=ring_geometry,
     )
     if profile is None:
@@ -746,9 +768,14 @@ def angular_mode_metrics(
 
     output = {
         "eigenimage_m_peak": np.nan,
-        "eigenimage_f_peak": np.nan,
+        "eigenimage_f_peak_total": np.nan,
+        "eigenimage_f_peak_nonaxisymmetric": np.nan,
+        "eigenimage_f_peak_fitted": np.nan,
         "eigenimage_mode_entropy": np.nan,
-        "eigenimage_angular_model_fraction": np.nan,
+        "eigenimage_angular_model_fraction_total": np.nan,
+        "eigenimage_angular_model_fraction_nonaxisymmetric": np.nan,
+        "eigenimage_f_nonaxisymmetric": np.nan,
+        "eigenimage_angular_unresolved_fraction_total": np.nan,
         "eigenimage_mpeak_phase_coherence": np.nan,
         "eigenimage_mpeak_phase_slope_logr": np.nan,
         "eigenimage_mpeak_orientation_slope_logr": np.nan,
@@ -786,6 +813,7 @@ def angular_mode_metrics(
     ring_radii = []
     ring_coefficients = []
     ring_mode_power = []
+    total_image_power = 0.0
     total_nonaxisymmetric_power = 0.0
     modeled_power = 0.0
     for radius, ring, valid in zip(radii, samples, sampled_support):
@@ -812,6 +840,7 @@ def angular_mode_metrics(
         constant_sse = float(np.sum(residual_constant**2))
         model_sse = float(np.sum(residual_model**2))
         ring_weight = float(radius * coverage / ring.size)
+        total_image_power += ring_weight * float(np.sum(ring**2))
         total_nonaxisymmetric_power += ring_weight * constant_sse
         modeled_power += ring_weight * max(0.0, constant_sse - model_sse)
 
@@ -830,6 +859,40 @@ def angular_mode_metrics(
     ring_radii = np.asarray(ring_radii, dtype=float)
     ring_coefficients = np.asarray(ring_coefficients, dtype=complex)
     ring_mode_power = np.asarray(ring_mode_power, dtype=float)
+    if total_image_power > 0.0:
+        output.update(
+            {
+                "eigenimage_angular_model_fraction_total": float(
+                    np.clip(modeled_power / total_image_power, 0.0, 1.0)
+                ),
+                "eigenimage_f_nonaxisymmetric": float(
+                    np.clip(
+                        total_nonaxisymmetric_power / total_image_power,
+                        0.0,
+                        1.0,
+                    )
+                ),
+                "eigenimage_angular_unresolved_fraction_total": float(
+                    np.clip(
+                        (
+                            total_nonaxisymmetric_power - modeled_power
+                        ) / total_image_power,
+                        0.0,
+                        1.0,
+                    )
+                ),
+            }
+        )
+    if total_nonaxisymmetric_power > 0.0:
+        output[
+            "eigenimage_angular_model_fraction_nonaxisymmetric"
+        ] = float(
+            np.clip(
+                modeled_power / total_nonaxisymmetric_power,
+                0.0,
+                1.0,
+            )
+        )
     mode_power = np.sum(ring_mode_power, axis=0)
     total_mode_power = np.sum(mode_power)
     if not np.isfinite(total_mode_power) or total_mode_power <= 0.0:
@@ -850,19 +913,25 @@ def angular_mode_metrics(
     output.update(
         {
             "eigenimage_m_peak": peak_mode,
-            "eigenimage_f_peak": float(mode_fractions[peak_index]),
-            "eigenimage_mode_entropy": float(entropy),
-            "eigenimage_angular_model_fraction": float(
-                np.clip(
-                    modeled_power / total_nonaxisymmetric_power
-                    if total_nonaxisymmetric_power > 0.0
-                    else 0.0,
-                    0.0,
-                    1.0,
-                )
+            "eigenimage_f_peak_fitted": float(
+                mode_fractions[peak_index]
             ),
+            "eigenimage_mode_entropy": float(entropy),
         }
     )
+    peak_power = mode_fractions[peak_index] * modeled_power
+    if total_image_power > 0.0:
+        output["eigenimage_f_peak_total"] = float(
+            np.clip(peak_power / total_image_power, 0.0, 1.0)
+        )
+    if total_nonaxisymmetric_power > 0.0:
+        output["eigenimage_f_peak_nonaxisymmetric"] = float(
+            np.clip(
+                peak_power / total_nonaxisymmetric_power,
+                0.0,
+                1.0,
+            )
+        )
 
     phase_power = ring_mode_power[:, peak_index]
     maximum_phase_power = np.max(phase_power)
@@ -1031,8 +1100,26 @@ def characterize_result(
     variance = np.asarray(result.variance_fraction, dtype=float)
     cumulative = np.asarray(result.cumulative_variance, dtype=float)
     cumulative_no_pc0 = np.full(result.n_components, np.nan, dtype=float)
+    variance_no_pc0_renormalized = np.full(
+        result.n_components,
+        np.nan,
+        dtype=float,
+    )
+    cumulative_no_pc0_renormalized = np.full(
+        result.n_components,
+        np.nan,
+        dtype=float,
+    )
     if result.n_components > 1:
         cumulative_no_pc0[1:] = np.cumsum(variance[1:])
+        remaining_variance = np.sum(variance[1:])
+        if remaining_variance > 0.0:
+            variance_no_pc0_renormalized[1:] = (
+                variance[1:] / remaining_variance
+            )
+            cumulative_no_pc0_renormalized[1:] = np.cumsum(
+                variance_no_pc0_renormalized[1:]
+            )
     eigenimage_center = _eigenimage_center(result)
     eigenimage_support = np.any(result.valid_mask, axis=0)
     angular_resolution_pix = _beam_fwhm_pixels(result)
@@ -1044,7 +1131,7 @@ def characterize_result(
         result.eigenimages.shape[1:],
         center=eigenimage_center,
         n_azimuth=n_azimuth,
-        minimum_radius=2.0,
+        minimum_radius=angular_minimum_radius,
         ring_geometry=ring_geometry,
     )
 
@@ -1074,6 +1161,7 @@ def characterize_result(
                 center=eigenimage_center,
                 n_azimuth=n_azimuth,
                 minimum_coverage=minimum_azimuthal_coverage,
+                minimum_radius=angular_minimum_radius,
                 ring_geometry=ring_geometry,
             )
         )
@@ -1085,6 +1173,7 @@ def characterize_result(
                 center=eigenimage_center,
                 n_azimuth=n_azimuth,
                 minimum_coverage=minimum_azimuthal_coverage,
+                minimum_radius=angular_minimum_radius,
                 ring_geometry=ring_geometry,
             )
         )
@@ -1097,6 +1186,7 @@ def characterize_result(
                 n_azimuth=n_azimuth,
                 minimum_coverage=minimum_azimuthal_coverage,
                 minimum_relative_power=phase_minimum_relative_power,
+                minimum_radius=angular_minimum_radius,
                 ring_geometry=ring_geometry,
             )
         )
@@ -1128,9 +1218,21 @@ def characterize_result(
             "eigenvalue": float(result.eigenvalues[component]),
             "variance_fraction": float(variance[component]),
             "variance_percent": float(100.0 * variance[component]),
+            "variance_fraction_no_pc0_renormalized": float(
+                variance_no_pc0_renormalized[component]
+            ),
+            "variance_percent_no_pc0_renormalized": float(
+                100.0 * variance_no_pc0_renormalized[component]
+            ),
             "cumulative_variance": float(cumulative[component]),
             "cumulative_variance_no_pc0": float(
                 cumulative_no_pc0[component]
+            ),
+            "cumulative_variance_no_pc0_renormalized": float(
+                cumulative_no_pc0_renormalized[component]
+            ),
+            "cumulative_variance_percent_no_pc0_renormalized": float(
+                100.0 * cumulative_no_pc0_renormalized[component]
             ),
             "acf_level": float(acf_level),
             "azimuth_samples": int(n_azimuth),
@@ -1294,7 +1396,10 @@ def plot_characterization(
             )
             fraction_axis.plot(
                 components,
-                np.asarray(subset["eigenimage_f_m2"], dtype=float),
+                np.asarray(
+                    subset["eigenimage_f_m2_total"],
+                    dtype=float,
+                ),
                 marker="o",
                 label=label,
             )
@@ -1354,8 +1459,8 @@ def plot_characterization(
         q2_axis.set_title("ACF quadrupole strength")
         q4_axis.set_ylabel(r"$\max Q_4(r)$")
         q4_axis.set_title("ACF fourth-order strength")
-        fraction_axis.set_ylabel(r"$f_{m=2}$")
-        fraction_axis.set_title(r"Eigenimage $m=2$ variance fraction")
+        fraction_axis.set_ylabel(r"$f_{m=2,\,\mathrm{total}}$")
+        fraction_axis.set_title(r"Total eigenimage $m=2$ power")
         q2_axis.legend(frameon=False)
     else:
         for axis, column in (
@@ -1464,9 +1569,24 @@ def _plot_core_variance(
     dpi=200,
     show=False,
 ):
-    fig, axes = plt.subplots(1, 2, figsize=(13, 4.5), squeeze=False)
-    variance_axis, cumulative_axis = axes.ravel()
+    fig, axes = plt.subplots(2, 2, figsize=(14, 9), squeeze=False)
+    (
+        variance_axis,
+        normalized_variance_axis,
+        cumulative_axis,
+        normalized_cumulative_axis,
+    ) = axes.ravel()
     _plot_component_series(variance_axis, table, "variance_percent")
+    _plot_component_series(
+        normalized_variance_axis,
+        table,
+        "variance_percent_no_pc0_renormalized",
+    )
+    _plot_component_series(
+        normalized_cumulative_axis,
+        table,
+        "cumulative_variance_percent_no_pc0_renormalized",
+    )
     cumulative_column = (
         "cumulative_variance"
         if include_pc0_cumulative
@@ -1487,19 +1607,52 @@ def _plot_core_variance(
             label=label,
         )
     variance_axis.set_yscale("log")
-    variance_axis.set_ylabel("Variance [%]")
-    variance_axis.set_title("PCA variance spectrum")
-    cumulative_axis.set_ylabel("Cumulative variance [%]")
+    normalized_variance_axis.set_yscale("log")
+    variance_axis.set_ylabel("Variance [% of total]")
+    variance_axis.set_title("Absolute variance spectrum")
+    normalized_variance_axis.set_ylabel("Variance [% beyond PC 0]")
+    normalized_variance_axis.set_title(
+        "Renormalized variance spectrum beyond PC 0"
+    )
+    cumulative_axis.set_ylabel("Cumulative variance [% of total]")
     cumulative_axis.set_title(
         "Cumulative variance"
         if include_pc0_cumulative
-        else "Cumulative variance excluding PC 0 (not renormalized)"
+        else "Absolute cumulative variance beyond PC 0"
     )
-    variance_axis.legend(frameon=False)
+    normalized_cumulative_axis.set_ylabel(
+        "Cumulative variance [% beyond PC 0]"
+    )
+    normalized_cumulative_axis.set_title(
+        "Renormalized cumulative variance beyond PC 0"
+    )
+    normalized_values = _finite_column(
+        table,
+        "cumulative_variance_percent_no_pc0_renormalized",
+    )
+    if normalized_values.size:
+        normalized_minimum = float(np.min(normalized_values))
+        normalized_maximum = float(np.max(normalized_values))
+        normalized_span = normalized_maximum - normalized_minimum
+        if normalized_span <= 0.0:
+            normalized_span = max(abs(normalized_maximum), 1.0)
+        normalized_padding = 0.15 * normalized_span
+        normalized_cumulative_axis.set_ylim(
+            normalized_minimum - normalized_padding,
+            normalized_maximum + normalized_padding,
+        )
+    label_fontsize = 14
+    title_fontsize = 16
+    tick_fontsize = 12
+    variance_axis.legend(frameon=False, fontsize=tick_fontsize)
     for axis in axes.ravel():
-        axis.set_xlabel("PCA component")
+        axis.set_xlabel("PCA component", fontsize=label_fontsize)
+        axis.xaxis.label.set_size(label_fontsize)
+        axis.yaxis.label.set_size(label_fontsize)
+        axis.title.set_size(title_fontsize)
+        axis.tick_params(axis="both", labelsize=tick_fontsize)
         axis.grid(alpha=0.3)
-    fig.tight_layout()
+    fig.tight_layout(pad=1.2)
     fig.savefig(output, dpi=dpi, bbox_inches="tight")
     if show:
         plt.show()
@@ -1557,7 +1710,18 @@ def _plot_core_acf(table, output, dpi=200, show=False):
     plt.close(fig)
 
 
-def _plot_core_eigenimage(table, output, dpi=200, show=False):
+def _plot_core_eigenimage(
+    table,
+    output,
+    angular_normalization="total",
+    dpi=200,
+    show=False,
+):
+    mode_fraction_column = (
+        "eigenimage_f_m2_total"
+        if angular_normalization == "total"
+        else "eigenimage_f_m2_nonaxisymmetric"
+    )
     fig, axes = plt.subplots(2, 3, figsize=(15, 8), squeeze=False)
     (
         axisymmetric_axis,
@@ -1569,7 +1733,7 @@ def _plot_core_eigenimage(table, output, dpi=200, show=False):
     ) = axes.ravel()
     for axis, column in (
         (axisymmetric_axis, "eigenimage_f_m0"),
-        (fraction_axis, "eigenimage_f_m2"),
+        (fraction_axis, mode_fraction_column),
         (phase_axis, "eigenimage_m2_phase_coherence"),
         (slope_axis, "eigenimage_m2_phase_slope_logr"),
         (compactness_axis, "eigenimage_compactness"),
@@ -1577,7 +1741,7 @@ def _plot_core_eigenimage(table, output, dpi=200, show=False):
         _plot_component_series(axis, table, column)
     for axis, column in (
         (axisymmetric_axis, "eigenimage_f_m0"),
-        (fraction_axis, "eigenimage_f_m2"),
+        (fraction_axis, mode_fraction_column),
         (phase_axis, "eigenimage_m2_phase_coherence"),
     ):
         _set_data_ylim(
@@ -1599,8 +1763,12 @@ def _plot_core_eigenimage(table, output, dpi=200, show=False):
         )
     axisymmetric_axis.set_ylabel(r"$f_{m=0}$")
     axisymmetric_axis.set_title("Axisymmetric eigenimage power")
-    fraction_axis.set_ylabel(r"$f_{m=2}$")
-    fraction_axis.set_title(r"Eigenimage $m=2$ variance fraction")
+    if angular_normalization == "total":
+        fraction_axis.set_ylabel(r"$f_{m=2,\,\mathrm{total}}$")
+        fraction_axis.set_title(r"Total eigenimage $m=2$ power")
+    else:
+        fraction_axis.set_ylabel(r"$f_{m=2,\,\mathrm{nonaxi}}$")
+        fraction_axis.set_title(r"$m=2$ share of non-axisymmetric power")
     phase_axis.set_ylabel(r"$m=2$ phase coherence")
     phase_axis.set_title("Ordered two-fold phase")
     slope_axis.axhline(0.0, color="0.5", linewidth=1.0)
@@ -1620,7 +1788,23 @@ def _plot_core_eigenimage(table, output, dpi=200, show=False):
     plt.close(fig)
 
 
-def _plot_core_angularmode(table, output, dpi=200, show=False):
+def _plot_core_angularmode(
+    table,
+    output,
+    angular_normalization="total",
+    dpi=200,
+    show=False,
+):
+    peak_fraction_column = (
+        "eigenimage_f_peak_total"
+        if angular_normalization == "total"
+        else "eigenimage_f_peak_nonaxisymmetric"
+    )
+    model_fraction_column = (
+        "eigenimage_angular_model_fraction_total"
+        if angular_normalization == "total"
+        else "eigenimage_angular_model_fraction_nonaxisymmetric"
+    )
     fig, axes = plt.subplots(2, 3, figsize=(15, 8), squeeze=False)
     (
         peak_axis,
@@ -1632,9 +1816,9 @@ def _plot_core_angularmode(table, output, dpi=200, show=False):
     ) = axes.ravel()
     for axis, column in (
         (peak_axis, "eigenimage_m_peak"),
-        (peak_fraction_axis, "eigenimage_f_peak"),
+        (peak_fraction_axis, peak_fraction_column),
         (entropy_axis, "eigenimage_mode_entropy"),
-        (model_fraction_axis, "eigenimage_angular_model_fraction"),
+        (model_fraction_axis, model_fraction_column),
         (coherence_axis, "eigenimage_mpeak_phase_coherence"),
         (
             slope_axis,
@@ -1655,9 +1839,9 @@ def _plot_core_angularmode(table, output, dpi=200, show=False):
     peak_axis.set_ylim(0.5, maximum_mode + 0.5)
     peak_axis.set_yticks(np.arange(1, maximum_mode + 1))
     for axis, column in (
-        (peak_fraction_axis, "eigenimage_f_peak"),
+        (peak_fraction_axis, peak_fraction_column),
         (entropy_axis, "eigenimage_mode_entropy"),
-        (model_fraction_axis, "eigenimage_angular_model_fraction"),
+        (model_fraction_axis, model_fraction_column),
         (coherence_axis, "eigenimage_mpeak_phase_coherence"),
     ):
         _set_data_ylim(
@@ -1677,12 +1861,18 @@ def _plot_core_angularmode(table, output, dpi=200, show=False):
 
     peak_axis.set_ylabel(r"$m_{\rm peak}$")
     peak_axis.set_title("Characteristic angular mode")
-    peak_fraction_axis.set_ylabel(r"$f_{\rm peak}$")
-    peak_fraction_axis.set_title("Dominance within fitted modes")
+    if angular_normalization == "total":
+        peak_fraction_axis.set_ylabel(r"$f_{\rm peak,total}$")
+        peak_fraction_axis.set_title("Dominant-mode total power")
+        model_fraction_axis.set_ylabel(r"$f_{1:m_{\max},\,\rm total}$")
+        model_fraction_axis.set_title("Low-order total power")
+    else:
+        peak_fraction_axis.set_ylabel(r"$f_{\rm peak,nonaxi}$")
+        peak_fraction_axis.set_title("Dominant non-axisymmetric power")
+        model_fraction_axis.set_ylabel(r"$f_{1:m_{\max},\,\rm nonaxi}$")
+        model_fraction_axis.set_title("Modeled non-axisymmetric power")
     entropy_axis.set_ylabel("Mode entropy")
-    entropy_axis.set_title("Angular-mode complexity")
-    model_fraction_axis.set_ylabel("Modeled fraction")
-    model_fraction_axis.set_title("Low-order modeled structure")
+    entropy_axis.set_title("Non-axisymmetric mode complexity")
     coherence_axis.set_ylabel("Phase coherence")
     coherence_axis.set_title("Dominant-mode phase order")
     slope_axis.set_ylabel(r"$d\phi_{\rm peak}/d\ln r$ [rad]")
@@ -1703,6 +1893,7 @@ def plot_core_characterization(
     prefix,
     groups=("variance", "acf", "eigenimage", "angularmode"),
     include_pc0_cumulative=False,
+    angular_normalization="total",
     dpi=200,
     show=False,
 ):
@@ -1717,6 +1908,10 @@ def plot_core_characterization(
     if invalid:
         raise ValueError(
             "groups contains unknown values: " + ", ".join(sorted(invalid))
+        )
+    if angular_normalization not in {"total", "nonaxisymmetric"}:
+        raise ValueError(
+            "angular_normalization must be total or nonaxisymmetric"
         )
 
     all_outputs = core_characterization_paths(prefix)
@@ -1740,7 +1935,19 @@ def plot_core_characterization(
         elif group == "acf":
             _plot_core_acf(table, output, dpi=dpi, show=show)
         elif group == "eigenimage":
-            _plot_core_eigenimage(table, output, dpi=dpi, show=show)
+            _plot_core_eigenimage(
+                table,
+                output,
+                angular_normalization=angular_normalization,
+                dpi=dpi,
+                show=show,
+            )
         else:
-            _plot_core_angularmode(table, output, dpi=dpi, show=show)
+            _plot_core_angularmode(
+                table,
+                output,
+                angular_normalization=angular_normalization,
+                dpi=dpi,
+                show=show,
+            )
     return outputs

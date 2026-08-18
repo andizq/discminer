@@ -359,6 +359,16 @@ def add_pca_parser(subparsers):
             "Default: 6"
         ),
     )
+    characterize.add_argument(
+        "--angular-normalization",
+        choices=("total", "nonaxisymmetric"),
+        default="total",
+        help=(
+            "Power normalization shown in the eigenimage and angular-mode "
+            "figures. Both variants are always stored in the ECSV table. "
+            "Default: total"
+        ),
+    )
     ring_geometry = characterize.add_mutually_exclusive_group()
     ring_geometry.add_argument(
         "--parfile",
@@ -760,6 +770,7 @@ def run_from_namespace(args):
             plot_prefix,
             groups=groups,
             include_pc0_cumulative=args.include_pc0_cumulative,
+            angular_normalization=args.angular_normalization,
             dpi=args.dpi,
             show=args.show,
         )
