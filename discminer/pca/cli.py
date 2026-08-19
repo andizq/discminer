@@ -173,7 +173,7 @@ def add_pca_parser(subparsers):
     run.set_defaults(overwrite=True)
 
     components = commands.add_parser(
-        "plot-components", help="Plot selected eigenimages"
+        "plot-components", help="Plot selected eigenimages and eigenvectors"
     )
     components.add_argument("artifact", help="Input PCA artifact")
     components.add_argument(
@@ -240,33 +240,34 @@ def add_pca_parser(subparsers):
     widths.add_argument("--dpi", type=int, default=200)
     widths.add_argument("--show", action="store_true")
 
-    diagnostics = commands.add_parser(
-        "plot-diagnostics",
-        help="Plot spatial and spectral width-fitting diagnostics",
+    acf = commands.add_parser(
+        "plot-acf",
+        aliases=["plot-diagnostics"],
+        help="Plot eigenimage and eigenvector autocorrelations",
     )
-    diagnostics.add_argument("artifact", help="Input PCA artifact")
-    diagnostics.add_argument(
+    acf.add_argument("artifact", help="Input PCA artifact")
+    acf.add_argument(
         "--spatial-output",
         help=(
             "Output spatial figure. "
-            "Default: pca_spatialwidths_<input>.png"
+            "Default: pca_spatialacf_<input>.png"
         ),
     )
-    diagnostics.add_argument(
+    acf.add_argument(
         "--spectral-output",
         help=(
             "Output spectral figure. "
-            "Default: pca_spectralwidths_<input>.png"
+            "Default: pca_spectralacf_<input>.png"
         ),
     )
-    diagnostics.add_argument(
+    acf.add_argument(
         "-n",
         "--n-components",
         type=int,
         default=9,
         help="Number of leading components to plot, at most 9. Default: 9",
     )
-    diagnostics.add_argument(
+    acf.add_argument(
         "--max-lag",
         type=float,
         default=None,
@@ -275,8 +276,8 @@ def add_pca_parser(subparsers):
             "Default: full non-negative lag range"
         ),
     )
-    diagnostics.add_argument("--dpi", type=int, default=200)
-    diagnostics.add_argument("--show", action="store_true")
+    acf.add_argument("--dpi", type=int, default=200)
+    acf.add_argument("--show", action="store_true")
 
     characterize = commands.add_parser(
         "characterize",
@@ -444,6 +445,78 @@ def add_pca_parser(subparsers):
     )
     characterize.set_defaults(overwrite=True)
 
+    spectra = commands.add_parser(
+        "characterize-spectra",
+        help="Compare eigenspectra with empirical profile templates",
+    )
+    spectra.add_argument("artifact", help="Input PCA artifact")
+    spectrum_selection = spectra.add_mutually_exclusive_group()
+    spectrum_selection.add_argument(
+        "-c",
+        "--components",
+        nargs="+",
+        default=None,
+        help="Zero-based components, separated by spaces or commas",
+    )
+    spectrum_selection.add_argument(
+        "-n",
+        "--n-components",
+        type=int,
+        default=9,
+        help="Number of leading components to analyze. Default: 9",
+    )
+    spectra.add_argument(
+        "--reference-component",
+        type=int,
+        default=0,
+        help="Component used as the empirical line profile. Default: 0",
+    )
+    spectra.add_argument(
+        "--smoothing-window",
+        type=int,
+        default=11,
+        help="Odd Savitzky-Golay window in channels. Default: 11",
+    )
+    spectra.add_argument(
+        "--smoothing-order",
+        type=int,
+        default=4,
+        help="Savitzky-Golay polynomial order, at least 4. Default: 4",
+    )
+    spectra.add_argument(
+        "--center-velocity",
+        type=float,
+        default=None,
+        help=(
+            "Reflection and dilation center in km/s. Default: zero when "
+            "available, otherwise the reference-profile peak"
+        ),
+    )
+    spectra.add_argument(
+        "-o",
+        "--output",
+        help=(
+            "Output ECSV table. Default: "
+            "pca_spectral_characterization_<input>.ecsv"
+        ),
+    )
+    spectra.add_argument(
+        "--plot-output",
+        help=(
+            "Output diagnostic figure. Default: "
+            "pca_spectral_templates_<input>.png"
+        ),
+    )
+    spectra.add_argument("--dpi", type=int, default=200)
+    spectra.add_argument("--show", action="store_true")
+    spectra.add_argument(
+        "--no-overwrite",
+        action="store_false",
+        dest="overwrite",
+        help="Fail instead of replacing existing outputs",
+    )
+    spectra.set_defaults(overwrite=True)
+
     reconstruct = commands.add_parser(
         "reconstruct", help="Reconstruct a cube from selected components"
     )
@@ -605,14 +678,19 @@ def run_from_namespace(args):
         print(f"Wrote width plot to {output}")
         return 0
 
-    if command == "plot-diagnostics":
+    if command in {"plot-acf", "plot-diagnostics"}:
         result = read_pca_artifact(args.artifact)
+        legacy_name = command == "plot-diagnostics"
+        spatial_product = "spatialwidths" if legacy_name else "spatialacf"
+        spectral_product = (
+            "spectralwidths" if legacy_name else "spectralacf"
+        )
         spatial_output = (
             Path(args.spatial_output)
             if args.spatial_output
             else _default_output(
                 args.artifact,
-                "spatialwidths",
+                spatial_product,
                 ".png",
             )
         )
@@ -621,7 +699,7 @@ def run_from_namespace(args):
             if args.spectral_output
             else _default_output(
                 args.artifact,
-                "spectralwidths",
+                spectral_product,
                 ".png",
             )
         )
@@ -640,8 +718,8 @@ def run_from_namespace(args):
             dpi=args.dpi,
             show=args.show,
         )
-        print(f"Wrote spatial-width diagnostics to {spatial_output}")
-        print(f"Wrote spectral-width diagnostics to {spectral_output}")
+        print(f"Wrote spatial ACF plot to {spatial_output}")
+        print(f"Wrote spectral ACF plot to {spectral_output}")
         return 0
 
     if command == "characterize":
@@ -809,6 +887,87 @@ def run_from_namespace(args):
                 "Wrote PCA excursion-set plot to "
                 f"{excursion_output}"
             )
+        return 0
+
+    if command == "characterize-spectra":
+        from .spectral_characterization import (
+            characterize_spectra,
+            plot_spectral_characterization,
+            write_spectral_characterization,
+        )
+
+        artifact = Path(args.artifact)
+        result = read_pca_artifact(artifact)
+        explicit_components = _component_values(args.components)
+        if explicit_components is None:
+            if args.n_components < 1:
+                raise ValueError("--n-components must be positive")
+            components = range(
+                min(args.n_components, result.n_components)
+            )
+        else:
+            components = explicit_components
+        output = (
+            Path(args.output)
+            if args.output
+            else _default_output(
+                artifact,
+                "spectral_characterization",
+                ".ecsv",
+            )
+        )
+        plot_output = (
+            Path(args.plot_output)
+            if args.plot_output
+            else _default_output(
+                artifact,
+                "spectral_templates",
+                ".png",
+            )
+        )
+        if not args.overwrite:
+            existing = [
+                path for path in (output, plot_output) if path.exists()
+            ]
+            if existing:
+                raise FileExistsError(
+                    "Output already exists: "
+                    + ", ".join(str(path) for path in existing)
+                )
+
+        table, templates = characterize_spectra(
+            result,
+            components=components,
+            artifact=artifact,
+            reference_component=args.reference_component,
+            smoothing_window=args.smoothing_window,
+            smoothing_order=args.smoothing_order,
+            center_velocity=args.center_velocity,
+        )
+        write_spectral_characterization(
+            table,
+            output,
+            overwrite=args.overwrite,
+        )
+        plot_spectral_characterization(
+            result,
+            table,
+            templates,
+            plot_output,
+            dpi=args.dpi,
+            show=args.show,
+        )
+        print(
+            table[
+                "component",
+                "variance_percent",
+                "parity_correlation",
+                "dominant_template",
+                "dominant_overlap",
+            ]
+        )
+        print(f"Wrote spectral characterization table to {output}")
+        print(f"Wrote spectral template plot to {plot_output}")
         return 0
 
     if command == "reconstruct":

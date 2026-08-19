@@ -1,3 +1,5 @@
+import argparse
+
 import matplotlib
 
 matplotlib.use("Agg")
@@ -5,9 +7,10 @@ matplotlib.use("Agg")
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 
-from discminer.pca.cli import _default_output  # noqa: E402
+from discminer.pca.cli import _default_output, add_pca_parser  # noqa: E402
 from discminer.pca.plotting import (  # noqa: E402
     covariance_velocity_window,
+    plot_components,
     plot_covariance,
     plot_spatial_width_diagnostics,
     plot_spectral_width_diagnostics,
@@ -59,6 +62,38 @@ def test_default_pca_products_use_prefixes_without_duplication():
     assert covariance.name == "pca_covariance_cube_data.png"
     assert spatial.name == "pca_spatialwidths_cube_data.png"
     assert spectral.name == "pca_spectralwidths_cube_data.png"
+
+
+def test_component_plot_with_eigenvectors_is_written(tmp_path):
+    output = tmp_path / "components.svg"
+
+    with matplotlib.rc_context({"svg.fonttype": "none"}):
+        plot_components(make_result(), [0, 1], output)
+
+    assert output.is_file()
+    figure_text = output.read_text()
+    assert "Eigenvector" in figure_text
+    assert "Velocity" in figure_text
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        ("plot-acf", "plot-acf"),
+        ("plot-diagnostics", "plot-diagnostics"),
+    ],
+)
+def test_plot_acf_parser_accepts_canonical_name_and_legacy_alias(
+    command,
+    expected,
+):
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    add_pca_parser(subparsers)
+
+    args = parser.parse_args(["pca", command, "pca_cube.fits"])
+
+    assert args.pca_command == expected
 
 
 def test_weighted_log_width_fit_recovers_power_law():

@@ -34,9 +34,11 @@ can therefore be regenerated without repeating the decomposition.
 
 ```bash
 discminer pca plot-widths pca_cube_data_TAG_convtb_stackedcube.fits
-discminer pca plot-diagnostics \
+discminer pca plot-acf \
     pca_cube_data_TAG_convtb_stackedcube.fits
 discminer pca characterize \
+    pca_cube_data_TAG_convtb_stackedcube.fits
+discminer pca characterize-spectra \
     pca_cube_data_TAG_convtb_stackedcube.fits
 discminer pca plot-components pca_cube_data_TAG_convtb_stackedcube.fits \
     --components 0,1,2,3,4,5
@@ -49,12 +51,63 @@ PCA component indices are zero-based. Use `discminer pca <command> -h` for the
 complete set of options, including explicit distance, covariance velocity
 limits, beam correction, and component selection.
 
-## Width diagnostics
+## Component and ACF diagnostics
 
-The diagnostics command plots up to the first nine components and writes
-`pca_spatialwidths_<cube>.png` and `pca_spectralwidths_<cube>.png`. Use
+The `plot-components` command pairs every selected eigenimage with its
+eigenvector on the artifact's physical velocity axis. PCA component signs are
+arbitrary, so the relative lobes of an eigenvector are meaningful but its
+overall sign is not.
+
+The `plot-acf` command plots up to the first nine components and writes
+`pca_spatialacf_<cube>.png` and `pca_spectralacf_<cube>.png`. Use
 `--n-components` to show fewer components or `--max-lag` to zoom the spectral
-autocorrelation axes.
+autocorrelation axes. The former `plot-diagnostics` spelling remains available
+as a compatibility alias and retains its original default output names.
+
+### Model-independent eigenspectrum templates
+
+The `characterize-spectra` command uses PC 0 as an empirical reference line
+profile by default. It smooths that profile and constructs orthonormal
+intensity, centroid, linewidth, third-derivative, and fourth-derivative
+templates. It requires only the velocity axis and eigenvectors stored in the
+PCA artifact; it does not read a DiscMiner parfile or any fitted moment maps.
+
+```bash
+discminer pca characterize-spectra pca_cube_data_TAG_stackedcube.fits \
+    --n-components 9 --smoothing-window 11
+```
+
+The command writes `pca_spectral_characterization_<cube>.ecsv` and
+`pca_spectral_templates_<cube>.png`. The figure shows the empirical templates,
+the selected eigenspectra aligned to their strongest template, and the full
+overlap matrix.
+
+Parity is the normalized correlation between an eigenvector and its reflection
+about the selected centre velocity,
+
+```text
+P = <e(v), e(2 v_center - v)> / (||e(v)|| ||e(2 v_center - v)||).
+```
+
+Thus `P=+1` is perfectly even, `P=-1` is perfectly odd, and values near zero
+are mixed. Template overlap is the absolute cosine similarity
+
+```text
+O_kp = |<e_k, b_p>| / (||e_k|| ||b_p||),
+```
+
+where `e_k` is an eigenspectrum and `b_p` is an empirical response template.
+It ranges from zero to one and uses an absolute value because PCA component
+signs are arbitrary. The templates are orthogonalized in the order intensity,
+centroid, linewidth, third derivative, and fourth derivative. Consequently,
+the linewidth template excludes simple intensity scaling, and the higher-order
+templates exclude the lower-order responses. The default uniform channel
+weighting matches the Euclidean metric of the PCA decomposition.
+
+Use `--center-velocity`, `--reference-component`, `--smoothing-window`, and
+`--smoothing-order` to test the sensitivity of the result. Higher derivatives
+are especially sensitive to smoothing and should be interpreted as line-shape
+diagnostics rather than unique physical labels.
 
 The width plot reproduces the original custom weighted fit in log space. By
 default it considers the first six components resolved above one major-axis

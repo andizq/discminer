@@ -123,7 +123,7 @@ def plot_components(
     dpi=200,
     show=False,
 ):
-    """Plot selected zero-based PCA component images."""
+    """Plot selected zero-based PCA eigenimages and eigenspectra."""
 
     use_discminer_style()
     components = result._validate_component_indices(components, "components")
@@ -132,13 +132,17 @@ def plot_components(
 
     ncols = len(components)
     fig, axes = plt.subplots(
-        1,
+        2,
         ncols,
-        figsize=(3.5 * ncols, 3.5),
+        figsize=(3.5 * ncols, 6.0),
         constrained_layout=True,
         squeeze=False,
+        gridspec_kw={"height_ratios": (1.0, 0.55)},
     )
-    axes = axes.ravel()
+    image_axes = axes[0]
+    spectrum_axes = axes[1]
+    velocity_order = np.argsort(result.velocity)
+    velocity = result.velocity[velocity_order]
 
     if share_scale:
         common_limits = _symmetric_limits(
@@ -147,7 +151,9 @@ def plot_components(
             percentile=percentile,
         )
 
-    for axis, component in zip(axes, components):
+    for column, component in enumerate(components):
+        image_axis = image_axes[column]
+        spectrum_axis = spectrum_axes[column]
         image = result.eigenimages[component]
         limits = (
             common_limits
@@ -156,7 +162,7 @@ def plot_components(
                 image, robust=robust, percentile=percentile
             )
         )
-        plotted = axis.imshow(
+        plotted = image_axis.imshow(
             image,
             origin="lower",
             interpolation="nearest",
@@ -164,10 +170,23 @@ def plot_components(
             vmin=limits[0],
             vmax=limits[1],
         )
-        axis.set_title(f"PC {component}")
-        axis.set_xticks([])
-        axis.set_yticks([])
-        fig.colorbar(plotted, ax=axis, fraction=0.046, pad=0.04)
+        image_axis.set_title(f"PC {component}")
+        image_axis.set_xticks([])
+        image_axis.set_yticks([])
+        fig.colorbar(
+            plotted,
+            ax=image_axis,
+            fraction=0.046,
+            pad=0.04,
+        )
+
+        eigenvector = result.eigenvectors[velocity_order, component]
+        spectrum_axis.axhline(0.0, color="0.65", linewidth=0.8)
+        spectrum_axis.plot(velocity, eigenvector, color="dodgerblue")
+        spectrum_axis.set_xlabel(r"Velocity [km s$^{-1}$]")
+        spectrum_axis.margins(x=0.02)
+        if column == 0:
+            spectrum_axis.set_ylabel("Eigenvector")
 
     fig.savefig(output, dpi=dpi, bbox_inches="tight")
     if show:
@@ -305,7 +324,7 @@ def plot_spatial_width_diagnostics(
         rotation="vertical",
     )
     fig.suptitle(
-        rf"Spatial-width diagnostics: $1/e={np.exp(-1):.3f}$",
+        rf"Eigenimage spatial ACF: $1/e={np.exp(-1):.3f}$",
         y=0.995,
     )
     fig.tight_layout()
@@ -399,7 +418,7 @@ def plot_spectral_width_diagnostics(
         va="center",
         rotation="vertical",
     )
-    fig.suptitle("Spectral-width diagnostics", y=0.995)
+    fig.suptitle("Eigenvector spectral ACF", y=0.995)
     fig.tight_layout()
     fig.savefig(output, dpi=dpi, bbox_inches="tight")
     if show:

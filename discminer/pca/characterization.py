@@ -1,11 +1,13 @@
 """Morphological measurements for PCA eigenimages and their ACFs."""
 
 from pathlib import Path
+import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy import units as u
 from astropy.table import Table
+from astropy.wcs import WCS
 from matplotlib.lines import Line2D
 from matplotlib.path import Path as MatplotlibPath
 from scipy.ndimage import map_coordinates
@@ -1045,6 +1047,25 @@ def excursion_set_metrics(image, mask=None, percentile=90.0):
 
 def _eigenimage_center(result):
     ny, nx = result.eigenimages.shape[1:]
+
+    # Synthetic DiscMiner cubes commonly use a sky-offset WCS whose physical
+    # origin is (0, 0), while CRPIX marks a corner and CRVAL carries the
+    # corresponding offset.  Prefer that origin when it projects inside the
+    # image.  Absolute-coordinate observational cubes normally project
+    # (0, 0) outside the image and retain the CRPIX fallback below.
+    try:
+        celestial_wcs = WCS(result.source_header).celestial
+        xorigin, yorigin = celestial_wcs.all_world2pix(0.0, 0.0, 0)
+        if (
+            np.isfinite(xorigin)
+            and np.isfinite(yorigin)
+            and 0.0 <= xorigin < nx
+            and 0.0 <= yorigin < ny
+        ):
+            return float(yorigin), float(xorigin)
+    except (KeyError, TypeError, ValueError):
+        pass
+
     xcenter = (
         float(result.source_header.get("CRPIX1", 0.5 * (nx + 1))) - 1.0
     )
@@ -1142,6 +1163,17 @@ def characterize_result(
         minimum_radius=angular_minimum_radius,
         ring_geometry=ring_geometry,
     )
+    image_shape = result.eigenimages.shape[1:]
+    large_enough_for_rings = min(image_shape) > 2.0 * angular_minimum_radius
+    if ring_radii.size == 0 and large_enough_for_rings:
+        warnings.warn(
+            "No complete radial rings are available for PCA eigenimage "
+            "characterization; ring-based angular diagnostics will be NaN. "
+            f"Inferred center (y, x) is {eigenimage_center} for image shape "
+            f"{image_shape}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
 
     rows = []
     for component in components:

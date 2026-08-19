@@ -11,6 +11,7 @@ import pytest  # noqa: E402
 from astropy.table import Table  # noqa: E402
 
 from discminer.pca.characterization import (  # noqa: E402
+    _eigenimage_center,
     _phase_diagnostic_support,
     _polar_sampling_grid,
     acf_ellipse_metrics,
@@ -419,6 +420,41 @@ def test_characterization_keeps_eigenvalues_independent_of_widths():
     assert "eigenimage_mpeak_orientation_slope_logr" in table.colnames
     assert np.all(table["eigenimage_ring_geometry"] == "circular_sky")
     assert "eigenimage_ring_radial_bins" in table.colnames
+
+
+def test_eigenimage_center_uses_in_frame_wcs_zero_offset():
+    result = make_result()
+    result.eigenimages = np.zeros((3, 190, 190))
+    result.source_header.update(
+        {
+            "NAXIS1": 190,
+            "NAXIS2": 190,
+            "CTYPE1": "RA---TAN",
+            "CTYPE2": "DEC--TAN",
+            "CRPIX1": 1.0,
+            "CRPIX2": 1.0,
+            "CRVAL1": 94.0 / 3600.0,
+            "CRVAL2": -94.0 / 3600.0,
+            "CDELT1": -1.0 / 3600.0,
+            "CDELT2": 1.0 / 3600.0,
+        }
+    )
+
+    ycenter, xcenter = _eigenimage_center(result)
+
+    assert xcenter == pytest.approx(94.0)
+    assert ycenter == pytest.approx(94.0)
+
+
+def test_characterization_warns_when_no_radial_rings_are_available():
+    result = make_result()
+    result.eigenimages = np.zeros((3, 190, 190))
+    result.valid_mask = np.ones((3, 190, 190), dtype=bool)
+
+    with pytest.warns(RuntimeWarning, match="No complete radial rings"):
+        table = characterize_result(result, components=[0])
+
+    assert table["eigenimage_ring_radial_bins"][0] == 0
 
 
 def test_characterization_outputs_are_written(tmp_path):
