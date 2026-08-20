@@ -361,6 +361,49 @@ def add_pca_parser(subparsers):
         ),
     )
     characterize.add_argument(
+        "--plot-m0-residuals",
+        action="store_true",
+        help=(
+            "Write an optional eigenimage grid comparing each original PC, "
+            "its projected m=0 field, and the m=0-subtracted residual"
+        ),
+    )
+    characterize.add_argument(
+        "--plot-mpeak-residuals",
+        action="store_true",
+        help=(
+            "Write an optional grid comparing each m=0-subtracted PC, its "
+            "dominant fitted non-axisymmetric mode, and the remaining "
+            "non-axisymmetric residual"
+        ),
+    )
+    residual_scaling = characterize.add_mutually_exclusive_group()
+    residual_scaling.add_argument(
+        "--robust",
+        action="store_true",
+        dest="mode_residual_robust",
+        help=(
+            "Use percentile-based symmetric scaling for mode-residual "
+            "plots. This is the default"
+        ),
+    )
+    residual_scaling.add_argument(
+        "--no-robust",
+        action="store_false",
+        dest="mode_residual_robust",
+        help="Use the full finite range for mode-residual plots",
+    )
+    characterize.add_argument(
+        "--percentile",
+        type=float,
+        default=99.5,
+        dest="mode_residual_percentile",
+        help=(
+            "Absolute-amplitude percentile used by robust mode-residual "
+            "scaling. Default: 99.5"
+        ),
+    )
+    characterize.add_argument(
         "--maximum-angular-mode",
         type=int,
         default=6,
@@ -441,9 +484,9 @@ def add_pca_parser(subparsers):
         "--no-overwrite",
         action="store_false",
         dest="overwrite",
-        help="Fail instead of replacing an existing ECSV table",
+        help="Fail instead of replacing any existing output",
     )
-    characterize.set_defaults(overwrite=True)
+    characterize.set_defaults(overwrite=True, mode_residual_robust=True)
 
     spectra = commands.add_parser(
         "characterize-spectra",
@@ -730,8 +773,12 @@ def run_from_namespace(args):
             core_characterization_paths,
             excursion_characterization_path,
             load_disc_ring_geometry,
+            m0_residual_characterization_path,
+            mpeak_residual_characterization_path,
             plot_core_characterization,
             plot_excursion_sets,
+            plot_m0_residuals,
+            plot_mpeak_residuals,
             write_characterization_table,
         )
 
@@ -752,6 +799,7 @@ def run_from_namespace(args):
         tables = []
         results = []
         component_lists = []
+        ring_geometries = []
         for artifact, label, parfile in zip(artifacts, labels, parfiles):
             result = read_pca_artifact(artifact)
             if parfile is None:
@@ -786,6 +834,7 @@ def run_from_namespace(args):
             components = list(components)
             results.append(result)
             component_lists.append(components)
+            ring_geometries.append(ring_geometry)
             tables.append(
                 characterize_result(
                     result,
@@ -840,6 +889,14 @@ def run_from_namespace(args):
         excursion_output = excursion_characterization_path(plot_prefix)
         if args.plot_excursions:
             plot_outputs.append(excursion_output)
+        m0_residual_output = m0_residual_characterization_path(plot_prefix)
+        if args.plot_m0_residuals:
+            plot_outputs.append(m0_residual_output)
+        mpeak_residual_output = mpeak_residual_characterization_path(
+            plot_prefix
+        )
+        if args.plot_mpeak_residuals:
+            plot_outputs.append(mpeak_residual_output)
 
         if not args.overwrite:
             existing = [
@@ -886,6 +943,48 @@ def run_from_namespace(args):
             print(
                 "Wrote PCA excursion-set plot to "
                 f"{excursion_output}"
+            )
+        if args.plot_m0_residuals:
+            plot_m0_residuals(
+                results,
+                labels,
+                component_lists,
+                ring_geometries,
+                m0_residual_output,
+                n_azimuth=args.azimuth_samples,
+                minimum_azimuthal_coverage=(
+                    args.minimum_azimuthal_coverage
+                ),
+                maximum_angular_mode=args.maximum_angular_mode,
+                robust=args.mode_residual_robust,
+                percentile=args.mode_residual_percentile,
+                dpi=args.dpi,
+                show=args.show,
+            )
+            print(
+                "Wrote PCA m=0-subtracted eigenimage plot to "
+                f"{m0_residual_output}"
+            )
+        if args.plot_mpeak_residuals:
+            plot_mpeak_residuals(
+                results,
+                labels,
+                component_lists,
+                ring_geometries,
+                mpeak_residual_output,
+                n_azimuth=args.azimuth_samples,
+                minimum_azimuthal_coverage=(
+                    args.minimum_azimuthal_coverage
+                ),
+                maximum_angular_mode=args.maximum_angular_mode,
+                robust=args.mode_residual_robust,
+                percentile=args.mode_residual_percentile,
+                dpi=args.dpi,
+                show=args.show,
+            )
+            print(
+                "Wrote PCA dominant-mode-subtracted eigenimage plot to "
+                f"{mpeak_residual_output}"
             )
         return 0
 

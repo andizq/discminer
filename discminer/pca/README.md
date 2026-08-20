@@ -157,6 +157,29 @@ correspond to input artifacts and columns to the selected PCA components. The
 contours use the same threshold set by `--excursion-percentile` as the
 compactness calculation and are not included by `--plot-group all`.
 
+Pass `--plot-m0-residuals` to additionally write
+`_eigenimage_m0_residuals.png`. For every selected PC, this optional figure
+shows the original eigenimage, the projected azimuthal-ring mean (`m=0`), and
+their residual (`m>=1`). It uses the same mask, deprojected ring geometry,
+emission surface, beam-aware inner radius, azimuth sampling, and minimum ring
+coverage as the tabulated angular diagnostics. Pixels outside the outermost
+accepted annulus are masked.
+
+Pass `--plot-mpeak-residuals` to write the analogous
+`_eigenimage_mpeak_residuals.png` figure. Its first row is the `m=0`-subtracted
+eigenimage, the middle row is the mode from `m=1` through
+`--maximum-angular-mode` with the largest area-weighted power integrated over
+the accepted rings, and the final row removes that mode from the
+non-axisymmetric eigenimage. The selected mode is annotated in each middle-row
+panel and can differ between PCs.
+
+In both residual figures the original and removed-mode panels share a
+symmetric color scale, while each residual receives its own symmetric scale
+so that weak remaining structure stays visible. Scaling is robust by default
+at the 99.5th percentile of absolute amplitude, matching
+`plot-components --robust`. Use `--percentile` to change that percentile or
+`--no-robust` to use the full finite amplitude range.
+
 By default PC 0 is omitted from the cumulative-variance curve without
 renormalizing the remaining variance. Pass `--include-pc0-cumulative` to
 restore the conventional cumulative curve. The right-hand panels divide the
@@ -172,6 +195,12 @@ each radial ring relative to the total eigenimage power. The `m=2` fraction
 is stored both relative to the total eigenimage power and relative to the
 remaining non-axisymmetric power while allowing its phase to vary between
 radial rings.
+
+The optional mode-residual plots decompose eigenimages after PCA. They do not
+rerun the decomposition: eigenvectors, eigenvalues, explained variances, and
+component numbering therefore remain unchanged. To measure a PCA basis of a
+mode-filtered cube instead, subtract the selected field channel by channel
+before running PCA.
 
 Phase coherence measures how closely those phases follow one logarithmic
 winding. The table also records the fitted phase slope against `log(radius)`.
@@ -201,6 +230,13 @@ the modeled fraction: the modeled fraction measures the combined power in all
 modes from `m=1` through `m_max`, whereas the peak fraction measures only the
 strongest of those modes. The total-power bookkeeping columns separate the
 axisymmetric, modeled low-order, and unresolved or higher-order contributions.
+
+For comparison with the complete angular spectrum, the table additionally
+stores `eigenimage_m_dominant_all`, selected from `m=0` through `m_max`, and
+`eigenimage_f_dominant_all_total`, its area-weighted power relative to the
+complete eigenimage. These all-mode columns do not replace
+`eigenimage_m_peak`: the latter intentionally remains restricted to `m>=1` so
+that its phase coherence and orientation slope remain well defined.
 
 Phase coherence and physical orientation slope are conditional on the
 dominant angular mode being appreciable and distinct. In the angular-mode

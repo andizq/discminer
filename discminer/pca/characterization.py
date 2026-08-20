@@ -7,9 +7,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy import units as u
 from astropy.table import Table
-from astropy.wcs import WCS
 from matplotlib.lines import Line2D
 from matplotlib.path import Path as MatplotlibPath
+from scipy.interpolate import griddata
 from scipy.ndimage import map_coordinates
 from skimage.measure import (
     EllipseModel,
@@ -574,7 +574,7 @@ def azimuthal_mode_fraction(
     return output
 
 
-def azimuthal_axisymmetric_fraction(
+def _axisymmetric_ring_profile(
     image,
     mask=None,
     center=None,
@@ -583,14 +583,6 @@ def azimuthal_axisymmetric_fraction(
     minimum_radius=2.0,
     ring_geometry=None,
 ):
-    """Return the area-weighted axisymmetric eigenimage power fraction.
-
-    The azimuthal mean on every radial ring is the ``m=0`` contribution.
-    Squaring each ring mean before integrating prevents cancellation between
-    positive and negative radial zones and makes the statistic invariant to
-    the arbitrary sign of a PCA eigenimage.
-    """
-
     if not 0.0 < minimum_coverage <= 1.0:
         raise ValueError("minimum_coverage must be in the interval (0, 1]")
 
@@ -606,15 +598,10 @@ def azimuthal_axisymmetric_fraction(
             raise ValueError("mask must have the same shape as image")
         support &= finite
 
-    output = {
-        "eigenimage_f_m0": np.nan,
-        "eigenimage_m0_rings": 0,
-        "eigenimage_m0_max_radius_pix": np.nan,
-    }
     if not np.any(support):
-        return output
+        return None
 
-    radii, _, coordinates = _polar_sampling_grid(
+    radii, angles, coordinates = _polar_sampling_grid(
         values.shape,
         center=center,
         n_azimuth=n_azimuth,
@@ -622,7 +609,7 @@ def azimuthal_axisymmetric_fraction(
         ring_geometry=ring_geometry,
     )
     if radii.size == 0:
-        return output
+        return None
 
     samples = map_coordinates(
         np.where(finite, values, 0.0),
@@ -641,8 +628,12 @@ def azimuthal_axisymmetric_fraction(
 
     axisymmetric_power = 0.0
     total_power = 0.0
+    accepted_indices = []
     accepted_radii = []
-    for radius, ring, valid in zip(radii, samples, sampled_support):
+    ring_means = []
+    for index, (radius, ring, valid) in enumerate(
+        zip(radii, samples, sampled_support)
+    ):
         coverage = np.mean(valid)
         if coverage < minimum_coverage:
             continue
@@ -650,23 +641,384 @@ def azimuthal_axisymmetric_fraction(
         if ring.size < 8:
             continue
         ring_weight = float(radius * coverage)
-        axisymmetric_power += ring_weight * float(np.mean(ring)) ** 2
+        ring_mean = float(np.mean(ring))
+        axisymmetric_power += ring_weight * ring_mean**2
         total_power += ring_weight * float(np.mean(ring**2))
+        accepted_indices.append(index)
         accepted_radii.append(radius)
+        ring_means.append(ring_mean)
 
-    if not accepted_radii or total_power <= 0.0:
+    if not accepted_radii:
+        return None
+
+    accepted_indices = np.asarray(accepted_indices, dtype=int)
+    return {
+        "values": values,
+        "support": support,
+        "angles": angles,
+        "coordinates": coordinates[:, accepted_indices],
+        "radii": np.asarray(accepted_radii, dtype=float),
+        "means": np.asarray(ring_means, dtype=float),
+        "axisymmetric_power": float(axisymmetric_power),
+        "total_power": float(total_power),
+    }
+
+
+def azimuthal_axisymmetric_fraction(
+    image,
+    mask=None,
+    center=None,
+    n_azimuth=360,
+    minimum_coverage=0.75,
+    minimum_radius=2.0,
+    ring_geometry=None,
+):
+    """Return the area-weighted axisymmetric eigenimage power fraction.
+
+    The azimuthal mean on every radial ring is the ``m=0`` contribution.
+    Squaring each ring mean before integrating prevents cancellation between
+    positive and negative radial zones and makes the statistic invariant to
+    the arbitrary sign of a PCA eigenimage.
+    """
+
+    output = {
+        "eigenimage_f_m0": np.nan,
+        "eigenimage_m0_rings": 0,
+        "eigenimage_m0_max_radius_pix": np.nan,
+    }
+    profile = _axisymmetric_ring_profile(
+        image,
+        mask=mask,
+        center=center,
+        n_azimuth=n_azimuth,
+        minimum_coverage=minimum_coverage,
+        minimum_radius=minimum_radius,
+        ring_geometry=ring_geometry,
+    )
+    if profile is None:
+        return output
+    if profile["total_power"] <= 0.0:
         return output
 
     output.update(
         {
             "eigenimage_f_m0": float(
-                np.clip(axisymmetric_power / total_power, 0.0, 1.0)
+                np.clip(
+                    profile["axisymmetric_power"] / profile["total_power"],
+                    0.0,
+                    1.0,
+                )
             ),
-            "eigenimage_m0_rings": len(accepted_radii),
-            "eigenimage_m0_max_radius_pix": float(accepted_radii[-1]),
+            "eigenimage_m0_rings": profile["radii"].size,
+            "eigenimage_m0_max_radius_pix": float(profile["radii"][-1]),
         }
     )
     return output
+
+
+def subtract_axisymmetric_mode(
+    image,
+    mask=None,
+    center=None,
+    n_azimuth=360,
+    minimum_coverage=0.75,
+    minimum_radius=2.0,
+    ring_geometry=None,
+):
+    """Return the projected ``m=0`` eigenimage and its residual.
+
+    Ring means are evaluated with the same sampling and coverage rules as
+    :func:`azimuthal_axisymmetric_fraction`. The reconstructed field and
+    residual are NaN outside the valid image support or the outermost accepted
+    annulus.
+    """
+
+    values = np.asarray(image, dtype=float)
+    if values.ndim != 2:
+        raise ValueError("image must be a two-dimensional array")
+    axisymmetric = np.full(values.shape, np.nan, dtype=float)
+    residual = np.full(values.shape, np.nan, dtype=float)
+    profile = _axisymmetric_ring_profile(
+        values,
+        mask=mask,
+        center=center,
+        n_azimuth=n_azimuth,
+        minimum_coverage=minimum_coverage,
+        minimum_radius=minimum_radius,
+        ring_geometry=ring_geometry,
+    )
+    if profile is None:
+        return axisymmetric, residual
+
+    ny, nx = values.shape
+    ygrid, xgrid = np.indices(values.shape, dtype=float)
+    if center is None:
+        ycenter = 0.5 * (ny - 1)
+        xcenter = 0.5 * (nx - 1)
+    else:
+        ycenter, xcenter = (float(value) for value in center)
+
+    if ring_geometry is None:
+        pixel_radius = np.hypot(xgrid - xcenter, ygrid - ycenter)
+        axisymmetric = np.interp(
+            pixel_radius,
+            profile["radii"],
+            profile["means"],
+            left=profile["means"][0],
+            right=np.nan,
+        )
+    else:
+        coordinates = profile["coordinates"]
+        points = np.column_stack(
+            (coordinates[0].ravel(), coordinates[1].ravel())
+        )
+        ring_values = np.repeat(
+            profile["means"],
+            profile["angles"].size,
+        )
+        if profile["radii"].size == 1:
+            axisymmetric.fill(profile["means"][0])
+        else:
+            axisymmetric = griddata(
+                points,
+                ring_values,
+                (ygrid, xgrid),
+                method="linear",
+                fill_value=np.nan,
+            )
+
+        outer_ring = coordinates[:, -1]
+        outer_path = MatplotlibPath(
+            np.column_stack((outer_ring[1], outer_ring[0]))
+        )
+        pixels = np.column_stack((xgrid.ravel(), ygrid.ravel()))
+        inside_outer_ring = outer_path.contains_points(
+            pixels,
+            radius=1e-9,
+        ).reshape(values.shape)
+        axisymmetric[~inside_outer_ring] = np.nan
+
+    domain = (
+        profile["support"]
+        & np.isfinite(values)
+        & np.isfinite(axisymmetric)
+    )
+    axisymmetric[~domain] = np.nan
+    residual[domain] = values[domain] - axisymmetric[domain]
+    return axisymmetric, residual
+
+
+def subtract_dominant_angular_mode(
+    image,
+    maximum_mode=6,
+    include_axisymmetric=True,
+    mask=None,
+    center=None,
+    n_azimuth=360,
+    minimum_coverage=0.75,
+    minimum_radius=2.0,
+    ring_geometry=None,
+):
+    """Return the dominant fitted angular mode and its residual.
+
+    Modes from ``m=0`` through ``maximum_mode`` are fitted simultaneously on
+    every accepted ring. The selected mode maximizes its area-weighted power
+    integrated over radius. Set ``include_axisymmetric=False`` to restrict
+    selection to ``m>=1``. The reconstructed mode and residual are NaN outside
+    the valid image support or the outermost accepted annulus.
+    """
+
+    if maximum_mode < 1:
+        raise ValueError("maximum_mode must be positive")
+    if n_azimuth < 2 * maximum_mode + 3:
+        raise ValueError(
+            "n_azimuth must exceed the number of fitted coefficients"
+        )
+    if not 0.0 < minimum_coverage <= 1.0:
+        raise ValueError("minimum_coverage must be in the interval (0, 1]")
+
+    values = np.asarray(image, dtype=float)
+    if values.ndim != 2:
+        raise ValueError("image must be a two-dimensional array")
+    finite = np.isfinite(values)
+    if mask is None:
+        support = finite
+    else:
+        support = np.asarray(mask, dtype=bool).copy()
+        if support.shape != values.shape:
+            raise ValueError("mask must have the same shape as image")
+        support &= finite
+
+    dominant = np.full(values.shape, np.nan, dtype=float)
+    residual = np.full(values.shape, np.nan, dtype=float)
+    if not np.any(support):
+        return np.nan, dominant, residual
+
+    radii, angles, coordinates = _polar_sampling_grid(
+        values.shape,
+        center=center,
+        n_azimuth=n_azimuth,
+        minimum_radius=minimum_radius,
+        ring_geometry=ring_geometry,
+    )
+    if radii.size == 0:
+        return np.nan, dominant, residual
+
+    samples = map_coordinates(
+        np.where(finite, values, 0.0),
+        coordinates,
+        order=1,
+        mode="constant",
+        cval=0.0,
+    )
+    sampled_support = map_coordinates(
+        support.astype(float),
+        coordinates,
+        order=0,
+        mode="constant",
+        cval=0.0,
+    ) > 0.5
+
+    accepted_indices = []
+    accepted_radii = []
+    ring_coefficients = []
+    mode_power = np.zeros(maximum_mode + 1, dtype=float)
+    for index, (radius, ring, valid) in enumerate(
+        zip(radii, samples, sampled_support)
+    ):
+        coverage = np.mean(valid)
+        if coverage < minimum_coverage:
+            continue
+        ring = ring[valid]
+        ring_angles = angles[valid]
+        if ring.size < 2 * maximum_mode + 3:
+            continue
+
+        columns = [np.ones(ring.size)]
+        for mode in range(1, maximum_mode + 1):
+            columns.extend(
+                (
+                    np.cos(mode * ring_angles),
+                    np.sin(mode * ring_angles),
+                )
+            )
+        coefficients = np.linalg.lstsq(
+            np.column_stack(columns),
+            ring,
+            rcond=None,
+        )[0]
+        ring_weight = float(radius * coverage)
+        mode_power[0] += ring_weight * coefficients[0] ** 2
+        for mode in range(1, maximum_mode + 1):
+            cosine = coefficients[2 * mode - 1]
+            sine = coefficients[2 * mode]
+            mode_power[mode] += (
+                0.5 * ring_weight * (cosine**2 + sine**2)
+            )
+        accepted_indices.append(index)
+        accepted_radii.append(radius)
+        ring_coefficients.append(coefficients)
+
+    eligible_power = (
+        mode_power if include_axisymmetric else mode_power[1:]
+    )
+    if not accepted_radii or not np.any(eligible_power > 0.0):
+        return np.nan, dominant, residual
+
+    peak_mode = int(np.argmax(eligible_power))
+    if not include_axisymmetric:
+        peak_mode += 1
+    accepted_indices = np.asarray(accepted_indices, dtype=int)
+    accepted_radii = np.asarray(accepted_radii, dtype=float)
+    ring_coefficients = np.asarray(ring_coefficients, dtype=float)
+    accepted_coordinates = coordinates[:, accepted_indices]
+
+    ny, nx = values.shape
+    ygrid, xgrid = np.indices(values.shape, dtype=float)
+    if center is None:
+        ycenter = 0.5 * (ny - 1)
+        xcenter = 0.5 * (nx - 1)
+    else:
+        ycenter, xcenter = (float(value) for value in center)
+
+    if ring_geometry is None:
+        pixel_radius = np.hypot(xgrid - xcenter, ygrid - ycenter)
+        if peak_mode == 0:
+            dominant = np.interp(
+                pixel_radius,
+                accepted_radii,
+                ring_coefficients[:, 0],
+                left=ring_coefficients[0, 0],
+                right=np.nan,
+            )
+        else:
+            cosine = np.interp(
+                pixel_radius,
+                accepted_radii,
+                ring_coefficients[:, 2 * peak_mode - 1],
+                left=ring_coefficients[0, 2 * peak_mode - 1],
+                right=np.nan,
+            )
+            sine = np.interp(
+                pixel_radius,
+                accepted_radii,
+                ring_coefficients[:, 2 * peak_mode],
+                left=ring_coefficients[0, 2 * peak_mode],
+                right=np.nan,
+            )
+            pixel_angle = np.arctan2(ygrid - ycenter, xgrid - xcenter)
+            dominant = (
+                cosine * np.cos(peak_mode * pixel_angle)
+                + sine * np.sin(peak_mode * pixel_angle)
+            )
+    else:
+        if peak_mode == 0:
+            ring_model = np.repeat(
+                ring_coefficients[:, :1],
+                angles.size,
+                axis=1,
+            )
+        else:
+            cosine = ring_coefficients[:, 2 * peak_mode - 1]
+            sine = ring_coefficients[:, 2 * peak_mode]
+            ring_model = (
+                cosine[:, np.newaxis]
+                * np.cos(peak_mode * angles[np.newaxis, :])
+                + sine[:, np.newaxis]
+                * np.sin(peak_mode * angles[np.newaxis, :])
+            )
+        points = np.column_stack(
+            (
+                accepted_coordinates[0].ravel(),
+                accepted_coordinates[1].ravel(),
+            )
+        )
+        if accepted_radii.size == 1:
+            dominant.fill(float(np.mean(ring_model)))
+        else:
+            dominant = griddata(
+                points,
+                ring_model.ravel(),
+                (ygrid, xgrid),
+                method="linear",
+                fill_value=np.nan,
+            )
+
+        outer_ring = accepted_coordinates[:, -1]
+        outer_path = MatplotlibPath(
+            np.column_stack((outer_ring[1], outer_ring[0]))
+        )
+        pixels = np.column_stack((xgrid.ravel(), ygrid.ravel()))
+        inside_outer_ring = outer_path.contains_points(
+            pixels,
+            radius=1e-9,
+        ).reshape(values.shape)
+        dominant[~inside_outer_ring] = np.nan
+
+    domain = support & np.isfinite(values) & np.isfinite(dominant)
+    dominant[~domain] = np.nan
+    residual[domain] = values[domain] - dominant[domain]
+    return peak_mode, dominant, residual
 
 
 def azimuthal_phase_coherence(
@@ -781,6 +1133,8 @@ def angular_mode_metrics(
         "eigenimage_f_peak_total": np.nan,
         "eigenimage_f_peak_nonaxisymmetric": np.nan,
         "eigenimage_f_peak_fitted": np.nan,
+        "eigenimage_m_dominant_all": np.nan,
+        "eigenimage_f_dominant_all_total": np.nan,
         "eigenimage_mode_entropy": np.nan,
         "eigenimage_angular_model_fraction_total": np.nan,
         "eigenimage_angular_model_fraction_nonaxisymmetric": np.nan,
@@ -823,6 +1177,7 @@ def angular_mode_metrics(
     ring_radii = []
     ring_coefficients = []
     ring_mode_power = []
+    ring_all_mode_power = []
     total_image_power = 0.0
     total_nonaxisymmetric_power = 0.0
     modeled_power = 0.0
@@ -862,6 +1217,17 @@ def angular_mode_metrics(
         ring_mode_power.append(
             radius * coverage * np.abs(complex_coefficients) ** 2
         )
+        ring_all_mode_power.append(
+            np.concatenate(
+                (
+                    [radius * coverage * coefficients[0] ** 2],
+                    0.5
+                    * radius
+                    * coverage
+                    * np.abs(complex_coefficients) ** 2,
+                )
+            )
+        )
 
     if not ring_radii:
         return output
@@ -869,6 +1235,21 @@ def angular_mode_metrics(
     ring_radii = np.asarray(ring_radii, dtype=float)
     ring_coefficients = np.asarray(ring_coefficients, dtype=complex)
     ring_mode_power = np.asarray(ring_mode_power, dtype=float)
+    all_mode_power = np.sum(
+        np.asarray(ring_all_mode_power, dtype=float),
+        axis=0,
+    )
+    if np.any(all_mode_power > 0.0):
+        dominant_all_mode = int(np.argmax(all_mode_power))
+        output["eigenimage_m_dominant_all"] = dominant_all_mode
+        if total_image_power > 0.0:
+            output["eigenimage_f_dominant_all_total"] = float(
+                np.clip(
+                    all_mode_power[dominant_all_mode] / total_image_power,
+                    0.0,
+                    1.0,
+                )
+            )
     if total_image_power > 0.0:
         output.update(
             {
@@ -1048,33 +1429,12 @@ def excursion_set_metrics(image, mask=None, percentile=90.0):
 def _eigenimage_center(result):
     ny, nx = result.eigenimages.shape[1:]
 
-    # Synthetic DiscMiner cubes commonly use a sky-offset WCS whose physical
-    # origin is (0, 0), while CRPIX marks a corner and CRVAL carries the
-    # corresponding offset.  Prefer that origin when it projects inside the
-    # image.  Absolute-coordinate observational cubes normally project
-    # (0, 0) outside the image and retain the CRPIX fallback below.
-    try:
-        celestial_wcs = WCS(result.source_header).celestial
-        xorigin, yorigin = celestial_wcs.all_world2pix(0.0, 0.0, 0)
-        if (
-            np.isfinite(xorigin)
-            and np.isfinite(yorigin)
-            and 0.0 <= xorigin < nx
-            and 0.0 <= yorigin < ny
-        ):
-            return float(yorigin), float(xorigin)
-    except (KeyError, TypeError, ValueError):
-        pass
-
-    xcenter = (
-        float(result.source_header.get("CRPIX1", 0.5 * (nx + 1))) - 1.0
-    )
-    ycenter = (
-        float(result.source_header.get("CRPIX2", 0.5 * (ny + 1))) - 1.0
-    )
-    if not (0.0 <= xcenter < nx and 0.0 <= ycenter < ny):
-        return 0.5 * (ny - 1), 0.5 * (nx - 1)
-    return ycenter, xcenter
+    # Match Cube.get_image_center() and Model._make_grid(): DiscMiner's sky
+    # coordinates are based on the geometric image centre, while the fitted
+    # xc and yc offsets are applied separately by the disc-to-sky projection.
+    # CRPIX is only a WCS reference pixel and need not identify the source or
+    # the centre of a cropped/downsampled image.
+    return 0.5 * (ny - 1), 0.5 * (nx - 1)
 
 
 def _beam_fwhm_pixels(result):
@@ -1094,6 +1454,13 @@ def _beam_fwhm_pixels(result):
     if pixel_x <= 0.0 or pixel_y <= 0.0:
         return 1.0
     return float(np.sqrt(values[0] * values[1] / (pixel_x * pixel_y)))
+
+
+def _angular_minimum_radius(result, maximum_angular_mode):
+    return max(
+        2.0,
+        maximum_angular_mode * _beam_fwhm_pixels(result) / np.pi,
+    )
 
 
 def _validated_components(result, components):
@@ -1152,9 +1519,9 @@ def characterize_result(
     eigenimage_center = _eigenimage_center(result)
     eigenimage_support = np.any(result.valid_mask, axis=0)
     angular_resolution_pix = _beam_fwhm_pixels(result)
-    angular_minimum_radius = max(
-        2.0,
-        maximum_angular_mode * angular_resolution_pix / np.pi,
+    angular_minimum_radius = _angular_minimum_radius(
+        result,
+        maximum_angular_mode,
     )
     ring_radii, _, _ = _polar_sampling_grid(
         result.eigenimages.shape[1:],
@@ -1685,6 +2052,374 @@ def excursion_characterization_path(prefix):
     return prefix.with_name(f"{prefix.name}_eigenimage_excursions.png")
 
 
+def m0_residual_characterization_path(prefix):
+    """Return the optional axisymmetric-subtraction figure path."""
+
+    prefix = Path(prefix)
+    if prefix.suffix:
+        prefix = prefix.with_suffix("")
+    return prefix.with_name(f"{prefix.name}_eigenimage_m0_residuals.png")
+
+
+def mpeak_residual_characterization_path(prefix):
+    """Return the optional dominant-mode-subtraction figure path."""
+
+    prefix = Path(prefix)
+    if prefix.suffix:
+        prefix = prefix.with_suffix("")
+    return prefix.with_name(f"{prefix.name}_eigenimage_mpeak_residuals.png")
+
+
+def _symmetric_color_limit(values, robust=True, percentile=99.5):
+    if robust and not 0.0 < percentile <= 100.0:
+        raise ValueError(
+            "percentile must be greater than zero and at most 100"
+        )
+    finite = np.abs(np.asarray(values, dtype=float))
+    finite = finite[np.isfinite(finite)]
+    if finite.size == 0:
+        return 1.0
+    if robust:
+        limit = float(np.percentile(finite, percentile))
+    else:
+        limit = float(np.max(finite))
+    if not np.isfinite(limit) or limit <= 0.0:
+        return 1.0
+    return limit
+
+
+def _short_plot_label(label):
+    label = str(label)
+    path = Path(label)
+    if path.suffix and len(label) > 40:
+        parent_parts = path.parent.parts[-2:]
+        if parent_parts:
+            return "/".join(parent_parts)
+    return label
+
+
+def _plot_angular_mode_residuals(
+    results,
+    labels,
+    component_lists,
+    ring_geometries,
+    output,
+    mode_selection,
+    n_azimuth=360,
+    minimum_azimuthal_coverage=0.75,
+    maximum_angular_mode=6,
+    cmap="RdBu_r",
+    robust=True,
+    percentile=99.5,
+    dpi=200,
+    show=False,
+):
+    """Plot eigenimages, one selected angular mode, and their residuals."""
+
+    results = list(results)
+    labels = [str(label) for label in labels]
+    component_lists = [list(values) for values in component_lists]
+    ring_geometries = list(ring_geometries)
+    if mode_selection not in {"m0", "mpeak"}:
+        raise ValueError("mode_selection must be m0 or mpeak")
+    if not results:
+        raise ValueError("results must contain at least one PCA result")
+    if len(labels) != len(results):
+        raise ValueError("labels must contain one value per PCA result")
+    if len(component_lists) != len(results):
+        raise ValueError(
+            "component_lists must contain one sequence per PCA result"
+        )
+    if len(ring_geometries) != len(results):
+        raise ValueError(
+            "ring_geometries must contain one value per PCA result"
+        )
+
+    validated_components = [
+        result._validate_component_indices(components, "components")
+        for result, components in zip(results, component_lists)
+    ]
+    if any(len(components) == 0 for components in validated_components):
+        raise ValueError(
+            "each component list must select at least one component"
+        )
+    displayed_components = sorted(
+        {
+            int(component)
+            for components in validated_components
+            for component in components
+        }
+    )
+
+    use_discminer_style()
+    ncols = len(displayed_components)
+    nrows = 3 * len(results)
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=(3.2 * ncols, 2.8 * nrows),
+        constrained_layout=True,
+        squeeze=False,
+    )
+
+    if mode_selection == "m0":
+        row_kinds = ("Original", r"$m=0$", r"Residual ($m\geq1$)")
+    else:
+        row_kinds = (
+            r"Non-axisymmetric ($m\geq1$)",
+            r"Dominant $m_\mathrm{peak}\geq1$",
+            "Residual",
+        )
+    for result_index, (
+        result,
+        label,
+        components,
+        ring_geometry,
+    ) in enumerate(
+        zip(results, labels, validated_components, ring_geometries)
+    ):
+        component_set = set(int(component) for component in components)
+        first_component = next(
+            component
+            for component in displayed_components
+            if component in component_set
+        )
+        support = np.any(result.valid_mask, axis=0)
+        center = _eigenimage_center(result)
+        minimum_radius = _angular_minimum_radius(
+            result,
+            maximum_angular_mode,
+        )
+        row_offset = 3 * result_index
+        display_label = _short_plot_label(label)
+
+        for column, component in enumerate(displayed_components):
+            component_axes = axes[row_offset:row_offset + 3, column]
+            if component not in component_set:
+                for axis in component_axes:
+                    axis.axis("off")
+                continue
+
+            original = np.asarray(
+                result.eigenimages[component],
+                dtype=float,
+            )
+            original_masked = np.where(support, original, np.nan)
+            if mode_selection == "m0":
+                selected_mode = 0
+                plot_input = original_masked
+                removed_mode, residual = subtract_axisymmetric_mode(
+                    original,
+                    mask=support,
+                    center=center,
+                    n_azimuth=n_azimuth,
+                    minimum_coverage=minimum_azimuthal_coverage,
+                    minimum_radius=minimum_radius,
+                    ring_geometry=ring_geometry,
+                )
+            else:
+                _, nonaxisymmetric = subtract_axisymmetric_mode(
+                    original,
+                    mask=support,
+                    center=center,
+                    n_azimuth=n_azimuth,
+                    minimum_coverage=minimum_azimuthal_coverage,
+                    minimum_radius=minimum_radius,
+                    ring_geometry=ring_geometry,
+                )
+                (
+                    selected_mode,
+                    removed_mode,
+                    _,
+                ) = subtract_dominant_angular_mode(
+                    original,
+                    maximum_mode=maximum_angular_mode,
+                    include_axisymmetric=False,
+                    mask=support,
+                    center=center,
+                    n_azimuth=n_azimuth,
+                    minimum_coverage=minimum_azimuthal_coverage,
+                    minimum_radius=minimum_radius,
+                    ring_geometry=ring_geometry,
+                )
+                plot_input = nonaxisymmetric
+                residual = np.full(original.shape, np.nan, dtype=float)
+                residual_domain = (
+                    np.isfinite(nonaxisymmetric)
+                    & np.isfinite(removed_mode)
+                )
+                residual[residual_domain] = (
+                    nonaxisymmetric[residual_domain]
+                    - removed_mode[residual_domain]
+                )
+            shared_values = np.concatenate(
+                (plot_input.ravel(), removed_mode.ravel())
+            )
+            shared_limit = _symmetric_color_limit(
+                shared_values,
+                robust=robust,
+                percentile=percentile,
+            )
+            residual_limit = _symmetric_color_limit(
+                residual,
+                robust=robust,
+                percentile=percentile,
+            )
+
+            for local_row, (axis, image) in enumerate(
+                zip(
+                    component_axes,
+                    (plot_input, removed_mode, residual),
+                )
+            ):
+                color_limit = (
+                    shared_limit if local_row < 2 else residual_limit
+                )
+                plotted = axis.imshow(
+                    np.ma.masked_invalid(image),
+                    origin="lower",
+                    interpolation="nearest",
+                    cmap=cmap,
+                    vmin=-color_limit,
+                    vmax=color_limit,
+                )
+                fig.colorbar(
+                    plotted,
+                    ax=axis,
+                    fraction=0.046,
+                    pad=0.04,
+                )
+                axis.set_xticks([])
+                axis.set_yticks([])
+                if not np.any(np.isfinite(image)):
+                    axis.text(
+                        0.5,
+                        0.5,
+                        "no accepted rings",
+                        transform=axis.transAxes,
+                        ha="center",
+                        va="center",
+                        fontsize=8,
+                    )
+                if mode_selection == "mpeak" and local_row == 1:
+                    mode_text = (
+                        f"m={int(selected_mode)}"
+                        if np.isfinite(selected_mode)
+                        else "m undefined"
+                    )
+                    axis.text(
+                        0.04,
+                        0.05,
+                        mode_text,
+                        transform=axis.transAxes,
+                        fontsize=9,
+                        color="black",
+                        bbox={
+                            "boxstyle": "round,pad=0.2",
+                            "facecolor": "white",
+                            "edgecolor": "0.5",
+                            "alpha": 0.85,
+                        },
+                    )
+                if component == first_component:
+                    axis.set_ylabel(row_kinds[local_row])
+            title = f"PC {component}"
+            if component == first_component:
+                title = f"{display_label}\n{title}"
+            component_axes[0].set_title(title)
+
+    scaling = (
+        f"robust P{percentile:g}"
+        if robust
+        else "full-range"
+    )
+    decomposition = (
+        "axisymmetric"
+        if mode_selection == "m0"
+        else "non-axisymmetric dominant-mode"
+    )
+    fig.suptitle(
+        f"PCA eigenimage {decomposition} decomposition "
+        f"({scaling} symmetric scaling)"
+    )
+    output = Path(output)
+    fig.savefig(output, dpi=dpi, bbox_inches="tight")
+    if show:
+        plt.show()
+    plt.close(fig)
+    return output
+
+
+def plot_m0_residuals(
+    results,
+    labels,
+    component_lists,
+    ring_geometries,
+    output,
+    n_azimuth=360,
+    minimum_azimuthal_coverage=0.75,
+    maximum_angular_mode=6,
+    cmap="RdBu_r",
+    robust=True,
+    percentile=99.5,
+    dpi=200,
+    show=False,
+):
+    """Plot each eigenimage, its projected ``m=0`` field, and residual."""
+
+    return _plot_angular_mode_residuals(
+        results,
+        labels,
+        component_lists,
+        ring_geometries,
+        output,
+        mode_selection="m0",
+        n_azimuth=n_azimuth,
+        minimum_azimuthal_coverage=minimum_azimuthal_coverage,
+        maximum_angular_mode=maximum_angular_mode,
+        cmap=cmap,
+        robust=robust,
+        percentile=percentile,
+        dpi=dpi,
+        show=show,
+    )
+
+
+def plot_mpeak_residuals(
+    results,
+    labels,
+    component_lists,
+    ring_geometries,
+    output,
+    n_azimuth=360,
+    minimum_azimuthal_coverage=0.75,
+    maximum_angular_mode=6,
+    cmap="RdBu_r",
+    robust=True,
+    percentile=99.5,
+    dpi=200,
+    show=False,
+):
+    """Plot each eigenimage, its dominant angular mode, and residual."""
+
+    return _plot_angular_mode_residuals(
+        results,
+        labels,
+        component_lists,
+        ring_geometries,
+        output,
+        mode_selection="mpeak",
+        n_azimuth=n_azimuth,
+        minimum_azimuthal_coverage=minimum_azimuthal_coverage,
+        maximum_angular_mode=maximum_angular_mode,
+        cmap=cmap,
+        robust=robust,
+        percentile=percentile,
+        dpi=dpi,
+        show=show,
+    )
+
+
 def plot_excursion_sets(
     results,
     labels,
@@ -2181,11 +2916,13 @@ def _plot_core_angularmode(
         slope_axis.set_ylim(-1.1 * maximum, 1.1 * maximum)
     slope_axis.axhline(0.0, color="0.5", linewidth=1.0)
 
-    peak_axis.set_ylabel(r"$m_{\rm peak}$")
-    peak_axis.set_title("Characteristic angular mode")
+    peak_axis.set_ylabel(r"$m_{\rm peak}\;(m\geq1)$")
+    peak_axis.set_title("Characteristic non-axisymmetric mode")
     if angular_normalization == "total":
         peak_fraction_axis.set_ylabel(r"$f_{\rm peak,total}$")
-        peak_fraction_axis.set_title("Dominant-mode total power")
+        peak_fraction_axis.set_title(
+            "Dominant non-axisymmetric mode / total power"
+        )
         model_fraction_axis.set_ylabel(r"$f_{1:m_{\max},\,\rm total}$")
         model_fraction_axis.set_title("Low-order total power")
     else:

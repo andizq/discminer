@@ -14,6 +14,7 @@ from discminer.pca.characterization import (  # noqa: E402
     _eigenimage_center,
     _phase_diagnostic_support,
     _polar_sampling_grid,
+    _symmetric_color_limit,
     acf_ellipse_metrics,
     acf_multipole_metrics,
     angular_mode_metrics,
@@ -25,8 +26,14 @@ from discminer.pca.characterization import (  # noqa: E402
     excursion_characterization_path,
     excursion_set_metrics,
     load_disc_ring_geometry,
+    m0_residual_characterization_path,
+    mpeak_residual_characterization_path,
     plot_core_characterization,
     plot_excursion_sets,
+    plot_m0_residuals,
+    plot_mpeak_residuals,
+    subtract_axisymmetric_mode,
+    subtract_dominant_angular_mode,
     write_characterization_table,
 )
 from discminer.pca.cli import (  # noqa: E402
@@ -150,6 +157,106 @@ def test_axisymmetric_fraction_measures_ring_mean_power():
     )
 
 
+def test_axisymmetric_subtraction_recovers_nonaxisymmetric_pattern():
+    radial = angular_pattern()
+    mixed = angular_pattern(mode=2, amplitude=1.0)
+    expected_residual = mixed - radial
+    support = np.ones(mixed.shape, dtype=bool)
+    support[50, 50] = False
+
+    axisymmetric, residual = subtract_axisymmetric_mode(
+        mixed,
+        mask=support,
+        center=(50, 50),
+    )
+
+    ycoord, xcoord = np.indices(mixed.shape, dtype=float)
+    radius = np.hypot(xcoord - 50.0, ycoord - 50.0)
+    comparison = support & (radius >= 3.0) & (radius <= 48.0)
+    assert np.nanmedian(
+        np.abs(axisymmetric[comparison] - radial[comparison])
+    ) < 0.005
+    assert np.nanmedian(
+        np.abs(residual[comparison] - expected_residual[comparison])
+    ) < 0.005
+    assert np.isnan(axisymmetric[50, 50])
+    assert np.isnan(residual[50, 50])
+
+
+def test_axisymmetric_subtraction_preserves_a_zero_eigenimage():
+    image = np.zeros((21, 21), dtype=float)
+
+    axisymmetric, residual = subtract_axisymmetric_mode(
+        image,
+        center=(10, 10),
+    )
+
+    assert np.all(axisymmetric[np.isfinite(axisymmetric)] == 0.0)
+    assert np.all(residual[np.isfinite(residual)] == 0.0)
+    assert np.any(np.isfinite(residual))
+
+
+def test_dominant_mode_subtraction_selects_m0_or_nonzero_mode():
+    radial = angular_pattern()
+    pure_m2 = angular_pattern(mode=2, amplitude=1.0) - radial
+    pure_m3 = angular_pattern(mode=3, amplitude=1.0) - radial
+    ycoord, xcoord = np.indices(radial.shape, dtype=float)
+    radius = np.hypot(xcoord - 50.0, ycoord - 50.0)
+    comparison = (radius >= 3.0) & (radius <= 48.0)
+
+    peak_m0, fitted_m0, residual_m0 = subtract_dominant_angular_mode(
+        radial,
+        center=(50, 50),
+    )
+    mixed = radial + 2.0 * pure_m2 + 0.25 * pure_m3
+    peak_m2, fitted_m2, residual_m2 = subtract_dominant_angular_mode(
+        mixed,
+        center=(50, 50),
+    )
+    weak_m2 = radial + 0.2 * pure_m2
+    peak_weak_all, _, _ = subtract_dominant_angular_mode(
+        weak_m2,
+        center=(50, 50),
+    )
+    peak_weak_nonaxisymmetric, fitted_weak_m2, _ = (
+        subtract_dominant_angular_mode(
+            weak_m2,
+            include_axisymmetric=False,
+            center=(50, 50),
+        )
+    )
+
+    assert peak_m0 == 0
+    assert np.nanmedian(
+        np.abs(fitted_m0[comparison] - radial[comparison])
+    ) < 0.005
+    assert np.nanmedian(np.abs(residual_m0[comparison])) < 0.005
+    assert peak_m2 == 2
+    assert np.nanmedian(
+        np.abs(fitted_m2[comparison] - 2.0 * pure_m2[comparison])
+    ) < 0.005
+    expected_residual = radial + 0.25 * pure_m3
+    assert np.nanmedian(
+        np.abs(residual_m2[comparison] - expected_residual[comparison])
+    ) < 0.005
+    assert peak_weak_all == 0
+    assert peak_weak_nonaxisymmetric == 2
+    assert np.nanmedian(
+        np.abs(fitted_weak_m2[comparison] - 0.2 * pure_m2[comparison])
+    ) < 0.005
+
+
+def test_robust_color_limit_rejects_an_amplitude_outlier():
+    values = np.array([0.0, 1.0, -1.0, 100.0])
+
+    assert _symmetric_color_limit(
+        values,
+        robust=True,
+        percentile=75.0,
+    ) < 100.0
+    assert _symmetric_color_limit(values, robust=False) == 100.0
+
+
 def test_disc_plane_rings_follow_parfile_orientation_and_surface(tmp_path):
     parfile = tmp_path / "parfile.json"
     parfile.write_text(
@@ -160,8 +267,8 @@ def test_disc_plane_rings_follow_parfile_orientation_and_surface(tmp_path):
                     "orientation": {
                         "incl": np.pi / 3.0,
                         "PA": 0.0,
-                        "xc": 0.0,
-                        "yc": 0.0,
+                        "xc": 3.0,
+                        "yc": -4.0,
                     },
                     "height_upper": {
                         "z0": 10.0,
@@ -204,9 +311,11 @@ def test_disc_plane_rings_follow_parfile_orientation_and_surface(tmp_path):
     ring_index = np.flatnonzero(radii == 10.0)[0]
     assert np.ptp(midplane_coords[1, ring_index]) == pytest.approx(20.0)
     assert np.ptp(midplane_coords[0, ring_index]) == pytest.approx(10.0)
-    assert np.mean(midplane_coords[0, ring_index]) == pytest.approx(50.0)
+    assert np.mean(midplane_coords[1, ring_index]) == pytest.approx(53.0)
+    assert np.mean(midplane_coords[0, ring_index]) == pytest.approx(46.0)
+    assert np.mean(upper_coords[1, ring_index]) == pytest.approx(53.0)
     assert np.mean(upper_coords[0, ring_index]) == pytest.approx(
-        50.0 - 10.0 * np.sin(np.pi / 3.0),
+        46.0 - 10.0 * np.sin(np.pi / 3.0),
         abs=0.01,
     )
 
@@ -253,9 +362,15 @@ def test_deprojection_recovers_axisymmetric_disc_power(tmp_path):
         center=(50, 50),
         ring_geometry=geometry,
     )
+    _, residual = subtract_axisymmetric_mode(
+        image,
+        center=(50, 50),
+        ring_geometry=geometry,
+    )
 
     assert deprojected["eigenimage_f_m0"] > 0.999
     assert deprojected["eigenimage_f_m0"] > circular["eigenimage_f_m0"]
+    assert np.nanmedian(np.abs(residual)) < 0.001
 
 
 def test_phase_coherence_recovers_fixed_and_winding_m2_patterns():
@@ -295,6 +410,11 @@ def test_angular_mode_metrics_find_dominant_mode_and_orientation_slope():
     )
 
     assert fixed_m3["eigenimage_m_peak"] == 3
+    assert fixed_m3["eigenimage_m_dominant_all"] == 0
+    assert fixed_m3["eigenimage_f_dominant_all_total"] == pytest.approx(
+        2.0 / 3.0,
+        abs=0.02,
+    )
     assert fixed_m3["eigenimage_f_peak_fitted"] > 0.99
     assert fixed_m3[
         "eigenimage_f_peak_nonaxisymmetric"
@@ -406,6 +526,8 @@ def test_characterization_keeps_eigenvalues_independent_of_widths():
     assert "eigenimage_f_peak_total" in table.colnames
     assert "eigenimage_f_peak_nonaxisymmetric" in table.colnames
     assert "eigenimage_f_peak_fitted" in table.colnames
+    assert "eigenimage_m_dominant_all" in table.colnames
+    assert "eigenimage_f_dominant_all_total" in table.colnames
     assert "eigenimage_mode_entropy" in table.colnames
     assert "eigenimage_angular_model_fraction_total" in table.colnames
     assert (
@@ -422,7 +544,7 @@ def test_characterization_keeps_eigenvalues_independent_of_widths():
     assert "eigenimage_ring_radial_bins" in table.colnames
 
 
-def test_eigenimage_center_uses_in_frame_wcs_zero_offset():
+def test_eigenimage_center_uses_geometric_center_not_wcs_reference():
     result = make_result()
     result.eigenimages = np.zeros((3, 190, 190))
     result.source_header.update(
@@ -442,17 +564,37 @@ def test_eigenimage_center_uses_in_frame_wcs_zero_offset():
 
     ycenter, xcenter = _eigenimage_center(result)
 
-    assert xcenter == pytest.approx(94.0)
-    assert ycenter == pytest.approx(94.0)
+    assert xcenter == pytest.approx(94.5)
+    assert ycenter == pytest.approx(94.5)
 
 
 def test_characterization_warns_when_no_radial_rings_are_available():
     result = make_result()
     result.eigenimages = np.zeros((3, 190, 190))
     result.valid_mask = np.ones((3, 190, 190), dtype=bool)
+    ring_geometry = {
+        "mode": "disc_plane",
+        "parfile": "parfile.json",
+        "surface": "midplane",
+        "surface_model": "midplane",
+        "surface_function": None,
+        "surface_parameters": {},
+        "inclination_rad": 0.0,
+        "position_angle_rad": 0.0,
+        "center_x_au": 1000.0,
+        "center_y_au": 0.0,
+        "distance_pc": 100.0,
+        "pixel_x_au": 1.0,
+        "pixel_y_au": 1.0,
+        "radial_step_au": 1.0,
+    }
 
     with pytest.warns(RuntimeWarning, match="No complete radial rings"):
-        table = characterize_result(result, components=[0])
+        table = characterize_result(
+            result,
+            components=[0],
+            ring_geometry=ring_geometry,
+        )
 
     assert table["eigenimage_ring_radial_bins"][0] == 0
 
@@ -558,6 +700,104 @@ def test_excursion_plot_highlights_selected_eigenimage_regions(tmp_path):
     assert restored.stat().st_size > 0
 
 
+def test_m0_residual_plot_is_written_with_robust_scaling(
+    tmp_path,
+    monkeypatch,
+):
+    result = make_result()
+    radial = angular_pattern()
+    result.eigenimages = np.stack(
+        (
+            radial,
+            angular_pattern(mode=2, amplitude=1.0),
+            angular_pattern(mode=3, amplitude=0.2),
+        )
+    )
+    result.valid_mask = np.ones_like(result.eigenimages, dtype=bool)
+    output = m0_residual_characterization_path(tmp_path / "pca_core.png")
+    color_limits = []
+    original_imshow = matplotlib.axes.Axes.imshow
+
+    def record_color_limits(axis, *args, **kwargs):
+        color_limits.append((kwargs.get("vmin"), kwargs.get("vmax")))
+        return original_imshow(axis, *args, **kwargs)
+
+    monkeypatch.setattr(
+        matplotlib.axes.Axes,
+        "imshow",
+        record_color_limits,
+    )
+
+    restored = plot_m0_residuals(
+        [result],
+        ["spiral"],
+        [[1, 2]],
+        [None],
+        output,
+        robust=True,
+        percentile=95.0,
+    )
+
+    assert restored == output
+    assert restored.name == "pca_core_eigenimage_m0_residuals.png"
+    assert restored.stat().st_size > 0
+    assert color_limits[0] == color_limits[1]
+    assert color_limits[3] == color_limits[4]
+    assert color_limits[2] != color_limits[0]
+    assert color_limits[5] != color_limits[3]
+    assert color_limits[2] != color_limits[5]
+
+
+def test_mpeak_residual_plot_is_written_with_independent_scaling(
+    tmp_path,
+    monkeypatch,
+):
+    result = make_result()
+    radial = angular_pattern()
+    pure_m2 = angular_pattern(mode=2, amplitude=1.0) - radial
+    pure_m3 = angular_pattern(mode=3, amplitude=1.0) - radial
+    result.eigenimages = np.stack(
+        (
+            radial + 2.0 * pure_m2 + 0.4 * pure_m3,
+            radial + 0.2 * pure_m2,
+            radial,
+        )
+    )
+    result.valid_mask = np.ones_like(result.eigenimages, dtype=bool)
+    output = mpeak_residual_characterization_path(tmp_path / "pca_core.png")
+    color_limits = []
+    original_imshow = matplotlib.axes.Axes.imshow
+
+    def record_color_limits(axis, *args, **kwargs):
+        color_limits.append((kwargs.get("vmin"), kwargs.get("vmax")))
+        return original_imshow(axis, *args, **kwargs)
+
+    monkeypatch.setattr(
+        matplotlib.axes.Axes,
+        "imshow",
+        record_color_limits,
+    )
+
+    restored = plot_mpeak_residuals(
+        [result],
+        ["spiral"],
+        [[0, 1]],
+        [None],
+        output,
+        robust=True,
+        percentile=95.0,
+    )
+
+    assert restored == output
+    assert restored.name == "pca_core_eigenimage_mpeak_residuals.png"
+    assert restored.stat().st_size > 0
+    assert color_limits[0] == color_limits[1]
+    assert color_limits[3] == color_limits[4]
+    assert color_limits[2] != color_limits[0]
+    assert color_limits[5] != color_limits[3]
+    assert color_limits[2] != color_limits[5]
+
+
 def test_characterize_parser_exposes_pc0_cumulative_flag():
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command")
@@ -576,6 +816,10 @@ def test_characterize_parser_exposes_pc0_cumulative_flag():
             "--excursion-percentile",
             "85",
             "--plot-excursions",
+            "--plot-m0-residuals",
+            "--plot-mpeak-residuals",
+            "--percentile",
+            "98",
             "--maximum-angular-mode",
             "5",
             "--angular-normalization",
@@ -593,6 +837,10 @@ def test_characterize_parser_exposes_pc0_cumulative_flag():
     assert args.azimuth_samples == 180
     assert args.excursion_percentile == 85
     assert args.plot_excursions
+    assert args.plot_m0_residuals
+    assert args.plot_mpeak_residuals
+    assert args.mode_residual_robust
+    assert args.mode_residual_percentile == 98
     assert args.maximum_angular_mode == 5
     assert args.angular_normalization == "nonaxisymmetric"
     assert args.parfile == ["fit/parfile.json"]
@@ -604,6 +852,14 @@ def test_characterize_parser_exposes_pc0_cumulative_flag():
     assert circular.circular_deproj
     assert circular.angular_normalization == "total"
     assert not circular.plot_excursions
+    assert not circular.plot_m0_residuals
+    assert not circular.plot_mpeak_residuals
+    assert circular.mode_residual_robust
+
+    full_range = parser.parse_args(
+        ["pca", "characterize", "pca_cube.fits", "--no-robust"]
+    )
+    assert not full_range.mode_residual_robust
 
 
 def test_characterize_parfiles_are_discovered_per_artifact(tmp_path):
