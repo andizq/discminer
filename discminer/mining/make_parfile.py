@@ -7,6 +7,7 @@ import re
 import warnings
 import numpy as np
 from pathlib import Path
+from urllib.parse import quote
 
 from astropy import units as u
 from astropy.io import fits
@@ -654,6 +655,21 @@ def write_image_center_json(image_center_dict):
     return output_file.name
 
 
+def download_exoalma_cube(file_data):
+    """Download an inferred exoALMA cube to its configured local path."""
+    from urllib.request import urlretrieve
+
+    url_nrao = (
+        'https://bulk.cv.nrao.edu/exoalma/'
+        'ALMA_self_cal_data/images_v1/ds_cubes/'
+    )
+    destination = Path(file_data)
+    url = url_nrao + quote(destination.name)
+
+    print('Downloading exoALMA cube from %s' % url)
+    urlretrieve(url=url, filename=str(destination))
+
+
 #*************
 #MAKE PAR FILE
 #*************    
@@ -693,6 +709,9 @@ def make_json(dicts_list=[], keys_list=[], filename=args.json_file):
 
 def make_all():
     tags_dict = get_tags_dict(log_file)
+    if args.download_cube:
+        download_exoalma_cube(tags_dict['file_data'])
+
     pars_dict, units_dict, log_metadata = get_base_pars(log_file, tags_dict)
     image_center_dict = shift_orientation_to_data_image(
         pars_dict,
@@ -734,12 +753,5 @@ def make_all():
     )
     if parfile_written and write_image_center:
         write_image_center_json(image_center_dict)
-
-if args.download_cube:
-    from urllib.request import urlretrieve
-
-    url_nrao = 'https://bulk.cv.nrao.edu/exoalma/ALMA_self_cal_data/images_v1/ds_cubes/'
-
-    urlretrieve(url=url_nrao+file_data,filename=file_data)
 
 make_all()
