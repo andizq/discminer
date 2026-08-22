@@ -8,6 +8,7 @@ import warnings
 import numbers
 import runpy
 import copy
+from functools import wraps
 import sys
 import os
 import re
@@ -59,6 +60,34 @@ moltex = {
 
 #warnings.filterwarnings("ignore", category=UserWarning)
 #warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+
+def _rescale_intensity_func(model, downsamp_factor):
+    """Rescale a fitted intensity prescription to the prototype pixel area."""
+    downsamp_factor = float(downsamp_factor)
+    if not np.isfinite(downsamp_factor) or downsamp_factor <= 0.0:
+        raise ValueError("downsamp_factor must be finite and greater than zero.")
+
+    intensity_scale = 1.0 / downsamp_factor
+    raw_intensity_func = model.intensity_func
+
+    model.raw_intensity_func = raw_intensity_func
+    model.intensity_scale = intensity_scale
+
+    if intensity_scale == 1.0:
+        return
+
+    @wraps(raw_intensity_func)
+    def scaled_intensity_func(*args, **kwargs):
+        return intensity_scale * raw_intensity_func(*args, **kwargs)
+
+    model.intensity_func = scaled_intensity_func
+    print(
+        "Rescaling evaluated model intensity from fit to prototype "
+        "pixel area by %.8g (1 / downsamp_factor %.8g). "
+        % (intensity_scale, downsamp_factor)
+    )
+
 
 def init_data_and_model(
     parfile='parfile.json',
@@ -186,13 +215,11 @@ def init_data_and_model(
         #****************
         #PROTOTYPE PARAMS
         #****************
-        model.params = copy.copy(params)
-
-        #if datacube.beam is not None:
-        try:
-            model.params['intensity']['I0'] /= meta['downsamp_factor']
-        except KeyError:
-            print ('Warning: I0 parameter not found. Skipping downsampling re-normalisation. Make sure your intensity normalisation refers to the same pixel size of your input image...')
+        model.params = copy.deepcopy(params)
+        _rescale_intensity_func(
+            model,
+            meta.get('downsamp_factor', 1.0),
+        )
             
         return datacube, model
 
