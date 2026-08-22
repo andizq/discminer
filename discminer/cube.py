@@ -308,26 +308,40 @@ class Cube(_JSON):
         kwargs_io = dict(overwrite=True)  # Default kwargs
         kwargs_io.update(kwargs)
 
-        try: #e.g. mJy/beam --> Jy/beam
-            I = self.data * u.Unit(self.header["BUNIT"]).to("beam-1 Jy")
+        try:
+            intensity_unit = u.Unit(self.header["BUNIT"])
+        except (KeyError, TypeError, ValueError):
+            sys.exit("Stopping execution: Unable to parse input cube intensity units...")
+
+        if intensity_unit.is_equivalent(u.Jy / u.beam):
+            # e.g. mJy/beam --> Jy/beam
+            I = self.data * intensity_unit.to(u.Jy / u.beam)
             # beam_area: C*bmin['']*bmaj[''] * (dist[pc])**2 --> beam area in au**2 units
             # beam solid angle: beam_area/(dist[m])**2.
             #  dist**2 cancels out with beamarea's dist[pc]**2 from conversion of bmaj, bmin to mks units.
             solid_angle = u.au.to("m") ** 2 * self.beam_area_arcsecs / u.pc.to("m") ** 2
-        except u.core.UnitConversionError: #Jy/arcsec2, Jy/pixel or K
-            I = self.data
-            if self.header.get('BUNIT') in ['Jy/arcsec^2', 'Jy / arcsec^2' , 'arcsec-2 Jy', 'Jy arcsec-2']:
-                solid_angle = (1 * u.arcsec**2).to(u.sr).value
-            elif self.header.get('BUNIT') in ['Jy/pixel', 'Jy / pixel', 'pixel-1 Jy', 'Jy pixel-1']:
-                solid_angle = (self.pix_size**2).to(u.sr).value
-            elif self.header.get('BUNIT') in ['K']:
-                warnings.warn("Skipping convert_to_tb: Input Cube already in K units...", Warning)
-                self.wcs = WCS(self.header)
-                if writefits:
-                    self.writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)                
-                return 0
-            else:
-                sys.exit("Stopping execution: Unable to convert input cube units to K...")
+        elif intensity_unit.is_equivalent(u.Jy / u.arcsec**2):
+            I = self.data * intensity_unit.to(u.Jy / u.arcsec**2)
+            solid_angle = (1 * u.arcsec**2).to(u.sr).value
+        elif intensity_unit.is_equivalent(u.Jy / u.pix):
+            I = self.data * intensity_unit.to(u.Jy / u.pix)
+            pixel_area = (
+                np.abs(self.header["CDELT1"])
+                * u.Unit(self.header["CUNIT1"])
+                * np.abs(self.header["CDELT2"])
+                * u.Unit(self.header["CUNIT2"])
+            )
+            solid_angle = pixel_area.to(u.sr).value
+        elif intensity_unit.is_equivalent(u.K):
+            warnings.warn("Skipping convert_to_tb: Input Cube already in temperature units...", Warning)
+            self.data = self.data * intensity_unit.to(u.K)
+            self.header["BUNIT"] = "K"
+            self.wcs = WCS(self.header)
+            if writefits:
+                self.writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)
+            return 0
+        else:
+            sys.exit("Stopping execution: Unable to convert input cube units to K...")
 
         nu = self.header["RESTFRQ"]  # in Hz
         Jy_to_SI = 1e-26
@@ -363,7 +377,8 @@ class Cube(_JSON):
             self.writefits(logkeys=[hdrkey], tag=tag, **kwargs_io)
 
     def downsample(
-            self, npix, method=np.median, kwargs_method={}, writefits=True, tag="", crpix_to_center=False, **kwargs
+            self, npix, method=np.median, kwargs_method={}, writefits=True, tag="", crpix_to_center=False,
+            rescale_jypixel="auto", **kwargs
     ):
         """
         Downsample datacube to reduce spatial correlations between pixels and/or to save computational costs in the modelling. 
@@ -385,6 +400,14 @@ class Cube(_JSON):
         tag : str, optional
             String to add at the end of the output filename.
 
+        rescale_jypixel : {'auto', True, False}, optional
+            Controls whether a reduced Jy/pixel block is multiplied by the
+            ratio of output to input pixel area. ``'auto'`` skips the scaling
+            for known sum reducers and applies it to reducers such as the mean
+            or median that return a representative input-pixel value. Use an
+            explicit bool for custom reducers whose semantics cannot be
+            inferred.
+
         kwargs : keyword arguments
             Additional keyword arguments to pass to `~astropy.io.fits.writeto` function.
            
@@ -395,6 +418,22 @@ class Cube(_JSON):
         kwargs_io.update(kwargs)
 
         npix = int(npix)
+
+        if rescale_jypixel == "auto":
+            integrated_reducers = (
+                np.sum,
+                np.nansum,
+                np.ma.sum,
+                np.ndarray.sum,
+            )
+            apply_jypixel_rescaling = method not in integrated_reducers
+        elif isinstance(rescale_jypixel, (bool, np.bool_)):
+            apply_jypixel_rescaling = bool(rescale_jypixel)
+        else:
+            raise InputError(
+                rescale_jypixel,
+                "rescale_jypixel must be 'auto', True, or False.",
+            )
 
         if npix > 1:
             nchan, ny0, nx0 = self.nchan, self.ny, self.nx
@@ -443,6 +482,15 @@ class Cube(_JSON):
                             **kwargs_method
                         )
             _progress_bar(100); print('\n')
+
+            try:
+                intensity_unit = u.Unit(self.header.get("BUNIT", ""))
+                is_jy_per_pixel = intensity_unit.is_equivalent(u.Jy / u.pix)
+            except (TypeError, ValueError):
+                is_jy_per_pixel = False
+
+            if apply_jypixel_rescaling and is_jy_per_pixel:
+                av_data *= di * dj
 
             self.nx = nx
             self.ny = ny
