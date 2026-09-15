@@ -10,7 +10,7 @@ import numpy as np
 
 from .tools.utils import InputError
 
-__all__ = ['estimate_inv_psd', 'validate_finite']
+__all__ = ["estimate_inv_psd", "validate_finite"]
 
 _fast_log_likelihood_func = None
 
@@ -19,7 +19,7 @@ NCHAN_PSD_RECOMMENDED = 20
 
 
 def _beam_boozle():
-    #Imported lazily so this module loads without the optional dependency, and so the
+    # Imported lazily so this module loads without the optional dependency, and so the
     # import also runs inside multiprocessing workers
     try:
         import beam_boozle
@@ -28,7 +28,7 @@ def _beam_boozle():
         raise ImportError(
             "Correlated-noise likelihoods require the 'beam-boozle' package, which is not on "
             "PyPI yet. Install it from source:\n"
-            "    pip install git+https://github.com/tomhilder/fast_corr_likelihoods"
+            "    pip install git+https://github.com/tomhilder/beam-boozle"
         ) from e
     return beam_boozle
 
@@ -41,7 +41,7 @@ def get_fast_log_likelihood():
     return _fast_log_likelihood_func
 
 
-def validate_finite(data, name='data'):
+def validate_finite(data, name="data"):
     """
     Raise if *data* contains non-finite pixels.
 
@@ -66,22 +66,26 @@ def validate_finite(data, name='data'):
     npix = _largest_finite_clip(bad2d)
 
     if npix > 0:
-        hint = ('The largest fully finite window centred on the image is %dx%d pixels; '
-                'try datacube.clip(npix=%d).' % (2 * npix, 2 * npix, npix))
+        hint = (
+            "The largest fully finite window centred on the image is %dx%d pixels; "
+            "try datacube.clip(npix=%d)." % (2 * npix, 2 * npix, npix)
+        )
     else:
-        hint = ('The non-finite pixels are not confined to the border, so clipping to a '
-                'centred window will not remove them.')
+        hint = (
+            "The non-finite pixels are not confined to the border, so clipping to a "
+            "centred window will not remove them."
+        )
 
     raise InputError(
         name,
-        'Found %.2f%% non-finite pixels. The correlated-noise likelihood requires a fully '
-        'finite rectangular region. %s Alternatively, pass noise_stddev=... to use the '
-        'uncorrelated likelihood, which does mask non-finite pixels.' % (frac, hint)
+        "Found %.2f%% non-finite pixels. The correlated-noise likelihood requires a fully "
+        "finite rectangular region. %s Alternatively, pass noise_stddev=... to use the "
+        "uncorrelated likelihood, which does mask non-finite pixels." % (frac, hint),
     )
 
 
 def _largest_finite_clip(bad2d):
-    #Largest npix whose centred 2*npix x 2*npix window contains no bad pixel, matching the
+    # Largest npix whose centred 2*npix x 2*npix window contains no bad pixel, matching the
     # convention of Cube.clip. Returns 0 if there is no such window. The summed-area table
     # makes each candidate window O(1) to test.
     ny, nx = bad2d.shape
@@ -139,30 +143,36 @@ def estimate_inv_psd(datacube, channels=None, white_floor=1e-2, smooth=3, mask=N
 
     data = np.asarray(datacube.data, dtype=np.float64)
     if data.ndim != 3:
-        raise InputError(data.shape, 'Input datacube must have shape (nchan, nx, ny).')
+        raise InputError(data.shape, "Input datacube must have shape (nchan, nx, ny).")
 
     if channels is None:
         nchan = data.shape[0]
         if nchan < 2 * NCHAN_PSD_MIN:
-            raise InputError(nchan,
-                             'Cube has too few channels (%d) to take the default first and '
-                             'last five as line-free. Specify channels explicitly.' % nchan)
-        channels = np.r_[0:5, nchan - 5:nchan]
+            raise InputError(
+                nchan,
+                "Cube has too few channels (%d) to take the default first and "
+                "last five as line-free. Specify channels explicitly." % nchan,
+            )
+        channels = np.r_[0:5, nchan - 5 : nchan]
 
     noise_images = data[np.atleast_1d(np.asarray(channels))]
     nused = len(noise_images)
 
     if nused < NCHAN_PSD_MIN:
-        raise InputError(nused,
-                         'At least %d line-free channels are required to estimate the noise '
-                         'PSD (got %d).' % (NCHAN_PSD_MIN, nused))
+        raise InputError(
+            nused,
+            "At least %d line-free channels are required to estimate the noise "
+            "PSD (got %d)." % (NCHAN_PSD_MIN, nused),
+        )
     if nused < NCHAN_PSD_RECOMMENDED:
-        warnings.warn('Estimating the noise PSD from only %d channels biases the inverse PSD '
-                      'high, making posteriors somewhat overconfident. %d or more line-free '
-                      'channels are recommended.' % (nused, NCHAN_PSD_RECOMMENDED))
+        warnings.warn(
+            "Estimating the noise PSD from only %d channels biases the inverse PSD "
+            "high, making posteriors somewhat overconfident. %d or more line-free "
+            "channels are recommended." % (nused, NCHAN_PSD_RECOMMENDED)
+        )
 
-    validate_finite(noise_images, name='line-free channels')
+    validate_finite(noise_images, name="line-free channels")
 
     return bb.utils.estimate_noise_inv_psd_from_data(
-        noise_images, mask=mask, mode='white', eps=white_floor, smooth=smooth
+        noise_images, mask=mask, mode="white", eps=white_floor, smooth=smooth
     )
