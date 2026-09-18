@@ -1,7 +1,7 @@
 """
 Noise models for the discminer likelihood
 =========================================
-Functions: estimate_inv_psd, validate_finite
+Functions: estimate_inv_psd, validate_finite, validate_inv_psd
 """
 
 import warnings
@@ -10,7 +10,7 @@ import numpy as np
 
 from .tools.utils import InputError
 
-__all__ = ["estimate_inv_psd", "validate_finite"]
+__all__ = ["estimate_inv_psd", "validate_finite", "validate_inv_psd"]
 
 _fast_log_likelihood_func = None
 
@@ -39,6 +39,36 @@ def get_fast_log_likelihood():
     if _fast_log_likelihood_func is None:
         _fast_log_likelihood_func = _beam_boozle().fast_log_likelihood
     return _fast_log_likelihood_func
+
+
+def validate_inv_psd(inv_psd, shape):
+    """Return real float64 inverse PSD weights validated for a spatial grid.
+
+    Weights must be finite and non-negative, with at least one positive value.
+    Individual zeros are allowed to exclude Fourier modes from the likelihood.
+    """
+    if np.iscomplexobj(inv_psd):
+        raise InputError("noise_psd_inv", "Inverse PSD weights must be real.")
+    inv_psd = np.asarray(inv_psd, dtype=np.float64)
+    if inv_psd.ndim != 2 or inv_psd.shape != tuple(shape):
+        raise InputError(
+            inv_psd.shape,
+            "noise_psd_inv must match the spatial shape of the data being fitted. "
+            "Estimate it from line-free channels of the same cube, after any "
+            "clipping or downsampling.",
+        )
+    if not np.all(np.isfinite(inv_psd)):
+        raise InputError(
+            "noise_psd_inv",
+            "Inverse PSD weights must be finite. Check the noise estimate and "
+            "regularisation; zero-power noise images cannot define a likelihood.",
+        )
+    if np.any(inv_psd < 0) or not np.any(inv_psd > 0):
+        raise InputError(
+            "noise_psd_inv",
+            "Inverse PSD weights must be non-negative with at least one positive value.",
+        )
+    return inv_psd
 
 
 def validate_finite(data, name="data"):
@@ -122,7 +152,8 @@ def estimate_inv_psd(datacube, channels=None, white_floor=1e-2, smooth=3, mask=N
     white_floor : float, optional
         Fraction of the noise variance treated as uncorrelated. Regularises the inversion, since
         the PSD falls to nearly zero at spatial frequencies suppressed by the beam. Results are
-        insensitive to it over several orders of magnitude. Defaults to 1e-2.
+        insensitive to it over several orders of magnitude. Must be a finite positive
+        scalar. Defaults to 1e-2.
 
     smooth : int, optional
         Side length in pixels of a boxcar applied to the PSD before inversion, which reduces the
@@ -139,6 +170,10 @@ def estimate_inv_psd(datacube, channels=None, white_floor=1e-2, smooth=3, mask=N
     inv_psd : `numpy.ndarray`
         Inverse PSD with shape (nx, ny), on the unshifted FFT grid.
     """
+    if (not np.isscalar(white_floor) or not np.isrealobj(white_floor)
+            or not np.isfinite(white_floor) or white_floor <= 0):
+        raise InputError(white_floor, "white_floor must be a finite positive scalar.")
+
     bb = _beam_boozle()
 
     data = np.asarray(datacube.data, dtype=np.float64)
@@ -173,6 +208,9 @@ def estimate_inv_psd(datacube, channels=None, white_floor=1e-2, smooth=3, mask=N
 
     validate_finite(noise_images, name="line-free channels")
 
-    return bb.utils.estimate_noise_inv_psd_from_data(
-        noise_images, mask=mask, mode="white", eps=white_floor, smooth=smooth
-    )
+    # zero-power noise estimates can produce infinite weights; report an input error below.
+    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+        inv_psd = bb.utils.estimate_noise_inv_psd_from_data(
+            noise_images, mask=mask, mode="white", eps=white_floor, smooth=smooth
+        )
+    return validate_inv_psd(inv_psd, data.shape[1:])

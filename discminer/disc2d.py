@@ -40,7 +40,7 @@ from .grid import GridTools
 from . import cart
 
 from .diff_interp import get_griddata_sparse as get_griddata
-from .noise import get_fast_log_likelihood, validate_finite
+from .noise import get_fast_log_likelihood, validate_finite, validate_inv_psd
 from ._version import __version__
 
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -1393,7 +1393,6 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         
     def run_mcmc(self, data=None, vchannels=None, p0_mean=[], frac_stddev=1e-3,  
                  nwalkers=30, nsteps=100, frac_stats=0.2, noise_stddev=1.0,
-                 noise_psd_inv=None,
                  nthreads=None,
                  backend=None, #emcee
                  use_zeus=False,
@@ -1404,6 +1403,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                  write_log_pars=True,
                  tag='',
                  mpi=False,
+                 *, noise_psd_inv=None,
                  **kwargs_model): 
         """
         Optimise the discminer model parameters using an MCMC sampler.
@@ -1436,6 +1436,8 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             given, the likelihood accounts for the correlation the beam introduces between pixels
             rather than treating them as independent, and *noise_stddev* must be left at its
             default since the variance scale is carried by the PSD. Requires fully finite data.
+            Weights must be real, finite and non-negative, with at least one positive value.
+            Zero weights exclude individual Fourier modes. This argument is keyword-only.
 
             Both likelihoods omit the additive normalisation constant, so log-probabilities are
             not comparable between them; do not resume an existing emcee backend after switching.
@@ -1461,12 +1463,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                                  'Specify either noise_psd_inv or noise_stddev, not both; the '
                                  'correlated-noise likelihood takes its variance scale from the '
                                  'PSD.')
-            noise_psd_inv = np.asarray(noise_psd_inv, dtype=np.float64)
-            if noise_psd_inv.shape != np.shape(self.mc_data)[1:]:
-                raise InputError((noise_psd_inv.shape, np.shape(self.mc_data)[1:]),
-                                 'noise_psd_inv must match the spatial shape of the data being '
-                                 'fitted. Estimate it from line-free channels of the same cube, '
-                                 'after any clipping or downsampling.')
+            noise_psd_inv = validate_inv_psd(noise_psd_inv, np.shape(self.mc_data)[1:])
             validate_finite(self.mc_data, name='data cube being fitted')
             self.noise_psd_inv = noise_psd_inv
 
