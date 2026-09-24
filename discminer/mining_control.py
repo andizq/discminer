@@ -327,7 +327,10 @@ def _mining_stack(parserobj, prog='stack', description='Azimuthally stack line p
     parser.add_argument('-wedges', '--wedges', nargs='*', default=[], type=float, minimum=-180, maximum=180, action=Range,
                         help="If provided, perform stacking within the specified wedges. Define as many as there are annuli. If empty, the full azimuth is used for all annuli. USAGE: -wedges 30 40 -60 -40 defines two wedges with boundaries (30, 40) and (-60, -40) deg. DEFAULTS to [].")
 
-    parser.add_argument('-keplerian', '--keplerian', default=0, type=int, help="Use pure Keplerian profile to stack the lines? DEFAULTS to 0.")
+    parser.add_argument('-keplerian', '--keplerian', default=0, type=int, choices=[0, 1, 2],
+                        help="Use data rotation curve (0), pure Keplerian (1), or discminer model Keplerian (2) profile to stack the lines. DEFAULTS to 0.")
+    parser.add_argument('-writespectra', '--writespectra', default=0, type=int, choices=[0, 1],
+                        help="Write the exact sampled background spectra into one text file per annulus under stacked_spectra_keplerianX/? DEFAULTS to 0.")
     parser.add_argument('-stat', '--stat', default='nanmedian', type=str, help="Statistic used to stack the line profiles (e.g. median, mean, max, nanmedian). DEFAULTS to 'nanmedian'")
     parser.add_argument('-vlim', '--vlim', default=4.1, type=float, help="Velocity xlim in km/s. DEFAULTS to 4.1.")
     parser.add_argument('-logscale', '--logscale', default=0, type=int, help="Set x and y axes to be logarithmic (via ax.set_yscale('symlog', linthresh=1e-2))? DEFAULTS to 0.")
