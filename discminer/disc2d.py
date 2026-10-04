@@ -40,6 +40,7 @@ from .grid import GridTools
 from . import cart
 
 from .diff_interp import get_griddata_sparse as get_griddata
+from .noise import get_fast_log_likelihood, validate_finite, validate_inv_psd
 from ._version import __version__
 
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -1079,29 +1080,43 @@ class Mcmc:
         )
 
         lnlike = 0.0
-        for channel in range(self.mc_nchan):
-            data_channel = self.mc_data[channel]
-            model_channel = model_cube[channel]
-            valid = (
-                np.isfinite(data_channel)
-                & np.isfinite(model_channel)
-            )
 
-            #Non-finite data/model regions are excluded.
-            with np.errstate(divide="ignore", invalid="ignore"):
-                squared_residual = np.where(
-                    valid,
-                    np.square(
-                        (data_channel - model_channel)
-                        / self.noise_stddev
-                    ),
-                    0.0,
+        if self.noise_psd_inv is None:
+            #Independent pixels, weighted by 1/noise_stddev**2
+            for channel in range(self.mc_nchan):
+                data_channel = self.mc_data[channel]
+                model_channel = model_cube[channel]
+                valid = (
+                    np.isfinite(data_channel)
+                    & np.isfinite(model_channel)
                 )
 
-            lnlike += -0.5 * np.sum(
-                squared_residual,
-                dtype=np.float64,
-            )
+                #Non-finite data/model regions are excluded.
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    squared_residual = np.where(
+                        valid,
+                        np.square(
+                            (data_channel - model_channel)
+                            / self.noise_stddev
+                        ),
+                        0.0,
+                    )
+
+                lnlike += -0.5 * np.sum(
+                    squared_residual,
+                    dtype=np.float64,
+                )
+
+        else:
+            #Spatially correlated pixels, one FFT per channel. Non-finite pixels cannot be
+            # excluded here, hence the check in run_mcmc.
+            fast_log_likelihood = get_fast_log_likelihood()
+            for channel in range(self.mc_nchan):
+                lnlike += fast_log_likelihood(
+                    np.asarray(self.mc_data[channel], dtype=np.float64),
+                    np.asarray(model_cube[channel], dtype=np.float64),
+                    self.noise_psd_inv,
+                )
 
         return lnlike if np.isfinite(lnlike) else -np.inf
     
@@ -1388,6 +1403,7 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                  write_log_pars=True,
                  tag='',
                  mpi=False,
+                 *, noise_psd_inv=None,
                  **kwargs_model): 
         """
         Optimise the discminer model parameters using an MCMC sampler.
@@ -1410,7 +1426,22 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         
         frac_stats : float
             Fraction of MCMC steps at the end of the parameter chains considered for the computation of best-fit parameters (Defaults to 0.2, i.e. 20).
-       
+
+        noise_stddev : float or array_like, optional
+            Standard deviation of the noise, assumed independent from pixel to pixel. Scalar, or an
+            array broadcastable against a single channel map. Ignored if *noise_psd_inv* is given.
+
+        noise_psd_inv : array_like with shape (nx, ny), optional
+            Inverse noise power spectral density, from `~discminer.noise.estimate_inv_psd`. If
+            given, the likelihood accounts for the correlation the beam introduces between pixels
+            rather than treating them as independent, and *noise_stddev* must be left at its
+            default since the variance scale is carried by the PSD. Requires fully finite data.
+            Weights must be real, finite and non-negative, with at least one positive value.
+            Zero weights exclude individual Fourier modes. This argument is keyword-only.
+
+            Both likelihoods omit the additive normalisation constant, so log-probabilities are
+            not comparable between them; do not resume an existing emcee backend after switching.
+
         """        
         if data is None and vchannels is None:
             self.mc_data = self.datacube.data
@@ -1424,6 +1455,18 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
             
         self.mc_nchan = len(self.mc_vchannels)
         self.noise_stddev = noise_stddev
+        self.noise_psd_inv = None
+
+        if noise_psd_inv is not None:
+            if not (np.isscalar(noise_stddev) and noise_stddev == 1.0):
+                raise InputError((noise_psd_inv, noise_stddev),
+                                 'Specify either noise_psd_inv or noise_stddev, not both; the '
+                                 'correlated-noise likelihood takes its variance scale from the '
+                                 'PSD.')
+            noise_psd_inv = validate_inv_psd(noise_psd_inv, np.shape(self.mc_data)[1:])
+            validate_finite(self.mc_data, name='data cube being fitted')
+            self.noise_psd_inv = noise_psd_inv
+
         if use_zeus: import zeus as sampler_id
         else: import emcee as sampler_id
             
@@ -1455,6 +1498,10 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                               )
 
         _break_line()
+        if self.noise_psd_inv is None:
+            print ('Noise model: uncorrelated (independent pixels)')
+        else:
+            print ('Noise model: spatially correlated, from the inverse PSD provided')
         print ('Initialising MCMC routines with the following (%d) parameters:\n'%self.mc_nparams)
         if found_termtables:
             bound_left, bound_right = np.array(self.mc_boundaries_list).T

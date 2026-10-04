@@ -88,6 +88,7 @@ pip install -U discminer
 - [bettermoments](https://bettermoments.readthedocs.io/en/latest/)
 - [schwimmbad](https://pypi.org/project/schwimmbad)
 - [ipython](https://ipython.readthedocs.io/en/stable)
+- [beam-boozle](https://github.com/tomhilder/beam-boozle)
 
 
 ## How to use
