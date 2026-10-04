@@ -17,6 +17,7 @@ from discminer.plottools import (make_up_ax,
                                  make_round_map,
                                  use_discminer_style)
 
+import os
 import sys
 import random
 import numpy as np
@@ -163,9 +164,12 @@ for i in range(nmasks):
 #**********************************
 #LOAD EXTERNAL RADIAL vphi PROFILE
 #**********************************
-vphi_filename = 'radial_profile_velocity_data.dat'
+if args.keplerian in [0, 2]:
+    if args.keplerian == 0:
+        vphi_filename = 'radial_profile_velocity_data.dat'
+    else:
+        vphi_filename = 'radial_profile_velocity_model.dat'
 
-if not args.keplerian:
     try:
         vphi_file = np.loadtxt(vphi_filename, comments='#')
     except Exception:
@@ -218,6 +222,64 @@ def make_spectra(maski):
     intensities = datapdf[:, maski]
     return intensities.T
 
+def write_sampled_spectra(
+        output_dir,
+        annulus_index,
+        radial_bounds,
+        azimuth_bounds,
+        maski,
+        drawsi,
+        spectrai,
+        vcenti,
+):
+    """Write the exact deprojected spectra drawn as thin background lines."""
+    drawsi = np.asarray(drawsi, dtype=int)
+    pixel_indices = np.argwhere(maski)[drawsi]
+    nchan = len(datacube.vchannels)
+
+    velocity = datacube.vchannels[None, :] - vcenti[drawsi, None]
+    intensity = 1e3 * spectrai[drawsi]
+
+    output = np.column_stack([
+        np.repeat(np.arange(len(drawsi)), nchan),
+        np.repeat(drawsi, nchan),
+        np.repeat(pixel_indices[:, 0], nchan),
+        np.repeat(pixel_indices[:, 1], nchan),
+        np.repeat(Rgrid[maski][drawsi], nchan),
+        np.repeat(phigrid[maski][drawsi], nchan),
+        velocity.ravel(),
+        intensity.ravel(),
+    ])
+
+    rmin, rmax = radial_bounds
+    filename = os.path.join(
+        output_dir,
+        'annulus_%03d_R%.1f-%.1fau.txt' % (annulus_index, rmin, rmax),
+    )
+    if len(azimuth_bounds) == 2:
+        wedge = '%.8g %.8g' % tuple(azimuth_bounds)
+    else:
+        wedge = 'full'
+
+    header = '\n'.join([
+        'disc=%s; molecule=%s; keplerian=%d' % (
+            meta['disc'], meta['mol'], args.keplerian,
+        ),
+        'annulus_index=%d; radial_bounds_au=%.8g %.8g; azimuth_bounds_deg=%s' % (
+            annulus_index, rmin, rmax, wedge,
+        ),
+        'n_spectra=%d; n_channels=%d' % (len(drawsi), nchan),
+        'columns: spectrum_id mask_spectrum_index pixel_y pixel_x radius_au '
+        'azimuth_deg velocity_km_s intensity_mJy_beam',
+    ])
+    np.savetxt(
+        filename,
+        output,
+        header=header,
+        fmt=['%d', '%d', '%d', '%d', '%.8g', '%.8g', '%.8g', '%.8g'],
+    )
+    return filename
+
 #**************
 #MAKE PLT AXES
 #**************
@@ -254,6 +316,11 @@ for ax in axs_all[nmasks:]:
 stacked_profiles = []
 spectra, draws = [], []
 zup, vphi, vcent = [], [], []
+spectra_output_dir = 'stacked_spectra_keplerian%d' % args.keplerian
+written_spectra = []
+
+if args.writespectra:
+    os.makedirs(spectra_output_dir, exist_ok=True)
 
 for i in range(nmasks):
 
@@ -272,7 +339,7 @@ for i in range(nmasks):
     Rmask_au = Rgrid[masks[i]]
     zupi = model.z_upper_func({'R': Rmask_au*au_to_m}, **params['height_upper'])
 
-    if args.keplerian:
+    if args.keplerian == 1:
         vphii = model.velocity_func({'R': Rmask_au*au_to_m, 'z': zupi}, **params['velocity'])
     else:
         vphii = vel_sign * vphi_interp(Rmask_au)
@@ -283,6 +350,18 @@ for i in range(nmasks):
     vphi.append(vphii)
     vcent.append(vcenti)
     peaki = np.nanmax(spectrai[drawsi])
+
+    if args.writespectra:
+        written_spectra.append(write_sampled_spectra(
+            spectra_output_dir,
+            i,
+            masktuples_R[i],
+            masktuples_phi[i],
+            masks[i],
+            drawsi,
+            spectrai,
+            vcenti,
+        ))
 
     for j in drawsi:
         spec = 1e3 * spectrai[j]
@@ -373,6 +452,11 @@ np.savetxt(
     header=header,
     fmt="%.3f"
 )
+
+if written_spectra:
+    print('Wrote %d sampled-spectrum files to %s' % (
+        len(written_spectra), spectra_output_dir,
+    ))
 
 #***************
 #MAKE ROUND MAP
