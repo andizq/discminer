@@ -82,7 +82,7 @@ ax3.plot(R_profile, linewidth_lower, **kwargs_plot)
 
 #PLOT DECORATIONS
 xlims = ax0.get_xlim()
-make_up_ax(ax0, xlims=xlims, ylims=(0.0, 1.1*np.nanmax(z_upper)), labelbottom=True, labeltop=False, labelsize=12)
+make_up_ax(ax0, xlims=xlims, ylims=(0.0, 1.1*np.nanmax(np.append(z_upper, z_lower))), labelbottom=True, labeltop=False, labelsize=12)
 make_up_ax(ax1, xlims=xlims, labelbottom=False, labeltop=False, labelsize=12)
 make_up_ax(ax2, xlims=xlims, labelbottom=False, labeltop=False, labelleft=False, labelright=True, labelsize=12)
 make_up_ax(ax3, xlims=xlims, ylims=(0.1, 1.3), labelbottom=True, labeltop=False, labelleft=False, labelright=True, labelsize=12)

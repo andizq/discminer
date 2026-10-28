@@ -445,12 +445,16 @@ def _mining_parcube(parserobj, prog='parcube', description='Show cube reconstruc
     add_parser_args(parser, kernel=True, kind=True, surface='both')
     return parser
 
-def _mining_parfile(parserobj, prog='parfile', description='Create a JSON parameter file from a log_pars JSON or legacy text file and prepare_data.py'):
+def _mining_parfile(parserobj, prog='parfile', description='Create a JSON parameter file from a fit log and prepare_data.py, or model folders sampled from an emcee backend'):
     parser = _check_and_return_parser(parserobj, prog=prog, description=description)
     parser.add_argument('-dir_log', '--dir_log', default='./', type=str, help="Directory where the input log_pars file is located. DEFAULTS to './'")
     parser.add_argument('-dir_data', '--dir_data', default='./', type=str, help="Directory where the input datacube.fits is located. DEFAULTS to './'")
-    parser.add_argument('-dir_model', '--dir_model', default='./', type=str, help="Directory where model files will be stored. DEFAULTS to './'")    
+    parser.add_argument('-dir_model', '--dir_model', default='./', type=str, help="Directory where model files will be stored. DEFAULTS to './', or 'model_samples' in backend mode.")
     parser.add_argument('-f', '--log_file', default='', type=str, help="Input log_pars JSON or legacy text file. If omitted, select a default log in --dir_log, otherwise the log with the most steps, preferring JSON when step counts match.")
+    parser.add_argument('--backend', default=None, help="Optional emcee HDF5 backend. Create one model folder per selected draw; --log_file supplies the complete parameter template.")
+    parser.add_argument('--nsamples', default=100, type=int, help="Number of backend draws selected without replacement. DEFAULTS to 100.")
+    parser.add_argument('--nfrac', default=0.1, type=float, help="Final fraction of completed backend steps to sample, in (0, 1]. DEFAULTS to 0.1.")
+    parser.add_argument('--seed', default=12345, type=int, help="Random seed for backend selection. DEFAULTS to 12345.")
     parser.add_argument('-p', '--prepare_data', default='prepare_data.py', type=str, help="Script employed to clip and downsample the cube of interest. DEFAULTS to prepare_data.py.")
     parser.add_argument('-j', '--json_file', default='parfile.json', type=str, help="Name of output JSON file. DEFAULTS to parfile.json.")
     parser.add_argument('-fd', '--file_data', default='', type=str, help="If empty, try to infer the input datacube.fits from prepare_data.py. DEFAULTS to empty.")

@@ -1679,6 +1679,17 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
                 'npix': self.datacube.nx,
                 'nchan': self.datacube.nchan,
                 'image_center': self.datacube.get_image_center(),
+                'parameter_order': [
+                    '%s.%s' % (kind, name)
+                    for kind, name in zip(self.mc_kind, self.mc_header)
+                ],
+                'shared_parameters': {
+                    '%s.%s' % targets[0]: [
+                        '%s.%s' % target for target in targets[1:]
+                    ]
+                    for targets in self.mc_share_map.values()
+                    if len(targets) > 1
+                },
             }
             dicts_list = [metadata, p0pars, params, errneg, errpos]
             keys_list = ['metadata', 'p0', 'best_fit', 'errneg', 'errpos']

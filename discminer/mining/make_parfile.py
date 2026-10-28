@@ -5,6 +5,7 @@ import os
 import json
 import re
 import warnings
+import copy
 import numpy as np
 from pathlib import Path
 from urllib.parse import quote
@@ -639,8 +640,8 @@ def shift_orientation_to_data_image(pars_dict, tags_dict, log_metadata):
     }
 
 
-def write_image_center_json(image_center_dict):
-    output_file = Path(args.json_file).resolve().parent / 'image_center.json'
+def write_image_center_json(image_center_dict, filename=None):
+    output_file = Path(filename or args.json_file).resolve().parent / 'image_center.json'
     with open(output_file, 'w', encoding='utf-8') as json_file:
         json.dump(
             image_center_dict,
@@ -673,16 +674,18 @@ def download_exoalma_cube(file_data):
 #*************
 #MAKE PAR FILE
 #*************    
-def make_json(dicts_list=[], keys_list=[], filename=args.json_file):
+def make_json(dicts_list, keys_list, filename=None):
+    filename = Path(filename or args.json_file)
     master_dict = {key: dicts_list[i] for i,key in enumerate(keys_list)}
 
     def make():
+        filename.parent.mkdir(parents=True, exist_ok=True)
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(master_dict, f, ensure_ascii=False, indent=4)
         return True
 
     if args.overwrite:
-        if args.json_file in os.listdir():
+        if filename.exists():
             message = 'Overwriting JSON parfile...'
             #warnings.warn(message)
             print ('*'*10 + message)
@@ -691,28 +694,28 @@ def make_json(dicts_list=[], keys_list=[], filename=args.json_file):
                 warnings.warn(message)                
 
             if not args.reset:
-                with open(args.json_file) as json_file:
+                with open(filename) as json_file:
                     pars = json.load(json_file)
-                message = "Forwarding 'custom' dictionary to the new %s..."%args.json_file
+                message = "Forwarding 'custom' dictionary to the new %s..." % filename
                 print ('*'*10 + message)
                     
                 master_dict['custom'].update(pars['custom'])
         return make()
         
     else:
-        if args.json_file in os.listdir():
+        if filename.exists():
             message = '\n********JSON parfile exists and overwrite mode is off, therefore NO output was produced********'
             warnings.warn(message)
             return False
         else:
             return make()
 
-def make_all():
-    tags_dict = get_tags_dict(log_file)
-    if args.download_cube:
-        download_exoalma_cube(tags_dict['file_data'])
-
-    pars_dict, units_dict, log_metadata = get_base_pars(log_file, tags_dict)
+def build_parfile(tags_dict, pars_dict, units_dict, log_metadata, custom=None):
+    """Build one parfile, transforming this draw from the fit to the analysis grid."""
+    tags_dict = copy.deepcopy(tags_dict)
+    pars_dict = copy.deepcopy(pars_dict)
+    units_dict = copy.deepcopy(units_dict)
+    custom = copy.deepcopy(custom_dict if custom is None else custom)
     image_center_dict = shift_orientation_to_data_image(
         pars_dict,
         tags_dict,
@@ -743,15 +746,133 @@ def make_all():
             units_dict['height_lower'].update({'z0': "au"})
             
     try:
-        custom_dict.update(gaps=gaps_dict[tags_dict['disc']], rings=rings_dict[tags_dict['disc']], kinks=kinks_dict[tags_dict['disc']])
+        defaults = dict(gaps=gaps_dict[tags_dict['disc']], rings=rings_dict[tags_dict['disc']], kinks=kinks_dict[tags_dict['disc']])
     except KeyError:
-        custom_dict.update(gaps=[], rings=[0], kinks=[])
-            
-    parfile_written = make_json(
-        dicts_list=[custom_dict, tags_dict, pars_dict, units_dict],
-        keys_list=['custom', 'metadata', 'params', 'units'],
+        defaults = dict(gaps=[], rings=[0], kinks=[])
+    for key, value in defaults.items():
+        custom.setdefault(key, value)
+
+    return dict(custom=custom, metadata=tags_dict, params=pars_dict, units=units_dict), image_center_dict
+
+
+def make_samples(tags_dict, pars_dict, units_dict, log_metadata):
+    from discminer.mining.parfile_samples import (
+        apply_draw, load_parameter_mapping, read_backend_samples,
     )
-    if parfile_written and write_image_center:
-        write_image_center_json(image_center_dict)
+
+    if Path(args.json_file).name != args.json_file or args.json_file in (
+        'samples_manifest.json', 'image_center.json', 'customcart.py',
+    ):
+        raise ValueError('--json_file must be a filename inside each model folder.')
+    values, records, provenance = read_backend_samples(
+        args.backend, args.nsamples, args.nfrac, args.seed,
+    )
+    log_parameters = None
+    if ('parameter_order' not in log_metadata
+            and Path(log_file).suffix.lower() == '.json'):
+        with open(log_file, encoding='utf-8') as stream:
+            log_parameters = json.load(stream)
+    mapping = load_parameter_mapping(
+        log_metadata, pars_dict,
+        log_parameters=log_parameters, ndim=values.shape[1],
+    )
+    if values.shape[1] != len(mapping['parameter_order']):
+        raise ValueError('Backend dimensionality does not match parameter_order.')
+    if (tags_dict['nsteps'] != provenance['completed_steps']
+            or tags_dict['nwalkers'] != provenance['nwalkers']):
+        raise ValueError(
+            'The template log step/walker counts do not match the backend. '
+            'Select the matching fit log explicitly with --log_file.'
+        )
+
+    output_root = Path(
+        'model_samples' if args.dir_model == './' else args.dir_model
+    ).resolve()
+    outputs = [output_root / ('model%05d' % i) / args.json_file
+               for i in range(1, args.nsamples + 1)]
+    manifest_path = output_root / 'samples_manifest.json'
+    # Check the whole batch before writing any files or replacing its manifest.
+    for path in outputs:
+        if path.parent.exists() and not path.parent.is_dir():
+            raise NotADirectoryError(str(path.parent))
+    if not args.overwrite:
+        existing = [path for path in outputs + [manifest_path] if path.exists()]
+        if existing:
+            raise FileExistsError('Overwrite is off; output exists: %s' % existing[0])
+
+    custom = copy.deepcopy(custom_dict)
+    if not args.reset and Path(args.json_file).is_file():
+        with open(args.json_file) as stream:
+            custom.update(json.load(stream).get('custom', {}))
+
+    # Complete all transformations before creating output directories.
+    prepared = []
+    data_directory = Path(tags_dict['dir_data']).resolve()
+    data_file = Path(tags_dict['file_data']).resolve()
+    prepare_script = Path(tags_dict['prepare_script']).resolve()
+    customcart = prepare_script.parent / 'customcart.py'
+    for vector, record, output in zip(values, records, outputs):
+        parameters = copy.deepcopy(pars_dict)
+        apply_draw(parameters, vector, mapping)
+        parfile, image_center = build_parfile(
+            tags_dict, parameters, units_dict, log_metadata, custom=custom,
+        )
+        meta = parfile['metadata']
+        meta.update({
+            'dir_data': os.path.relpath(data_directory, output.parent),
+            'file_data': os.path.relpath(data_file, data_directory),
+            'prepare_script': os.path.relpath(prepare_script, output.parent),
+            'log_file': os.path.relpath(Path(log_file).resolve(), output.parent),
+            'dir_model': '.',
+            'backend_sample': dict(provenance, **mapping, **record),
+        })
+        if image_center is not None:
+            image_center['metadata']['file_data_pro'] = os.path.join(
+                meta['dir_data'], meta['file_data'],
+            )
+            image_center['metadata']['log_file'] = meta['log_file']
+        prepared.append((parfile, image_center))
+
+    manifest = dict(provenance, **mapping)
+    manifest.update({
+        'log_file': str(Path(log_file).resolve()),
+        'prepare_script': str(prepare_script),
+        'file_data': str(data_file),
+        'notes': 'Distinct chain indices can repeat states; tail selection does not establish convergence or independence.',
+        'models': [],
+    })
+    for output, record, (parfile, image_center) in zip(outputs, records, prepared):
+        make_json(list(parfile.values()), list(parfile), filename=output)
+        if args.image_center and image_center is not None:
+            write_image_center_json(image_center, filename=output)
+        if customcart.is_file():
+            link = output.parent / 'customcart.py'
+            if not link.exists() and not link.is_symlink():
+                link.symlink_to(os.path.relpath(customcart, output.parent))
+        manifest['models'].append(dict(
+            record, model=output.parent.name,
+            parfile=str(output.relative_to(output_root)),
+        ))
+    with open(manifest_path, 'w', encoding='utf-8') as stream:
+        json.dump(manifest, stream, indent=4, allow_nan=False)
+    print('Wrote %d sampled parfiles and %s' % (len(outputs), manifest_path))
+
+
+def make_all():
+    tags_dict = get_tags_dict(log_file)
+    if args.download_cube:
+        download_exoalma_cube(tags_dict['file_data'])
+    pars_dict, units_dict, log_metadata = get_base_pars(log_file, tags_dict)
+    if args.backend:
+        make_samples(tags_dict, pars_dict, units_dict, log_metadata)
+        return
+    parfile, image_center = build_parfile(
+        tags_dict, pars_dict, units_dict, log_metadata,
+    )
+    parfile_written = make_json(
+        dicts_list=list(parfile.values()), keys_list=list(parfile),
+    )
+    if parfile_written and args.image_center and image_center is not None:
+        write_image_center_json(image_center)
 
 make_all()
