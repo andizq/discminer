@@ -195,6 +195,47 @@ def add_pca_parser(subparsers):
     components.add_argument("--dpi", type=int, default=200)
     components.add_argument("--show", action="store_true")
 
+    variance = commands.add_parser(
+        "plot-variance",
+        help="Plot variance and cumulative variance, with optional tail baselines",
+    )
+    variance.add_argument("artifacts", nargs="+", help="One or more saved PCA artifacts")
+    variance.add_argument("--labels", nargs="+", help="One unique label per artifact")
+    variance.add_argument("-o", "--output", help="Output figure; default: pca_variance_<first input>.png")
+    variance.add_argument(
+        "-n", "--n-components", type=int, default=9,
+        help="Leading components displayed; -1 shows all. Fits and normalization always use the full spectrum",
+    )
+    variance.add_argument("--include-pc0-cumulative", action="store_true",
+                          help="Include PC 0 in the absolute cumulative panel")
+    variance.add_argument(
+        "--show-renormalized", action="store_true",
+        help="Add optional variance/cumulative panels normalized to power beyond PC 0",
+    )
+    variance.add_argument(
+        "--tail-fit", choices=("none", "constant", "log-linear"), default="none",
+        help="Optional empirical tail model; bounds are not detection significances",
+    )
+    variance.add_argument("--tail-start", type=int, default=10,
+                          help="First component of the primary fitted tail (default: 10)")
+    variance.add_argument("--tail-stop", type=int,
+                          help="Last fitted component, inclusive; default: final component of each artifact")
+    variance.add_argument(
+        "--tail-starts", nargs="+",
+        help="Additional starts for sensitivity checks, separated by spaces or commas; each range needs at least 3 components",
+    )
+    variance.add_argument("--tail-mad", type=float, default=3.0,
+                          help="Scaled-MAD envelope multiplier (default: 3); not a sigma significance")
+    variance.add_argument(
+        "--tail-diagnostics", action="store_true",
+        help="Write a separate full-spectrum, tail-residual and fit-sensitivity figure; requires --tail-fit",
+    )
+    variance.add_argument("--dpi", type=int, default=200)
+    variance.add_argument("--show", action="store_true")
+    variance.add_argument("--no-overwrite", dest="overwrite", action="store_false",
+                          help="Fail if any output figure or table already exists")
+    variance.set_defaults(overwrite=True)
+
     widths = commands.add_parser(
         "plot-widths", help="Plot spectral widths against spatial widths"
     )
@@ -700,6 +741,62 @@ def run_from_namespace(args):
             show=args.show,
         )
         print(f"Wrote component plot to {output}")
+        return 0
+
+    if command == "plot-variance":
+        from .plotting import plot_variance, plot_variance_tail_diagnostics
+        from .variance import variance_diagnostics, fit_above_tail_components
+
+        if args.n_components != -1 and args.n_components < 1:
+            raise ValueError("--n-components must be -1 or a positive integer")
+        if args.tail_diagnostics and args.tail_fit == "none":
+            raise ValueError("--tail-diagnostics requires --tail-fit constant or log-linear")
+        artifacts = [Path(value) for value in args.artifacts]
+        labels = args.labels or [_without_pca_prefix(path.stem) for path in artifacts]
+        results = [read_pca_artifact(path) for path in artifacts]
+        table, fits = variance_diagnostics(
+            results, labels=labels, tail_fit=args.tail_fit,
+            tail_start=args.tail_start, tail_starts=_component_values(args.tail_starts),
+            tail_stop=args.tail_stop, tail_mad=args.tail_mad,
+        )
+        table.meta["artifacts"] = [str(path.resolve()) for path in artifacts]
+        fits.meta["artifacts"] = table.meta["artifacts"]
+        output = Path(args.output) if args.output else _default_output(artifacts[0], "variance", ".png")
+        table_output = output.with_suffix(".ecsv")
+        fits_output = output.with_name(output.stem + "_tails.ecsv")
+        diagnostic_output = output.with_name(output.stem + "_tail_diagnostics" + output.suffix)
+        leading_output = output.with_name(output.stem + "_leading.ecsv")
+        leading_fits = fit_above_tail_components(table) if args.tail_diagnostics else None
+        outputs = [output, table_output] + ([fits_output] if len(fits) else [])
+        if args.tail_diagnostics:
+            outputs.extend([diagnostic_output, leading_output])
+        if len(set(path.resolve() for path in outputs)) != len(outputs):
+            raise ValueError("figure output must have an image extension distinct from .ecsv")
+        if any(path.resolve() in {artifact.resolve() for artifact in artifacts} for path in outputs):
+            raise ValueError("output paths must not replace an input PCA artifact")
+        if not args.overwrite:
+            for path in outputs:
+                if path.exists():
+                    raise FileExistsError(f"Output already exists: {path}")
+        plot_variance(table, output, n_components=args.n_components,
+                      include_pc0_cumulative=args.include_pc0_cumulative,
+                      show_renormalized=args.show_renormalized,
+                      dpi=args.dpi, show=args.show)
+        if args.tail_diagnostics:
+            plot_variance_tail_diagnostics(
+                table, fits, diagnostic_output, dpi=args.dpi,
+                show=args.show, leading_fits=leading_fits,
+            )
+            leading_fits.write(leading_output, format="ascii.ecsv", overwrite=args.overwrite)
+            print(f"Wrote tail diagnostic figure to {diagnostic_output}")
+            print(f"Wrote above-tail fit summary to {leading_output}")
+        table.write(table_output, format="ascii.ecsv", overwrite=args.overwrite)
+        print(f"Wrote variance plot to {output}")
+        print(f"Wrote component diagnostics to {table_output}")
+        if len(fits):
+            fits.write(fits_output, format="ascii.ecsv", overwrite=args.overwrite)
+            print(f"Wrote tail fits to {fits_output}")
+            print("Tail envelopes are empirical; flags are not calibrated noise detections.")
         return 0
 
     if command == "plot-widths":

@@ -53,6 +53,108 @@ limits, beam correction, and component selection.
 
 ## Component and ACF diagnostics
 
+### Standalone variance and tail diagnostics
+
+`plot-variance` reads saved PCA artifacts directly and produces one figure with
+variance and cumulative variance expressed as percentages of the full spectrum.
+`--show-renormalized` adds the optional "% beyond PC 0" panels.
+It does not compute eigenimage morphology, read a parfile, or rerun PCA.
+
+```bash
+discminer pca plot-variance pca_cube_data_TAG_stackedcube.fits
+discminer pca plot-variance pca_cube_data_TAG_stackedcube.fits \
+    --tail-fit log-linear --tail-start 10 --tail-starts 20,30 \
+    --n-components 12 --output variance_tail.png
+```
+
+The default display shows nine components; `--n-components -1` shows all.
+Normalization and fitting always use the complete stored eigenvalue spectrum,
+regardless of the display limit. The absolute cumulative panel excludes PC 0
+by default while retaining the full-spectrum denominator; use
+`--include-pc0-cumulative` to include it. The optional renormalized panels always
+exclude PC 0 and divide by the sum of all remaining eigenvalues. With `MEANSUB=False`,
+the artifact's reported variance includes uncentered power; this is recorded in
+the output table metadata. Figures have no footer text. A short in-panel legend
+identifies the primary baseline range and MAD envelope.
+
+Tail fitting is optional (`--tail-fit none`, the default). Two models are available:
+
+- `constant`: the median tail eigenvalue, bounded by plus/minus
+  `--tail-mad` times its scaled median absolute deviation (MAD).
+- `log-linear`: a robust Theil-Sen fit of `ln(eigenvalue)` against component
+  index, with multiplicative bounds from the scaled MAD of the log residuals.
+
+`--tail-start` selects the primary fit **shown as the baseline on the figure**
+(default: PC 10). `--tail-starts` adds starts for sensitivity checks; those fits
+are not averaged into the displayed baseline. Each fit runs through the last stored
+component unless `--tail-stop` sets an **inclusive** end. Every requested range
+must contain at least three components in every supplied artifact; log-linear
+fits require positive eigenvalues throughout the range. `--tail-mad` defaults to
+3, using the conventional MAD scale factor 1.4826022185.
+
+When fitting a tail, the figure adds observed/primary-upper-envelope ratios and
+the fraction of eligible tail choices exceeded by each component. Filled ratio
+points precede the primary fitted tail; open points belong to or follow that
+range and are not counted as independently tested excesses. A component is
+eligible for a fit's flag only when it precedes that fit's start. Counts such as
+`3/4` describe sensitivity to the chosen ranges, **not detection probability**.
+The table's `above_all_eligible_tails` flag additionally requires at least three
+eligible fits. Empirical MAD bounds are not confidence bands or sigma detection
+levels, and a sloping tail is not independently measured background noise.
+
+Use `--tail-diagnostics` with a tail fit to write a **separate optional figure**:
+
+```bash
+discminer pca plot-variance pca_cube_data_TAG_stackedcube.fits \
+    --tail-fit log-linear --tail-starts 20,30 --tail-diagnostics \
+    --output variance.png
+```
+
+This also writes `variance_tail_diagnostics.png` (or the same image format as
+`--output`). It shows the full stored eigenvalue spectrum with the primary
+baseline, MAD envelope and shaded fitted interval, alongside
+`ln(observed / baseline)` **inside that primary interval**. Early extrapolated
+PCs are excluded from the residual panel so they do not obscure tail curvature.
+Zero eigenvalues, whose logarithms are undefined, are omitted from that panel.
+`--n-components` affects only the main figure.
+
+The full-spectrum panel also overlays a descriptive log-linear fit to the
+**observed eigenvalues** of PCs before the primary tail that exceed its upper
+MAD envelope. PC 0 is excluded. This uses the same Theil-Sen slope and
+median-centered log intercept as the tail fit. The line is drawn only across
+the selected ranks, with a text box reporting `ln(lambda) = a + b*PC` and
+sample count `N`. Selection can contain gaps; the exact PC
+list and full-precision coefficients are saved in `<figure stem>_leading.ecsv`.
+The tail baseline is not subtracted from these eigenvalues. This is a
+selection-dependent descriptive slope, not a calibrated signal slope or a
+mechanism classification. Two selected PCs provide a two-point line
+without a scatter estimate; fewer than two produce an explanatory
+annotation instead of a fit. No formal coefficient uncertainties are assigned.
+
+With several tail starts, the optional figure adds fitted slope and scaled
+log-residual MAD versus tail start; constant fits instead show the median
+baseline and linear MAD. A ring identifies the primary fit. Additional fits
+remain sensitivity checks and do not alter the displayed primary baseline.
+The diagnostic reuses the calculated tail fits and does not recompute PCA.
+It supports multiple artifacts, uses the main figure's colors
+and markers, and has no footer text. `--no-overwrite` protects this figure too.
+
+Multiple artifacts can be compared without computing characterization tables:
+
+```bash
+discminer pca plot-variance pca_gi.fits pca_vsi.fits pca_mri.fits \
+    --labels GI VSI MRI --tail-fit log-linear --tail-starts 10,25,45 \
+    --output instability_variance.png
+```
+
+The default output is `pca_variance_<first input>.png`. A component table with
+the same stem and `.ecsv` extension is always written, containing all stored
+components, normalization, primary bounds, and eligible/excess counts. When
+fitting, `<figure stem>_tails.ecsv` records every fit's range, coefficients, MAD
+scale, and flagged components. The tables record artifact paths and settings.
+`--no-overwrite` protects all requested products. Component ranks in different
+PCA decompositions need not represent identical physical modes.
+
 The `plot-components` command pairs every selected eigenimage with its
 eigenvector on the artifact's physical velocity axis. PCA component signs are
 arbitrary, so the relative lobes of an eigenvector are meaningful but its
