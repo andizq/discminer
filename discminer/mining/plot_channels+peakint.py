@@ -105,7 +105,7 @@ plot_channels = np.append([0], plot_channels).astype(int) #dummy chan to make ro
 
 kw_channels = dict(channels={'indices': plot_channels}, ncols=nchans+1,
                    xlims = (-xlim, xlim), ylims = (-xlim, xlim), show_beam=False,
-                   observable = 'intensity_2',
+                   observable = 'intensity',
                    #contours_from=model,
                    #kwargs_contour = dict(colors='w', linewidths=1.0), 
                    unit_coordinates='au', unit_intensity=None, projection=None)

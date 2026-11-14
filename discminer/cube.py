@@ -6,6 +6,7 @@ from .plottools import (get_discminer_cmap,
 
 from .tools.fit_kernel import fit_gaussian, fit_twocomponent, fit_onecomponent
 from .tools.utils import FrontendUtils, InputError, _JSON
+from .tools.projected_maps import prepare_velocity_contours
 from .rail import Contours
 
 from astropy.convolution import Gaussian2DKernel
@@ -1212,7 +1213,7 @@ class Cube(_JSON):
         cid = fig.canvas.mpl_connect("button_press_event", onclick)
         return cid
 
-    def show(
+    def show_old(
             self,
             extent=None,
             chan_init=0,
@@ -1422,7 +1423,7 @@ class Cube(_JSON):
             else:
                 ci = 0
             kwargs_def.update({'chan_init': chan, 'cube_init': ci})                                
-            self._show_path( **kwargs_def)
+            self._show_path(_return_to=self.show_old, **kwargs_def)
 
         def go2trash(event):
             print("Cleaning interactive figure...")
@@ -1433,7 +1434,7 @@ class Cube(_JSON):
             else:
                 ci = 0
             kwargs_def.update({'chan_init': chan, 'cube_init': ci})                
-            self.show( **kwargs_def)
+            self.show_old( **kwargs_def)
 
         def go2surface(event):
             self._surface(ax[0], surface_from, **kwargs_surface)
@@ -1478,7 +1479,7 @@ class Cube(_JSON):
         
         plt.show(block=True)
 
-    def show_side_by_side(
+    def show_side_by_side_old(
             self,
             cube1,
             extent=None,
@@ -1650,7 +1651,7 @@ class Cube(_JSON):
             print("Cleaning interactive figure...")
             plt.close()
             chan = int(slider_chan.val)
-            self.show_side_by_side(
+            self.show_side_by_side_old(
                 cube1,
                 extent=extent,
                 chan_init=chan,
@@ -1703,6 +1704,93 @@ class Cube(_JSON):
             cmap_box.set_val(cmap)
             
         plt.show(block=True)
+
+    def show(
+            self, extent=None, chan_init=None, cube_init=0, compare_cubes=None,
+            cursor_grid=True, cmap="discminer.intensity", int_unit=None,
+            pos_unit="Offset [au]", vel_unit=r"km s$^{-1}$", show_beam=True,
+            surface_from=None, kwargs_surface=None, vmin=None, vmax=None,
+            block=True, channel_step=1, vel_fmt=".2f", cube_labels=None,
+            export_path=None, velocity2d=None, kwargs_isov=None, **kwargs
+    ):
+        """Open channel maps and selected spectra; return a retained viewer.
+
+        Scroll over a map or spectrum, or use Left/Right, to change channel.
+        Shift+Left/Right moves ten steps; F/L selects the first/last channel.
+        Up/Down selects the next/previous cube when comparing cubes.
+        Channel entry is zero-based; velocity entry picks the nearest channel
+        in ``vchannels`` (km/s). ``vel_fmt`` is a Python float format specifier.
+        Omit ``chan_init`` (or use None) to start at ``self.nchan // 2``.
+
+        Point/Box selects finite pixels; Clear retains zoom and viewing state.
+        Reset all clears selections/overlays and restores the opening settings.
+        Initial color limits use the 1st/99.9th percentiles of the initial
+        channel in cube 0, unless overridden by ``vmin`` or ``vmax``.
+        Min/Max, Auto (1st/99.9th percentiles) and Symmetric affect image
+        contrast independently of spectrum limits. Comparison cubes must share
+        spatial/velocity grids, distance and intensity units; unequal beams warn.
+
+        ``cmap`` and the Cmap field accept Matplotlib/CMasher names and
+        ``discminer.velocity``, ``discminer.intensity``, ``discminer.intensity2023`` or
+        ``discminer.residuals.intensity``; append ``_r`` to reverse a palette.
+
+        ``surface_from`` enables the Surf overlay button. ``velocity2d`` enables
+        the independent isov toggle: a dict with ``upper`` and/or ``lower`` 2D
+        projected velocity maps, in km/s including systemic velocity, on this
+        cube's spatial grid. Contours follow the channel velocity; upper is
+        solid and lower dashed, in black at linewidth 1.0 as in make_channel_maps.
+        ``kwargs_isov`` styles the contours (e.g.
+        colors, linewidths, alpha). Both overlays start hidden.
+
+        By default, cube labels show the differing parts of the filenames;
+        full names remain available on hover and in export metadata.
+        ``cube_labels`` overrides those labels for all cubes, including self.
+        ``export_path`` enables
+        the Export button (CSV plus JSON provenance). Use ``block=False`` for
+        script control via the returned viewer's ``set_channel``, ``select``,
+        ``clear``, ``reset``, ``set_clim`` and ``export`` methods. Extra keyword arguments
+        style spectra; ``stat_func`` defaults to a mean over finite pixels.
+        """
+        from .tools.channel_viewer import ChannelViewer
+
+        viewer = ChannelViewer(
+            self, compare_cubes=compare_cubes, extent=extent,
+            chan_init=chan_init, cube_init=cube_init, cursor_grid=cursor_grid,
+            cmap=cmap, int_unit=int_unit, pos_unit=pos_unit, vel_unit=vel_unit,
+            show_beam=show_beam, surface_from=surface_from,
+            kwargs_surface=kwargs_surface, vmin=vmin, vmax=vmax,
+            channel_step=channel_step, vel_fmt=vel_fmt, cube_labels=cube_labels,
+            export_path=export_path, velocity2d=velocity2d, kwargs_isov=kwargs_isov, **kwargs)
+        plt.show(block=block)
+        return viewer
+
+    def show_side_by_side(
+            self, cube1, extent=None, chan_init=None, cursor_grid=True,
+            cmap="discminer.intensity", int_unit=None, pos_unit="Offset [au]",
+            vel_unit=r"km s$^{-1}$", show_beam=True, surface_from=None,
+            kwargs_surface=None, vmin=None, vmax=None, block=True,
+            channel_step=1, vel_fmt=".2f", cube_labels=None, export_path=None,
+            velocity2d=None, kwargs_isov=None, **kwargs
+    ):
+        """Show two aligned cubes; see :meth:`show` for shared viewer controls.
+
+        Both maps use the same contrast. Selections in either map extract
+        spectra from both cubes at the same pixel coordinates.
+        The initial channel defaults to ``self.nchan // 2``.
+        ``velocity2d`` enables the same isovelocity contours on both maps.
+        """
+        from .tools.channel_viewer import ChannelViewer
+
+        viewer = ChannelViewer(
+            self, compare_cubes=[cube1], side_by_side=True, extent=extent,
+            chan_init=chan_init, cursor_grid=cursor_grid, cmap=cmap,
+            int_unit=int_unit, pos_unit=pos_unit, vel_unit=vel_unit,
+            show_beam=show_beam, surface_from=surface_from,
+            kwargs_surface=kwargs_surface, vmin=vmin, vmax=vmax,
+            channel_step=channel_step, vel_fmt=vel_fmt, cube_labels=cube_labels,
+            export_path=export_path, velocity2d=velocity2d, kwargs_isov=kwargs_isov, **kwargs)
+        plt.show(block=block)
+        return viewer
 
     # ************************
     # SHOW SPECTRUM ALONG PATH
@@ -1851,7 +1939,7 @@ class Cube(_JSON):
             cube_init=0,
             compare_cubes=[],
             cursor_grid=True,
-            cmap="gnuplot2_r",
+            cmap="discminer.intensity",
             int_unit=r"Intensity [mJy beam$^{-1}$]",
             pos_unit="au",
             vel_unit=r"km s$^{-1}$",
@@ -1860,6 +1948,7 @@ class Cube(_JSON):
             kwargs_surface={},
             vmin = None,
             vmax = None,
+            _return_to=None,
             **kwargs
     ):
 
@@ -2061,7 +2150,8 @@ class Cube(_JSON):
                 ci = int(slider_cubes.val)
             else:
                 ci = 0
-            self.show(
+            return_viewer = self.show if _return_to is None else _return_to
+            return_viewer(
                 extent=extent,
                 chan_init=chan,
                 cube_init=ci,
@@ -2087,6 +2177,7 @@ class Cube(_JSON):
             else:
                 ci = 0
             self._show_path(
+                _return_to=_return_to,
                 extent=extent,
                 chan_init=chan,
                 cube_init=ci,
@@ -2227,15 +2318,25 @@ class Cube(_JSON):
                           channels={'interval': None, 'indices': None}, ncols=5,
                           unit_intensity=None, unit_coordinates=None,
                           fmt_channels='%.2f', annotate_channels=True,
-                          observable='intensity', kind='attribute', cmap=None,
+                          observable='intensity2023', kind='attribute', cmap=None,
                           xlims=None, ylims=None, max_frac=0.8,
                           moving_center=False, center_from=None, zoom_factor=0.7,
                           fmt_cbar='%3d', mask_under=None,
                           contours_from=None, kwargs_contour={},
                           projection='wcs',
                           show_beam='all', kwargs_beam={},
-                          **kwargs_contourf):
-        
+                          velocity2d=None, **kwargs_contourf):
+        """Plot intensity channels, optionally with projected velocity contours.
+
+        ``velocity2d`` accepts upper/lower maps in km/s on this cube's spatial
+        grid, e.g. ``model.get_projected_map('velocity')``. Upper contours are
+        solid and lower dashed, at each plotted channel velocity. Style them
+        with ``kwargs_contour``. ``contours_from=model`` remains supported and
+        handles subpixels internally; a 2D or (ny, nx, nfields) array also remains
+        valid. Pass only one of ``velocity2d`` and ``contours_from``.
+        """
+        velocity_contours = prepare_velocity_contours(velocity2d, contours_from, self.data.shape[1:])
+
         try:
             vmin = kwargs_contourf['levels'][0]
             vmax = kwargs_contourf['levels'][-1]            
@@ -2374,26 +2475,10 @@ class Cube(_JSON):
 
                 im.append(axji.contourf(data_i, **kwargs_cf))
 
-                if contours_from is not None:
-                    try: #If Model instance provided
-                        vel2d, int2d, linew2d, lineb2d = contours_from.props
-                        
-                        if contours_from.subpixels > 0:                            
-                            dF = contours_from.sub_dA / contours_from.pix_dA
-                            vel2dup, vel2dlow = [], []
-                            for k in range(contours_from.subpixels_sq):
-                                vel2dup.append(vel2d[k]['upper'])
-                                vel2dlow.append(vel2d[k]['lower'])
-                            vel2d = {}
-                            vel2d['upper'] = np.sum(np.array(vel2dup), axis=0) * dF
-                            vel2d['lower'] = np.sum(np.array(vel2dlow), axis=0) * dF
-                            
-                        axji.contour(vel2d['upper'], levels=[plot_channels[ichan]], linestyles='-', **kwargs_cc)                        
-                        axji.contour(vel2d['lower'], levels=[plot_channels[ichan]], linestyles='--', **kwargs_cc)
-                    except AttributeError: #If input is not a Model instance, assume it's an array
-                        cca = np.moveaxis(np.atleast_3d(contours_from), -1, 0)
-                        for cci in cca:
-                            axji.contour(cci, levels=[plot_channels[ichan]], linestyles='-', **kwargs_cc)
+                for velocity_map, style in velocity_contours:
+                    contour_options = dict(linestyles=style)
+                    contour_options.update(kwargs_cc)
+                    axji.contour(velocity_map, levels=[plot_channels[ichan]], **contour_options)
             
                 if annotate_channels:
                     axji.text(0.02,0.98, fmt_channels%(plot_channels[ichan])+r'$^{\rm km/s}$', va='top', fontsize=SMALL_SIZE+2, transform=axji.transAxes)
@@ -2458,7 +2543,10 @@ class Cube(_JSON):
                             ticks=np.linspace(im_cbar.levels[0], im_cbar.levels[-1], 5))
 
         if kind=='attribute':
-            clabel = observable.split('_')[0].capitalize()+'%s'%unit_intensity
+            label_observable = observable.split('_')[0]
+            if label_observable == 'intensity2023':
+                label_observable = 'intensity'
+            clabel = label_observable.capitalize()+'%s'%unit_intensity
         elif kind=='residuals':
             clabel = kind.capitalize()+'%s'%unit_intensity
         cbar.set_label(clabel, fontsize=SMALL_SIZE+4, rotation=-90, labelpad=20) #+1
