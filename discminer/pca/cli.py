@@ -212,6 +212,15 @@ def add_pca_parser(subparsers):
         "--show-renormalized", action="store_true",
         help="Add optional variance/cumulative panels normalized to power beyond PC 0",
     )
+    power_display = variance.add_mutually_exclusive_group()
+    power_display.add_argument(
+        "--show-power", action="store_true",
+        help="Add unnormalized eigenvalue/cumulative-power panels in squared source intensity units",
+    )
+    power_display.add_argument(
+        "--power-only", action="store_true",
+        help="Show absolute eigenvalue/cumulative power instead of percentage panels",
+    )
     variance.add_argument(
         "--tail-fit", choices=("none", "constant", "log-linear"), default="none",
         help="Optional empirical tail model; bounds are not detection significances",
@@ -749,6 +758,8 @@ def run_from_namespace(args):
 
         if args.n_components != -1 and args.n_components < 1:
             raise ValueError("--n-components must be -1 or a positive integer")
+        if args.power_only and args.show_renormalized:
+            raise ValueError("--power-only cannot be combined with --show-renormalized")
         if args.tail_diagnostics and args.tail_fit == "none":
             raise ValueError("--tail-diagnostics requires --tail-fit constant or log-linear")
         artifacts = [Path(value) for value in args.artifacts]
@@ -781,6 +792,8 @@ def run_from_namespace(args):
         plot_variance(table, output, n_components=args.n_components,
                       include_pc0_cumulative=args.include_pc0_cumulative,
                       show_renormalized=args.show_renormalized,
+                      show_power=args.show_power,
+                      power_only=args.power_only,
                       dpi=args.dpi, show=args.show)
         if args.tail_diagnostics:
             plot_variance_tail_diagnostics(

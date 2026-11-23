@@ -151,7 +151,7 @@ def variance_diagnostics(
         "primary_tail_eligible", "primary_above_tail", "eligible_tail_count",
         "above_tail_count", "tail_support_fraction", "above_all_eligible_tails",
     ))
-    fit_table = Table(rows=fit_rows, names=(
+    fit_table = Table(rows=fit_rows or None, names=(
         "label", "tail_model", "tail_start", "tail_stop", "n_tail",
         "tail_median", "tail_mad_scale", "log_slope_per_pc", "log_intercept",
         "log_residual_mad_scale", "tail_first_to_last", "mad_multiplier", "above_components",

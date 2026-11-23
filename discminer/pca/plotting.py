@@ -16,7 +16,7 @@ from .artifact import PCAResult
 
 def plot_variance(
     table, output, n_components=9, include_pc0_cumulative=False,
-    dpi=200, show=False, show_renormalized=False,
+    dpi=200, show=False, show_renormalized=False, show_power=False, power_only=False,
 ):
     """Plot variance/cumulative variance with optional empirical tail bounds.
 
@@ -25,14 +25,34 @@ def plot_variance(
     """
     if n_components != -1 and n_components < 1:
         raise ValueError("n_components must be -1 or a positive integer")
+    if power_only and (show_power or show_renormalized):
+        raise ValueError("power_only cannot be combined with show_power or show_renormalized")
+    if show_power or power_only:
+        source_units = []
+        for unit in table.meta.get("source_intensity_units", ["unspecified"]):
+            try:
+                source_units.append(u.Unit(unit))
+            except (ValueError, TypeError):
+                source_units.append(str(unit))
+        if any(unit != source_units[0] for unit in source_units[1:]):
+            raise ValueError("Raw power comparison requires identical source intensity units; no unit conversion is applied")
+        power_unit = (
+            (source_units[0]**2).to_string("latex_inline")
+            if isinstance(source_units[0], u.UnitBase)
+            else "source intensity squared"
+        )
     use_discminer_style()
     has_tail = table.meta.get("tail_fit", "none") != "none"
-    rows = 1 + int(show_renormalized) + int(has_tail)
+    rows = 1 + int(show_renormalized) + int(show_power) + int(has_tail)
     fig, axes = plt.subplots(
         rows, 2, figsize=(13, 4 * rows), squeeze=False,
     )
     variance_axis = axes[0, 0]
     cumulative_axis = axes[1, 0] if show_renormalized else axes[0, 1]
+    if show_power:
+        power_axis, cumulative_power_axis = axes[1 + int(show_renormalized)]
+    elif power_only:
+        power_axis, cumulative_power_axis = variance_axis, cumulative_axis
     labels = list(dict.fromkeys(str(value) for value in table["label"]))
     palette = ["dodgerblue", "tomato", "mediumseagreen", "mediumpurple", "goldenrod"]
     markers = ["o", "s", "D", "^", "v"]
@@ -60,10 +80,19 @@ def plot_variance(
         color = "tomato" if len(labels) == 1 else palette[index % len(palette)]
         marker = markers[index % len(markers)]
         fit_color = "dodgerblue" if len(labels) == 1 else color
-        points(variance_axis, ranks, subset["variance_percent"], color, marker, label)
+        if not power_only:
+            points(variance_axis, ranks, subset["variance_percent"], color, marker, label)
         nonzero = ranks > 0
         cumulative_key = "cumulative_variance" if include_pc0_cumulative else "cumulative_variance_no_pc0"
-        points(cumulative_axis, ranks, 100*np.asarray(subset[cumulative_key]), color, marker)
+        if not power_only:
+            points(cumulative_axis, ranks, 100*np.asarray(subset[cumulative_key]), color, marker)
+        if show_power or power_only:
+            eigenvalues = np.asarray(full["eigenvalue"])
+            cumulative_power = np.cumsum(eigenvalues)
+            if not include_pc0_cumulative:
+                cumulative_power = np.r_[np.nan, np.cumsum(eigenvalues[1:])]
+            points(power_axis, ranks, subset["eigenvalue"], color, marker, label)
+            points(cumulative_power_axis, ranks, cumulative_power[:len(ranks)], color, marker)
         if show_renormalized:
             norm = np.asarray(subset["variance_fraction_no_pc0_renormalized"])
             points(axes[0, 1], ranks[nonzero], 100*norm[nonzero], color, marker)
@@ -82,7 +111,7 @@ def plot_variance(
                     continue
                 mask = np.ones(len(ranks), dtype=bool) if column == 0 else nonzero
                 x = ranks[mask]
-                scale = 100/denominator
+                scale = 1.0 if power_only else 100/denominator
                 lower = np.asarray(subset["tail_lower"])[mask]*scale
                 upper = np.asarray(subset["tail_upper"])[mask]*scale
                 baseline = np.asarray(subset["tail_baseline"])[mask]*scale
@@ -94,6 +123,12 @@ def plot_variance(
                     baseline_handle = handle
                 axes[0, column].plot(x, upper, ":", color=fit_color, lw=1.2, alpha=.8)
                 axes[0, column].fill_between(x, lower, upper, color=fit_color, alpha=.12, zorder=1)
+            if show_power:
+                lower = np.asarray(subset["tail_lower"]).copy()
+                lower[lower <= 0] = np.nan
+                power_axis.plot(ranks, subset["tail_baseline"], "--", color=fit_color, lw=1.8)
+                power_axis.plot(ranks, subset["tail_upper"], ":", color=fit_color, lw=1.2, alpha=.8)
+                power_axis.fill_between(ranks, lower, subset["tail_upper"], color=fit_color, alpha=.12)
             ratio = np.asarray(subset["observed_to_tail_upper"])
             eligible = np.asarray(subset["primary_tail_eligible"])
             visible_before_tail |= bool(np.any(eligible))
@@ -108,12 +143,19 @@ def plot_variance(
                     if total:
                         axes[-1, 1].annotate(f"{count}/{total}", (rank, support), xytext=(0, 7),
                                              textcoords="offset points", ha="center", fontsize=8)
-    variance_axis.set(yscale="log", ylabel="Variance [% of total]", title="Absolute variance spectrum")
-    cumulative_axis.set(ylabel="Cumulative variance [% of total]", title=(
-        "Cumulative variance including PC 0" if include_pc0_cumulative else "Cumulative variance beyond PC 0"))
+    if not power_only:
+        variance_axis.set(yscale="log", ylabel="Variance [% of total]", title="Full-spectrum variance fractions")
+        cumulative_axis.set(ylabel="Cumulative variance [% of total]", title=(
+            "Cumulative variance including PC 0" if include_pc0_cumulative else "Cumulative variance beyond PC 0"))
     if show_renormalized:
         axes[0, 1].set(yscale="log", ylabel="Variance [% beyond PC 0]", title="Renormalized variance beyond PC 0")
         axes[1, 1].set(ylabel="Cumulative variance [% beyond PC 0]", title="Renormalized cumulative variance beyond PC 0")
+    if show_power or power_only:
+        power_axis.set(yscale="log", ylabel=f"Power [{power_unit}]", title="Unnormalized PCA power")
+        cumulative_power_axis.set(ylabel=f"Cumulative power [{power_unit}]", title=(
+            "Cumulative power including PC 0" if include_pc0_cumulative else "Cumulative power beyond PC 0"))
+        if show_power:
+            power_axis.legend(frameon=False, fontsize=9, loc="upper right")
     if has_tail:
         axes[-1, 0].axhline(1, color="0.35", ls="--", lw=1.3)
         axes[-1, 0].set(yscale="log", ylabel="Observed / upper bound",

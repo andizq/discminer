@@ -58,6 +58,10 @@ limits, beam correction, and component selection.
 `plot-variance` reads saved PCA artifacts directly and produces one figure with
 variance and cumulative variance expressed as percentages of the full spectrum.
 `--show-renormalized` adds the optional "% beyond PC 0" panels.
+`--show-power` adds unnormalized per-component and cumulative-power panels:
+the stored eigenvalues in squared source intensity units (for example, K²).
+Use `--power-only` to show absolute power **instead of** the percentage panels.
+It cannot be combined with `--show-power` or `--show-renormalized`.
 It does not compute eigenimage morphology, read a parfile, or rerun PCA.
 
 ```bash
@@ -65,17 +69,32 @@ discminer pca plot-variance pca_cube_data_TAG_stackedcube.fits
 discminer pca plot-variance pca_cube_data_TAG_stackedcube.fits \
     --tail-fit log-linear --tail-start 10 --tail-starts 20,30 \
     --n-components 12 --output variance_tail.png
+discminer pca plot-variance pca_20ms.fits pca_100ms.fits \
+    --labels "20 m/s" "100 m/s" --show-power --include-pc0-cumulative \
+    --n-components 20 --output variance_and_power.png
+discminer pca plot-variance pca_20ms.fits pca_100ms.fits \
+    --labels "20 m/s" "100 m/s" --power-only --include-pc0-cumulative \
+    --tail-fit log-linear --tail-start 50 -n 20 --output absolute_power.png
 ```
 
 The default display shows nine components; `--n-components -1` shows all.
 Normalization and fitting always use the complete stored eigenvalue spectrum,
-regardless of the display limit. The absolute cumulative panel excludes PC 0
+regardless of the display limit. The full-spectrum cumulative panel excludes PC 0
 by default while retaining the full-spectrum denominator; use
 `--include-pc0-cumulative` to include it. The optional renormalized panels always
 exclude PC 0 and divide by the sum of all remaining eigenvalues. With `MEANSUB=False`,
 the artifact's reported variance includes uncentered power; this is recorded in
 the output table metadata. Figures have no footer text. A short in-panel legend
 identifies the primary baseline range and MAD envelope.
+
+The raw cumulative-power panel also follows `--include-pc0-cumulative`;
+include PC 0 and display all components (`-n -1`) to see total stored power.
+Tail baselines and envelopes are shown in native units in the raw spectrum.
+Power comparisons require the same source intensity units; no conversion is
+performed. Use matched spatial/spectral sampling and preprocessing as well.
+Raw power depends on brightness and line shape, and with `MEANSUB=False`
+includes the common profile. It is not a direct measure of turbulent kinetic
+energy. The ECSV diagnostics already contain the full raw `eigenvalue` column.
 
 Tail fitting is optional (`--tail-fit none`, the default). Two models are available:
 
