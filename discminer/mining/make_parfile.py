@@ -807,7 +807,6 @@ def make_samples(tags_dict, pars_dict, units_dict, log_metadata):
 
     # Complete all transformations before creating output directories.
     prepared = []
-    data_directory = Path(tags_dict['dir_data']).resolve()
     data_file = Path(tags_dict['file_data']).resolve()
     prepare_script = Path(tags_dict['prepare_script']).resolve()
     customcart = prepare_script.parent / 'customcart.py'
@@ -819,8 +818,9 @@ def make_samples(tags_dict, pars_dict, units_dict, log_metadata):
         )
         meta = parfile['metadata']
         meta.update({
-            'dir_data': os.path.relpath(data_directory, output.parent),
-            'file_data': os.path.relpath(data_file, data_directory),
+            # Moment maps belong to this draw; only the input cube is shared.
+            'dir_data': '.',
+            'file_data': os.path.relpath(data_file, output.parent),
             'prepare_script': os.path.relpath(prepare_script, output.parent),
             'log_file': os.path.relpath(Path(log_file).resolve(), output.parent),
             'dir_model': '.',

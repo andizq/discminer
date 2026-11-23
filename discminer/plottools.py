@@ -28,18 +28,18 @@ BIGGER_SIZE = 22
 _residuals_colors = {
     'velocity': ["#"+tmp for tmp in ["000b14","004f8f","1f9aff","fff7db","ff5a47","cc0033","140200"]],
     'linewidth': ["#"+tmp for tmp in ["000b14","036407","81ae71","fff7db","ff5a47","cc0033","140200"]],
-    'intensity': ["#"+tmp for tmp in ["000b14","382406","6a593c","fff7db","ff5a47","cc0033","140200"]],
+    'intensity2023': ["#"+tmp for tmp in ["000b14","382406","6a593c","fff7db","ff5a47","cc0033","140200"]],
     'peakintensity': ["#"+tmp for tmp in ["000b14","382406","6a593c","fff7db","ff5a47","cc0033","140200"]],    
-    'intensity_2': ["#"+tmp for tmp in ["000b14","382406","6a593c","fff7db","ff5a47","cc0033","140200"]],
+    'intensity': ["#"+tmp for tmp in ["000b14","382406","6a593c","fff7db","ff5a47","cc0033","140200"]],
     'delta': ["#"+tmp for tmp in ["8FA1C7", "ABC3F6", "7CF4FF","fff7db","ff5a47","cc0033","140200"]]
 }
 
 _residuals_cranges = {
     'velocity': None,
     'linewidth': None,
-    'intensity': None,
+    'intensity2023': None,
     'peakintensity': None,
-    'intensity_2': None,
+    'intensity': None,
     'delta': None
 }
 
@@ -47,11 +47,11 @@ _attribute_colors = {
     'velocity': ["#"+tmp for tmp in ["000b14","004f8f","1f9aff","fff7db","ff5a47","cc0033","140200"]],
     #'linewidth': ["#"+tmp for tmp in ["001219","005f73","0a9396","94d2bd","e9d8a6","ee9b00","ca6702","bb3e03","ae2012","9b2226"]],
     'linewidth': ['#'+tmp for tmp in ["ffffff","b89e97","000000", "50C878", "FFF7CA"]],
-    'intensity': "terrain_r",
+    'intensity2023': "terrain_r",
     'peakintensity': ['#'+tmp for tmp in ["ffffff","b89e97","000000", "7cf4ff", "c10ff7"]],
-    'intensity_2': ['#'+tmp for tmp in ["ffffff","b89e97","000000", "7cf4ff", "FFF7CA"]]
-    #'intensity_2': ['#'+tmp for tmp in ["ffffff","b89e97","000000", "7cf4ff", "f6f6f6"]]
-    #'intensity_2': ['#'+tmp for tmp in ["ffffff","b89e97","000000", "7cf4ff", "c10ff7"]]
+    'intensity': ['#'+tmp for tmp in ["ffffff","b89e97","000000", "7cf4ff", "FFF7CA"]]
+    #'intensity': ['#'+tmp for tmp in ["ffffff","b89e97","000000", "7cf4ff", "f6f6f6"]]
+    #'intensity': ['#'+tmp for tmp in ["ffffff","b89e97","000000", "7cf4ff", "c10ff7"]]
 }
 
 _attribute_cranges = {
@@ -59,9 +59,9 @@ _attribute_cranges = {
     #'linewidth': None,
     #'linewidth': "matplotlib",
     'linewidth': [0, 0.1, 0.25, 0.6, 1.0],
-    'intensity': "matplotlib",
+    'intensity2023': "matplotlib",
     'peakintensity': [0, 0.1, 0.25, 0.6, 1.0],
-    'intensity_2': [0, 0.1, 0.25, 0.6, 1.0],
+    'intensity': [0, 0.1, 0.25, 0.6, 1.0],
     'delta': [0, 0.1, 0.25, 0.6, 1.0]    
 }
 
@@ -191,6 +191,11 @@ def get_continuous_cmap(hex_list, float_list=None):
     return cmap_new
 
 def get_discminer_cmap(observable, kind='attribute'):
+    """Return a palette; ``intensity`` is the white/brown/black/cyan/yellow map.
+
+    ``intensity2023`` retains the terrain-based intensity palette. Use
+    ``kind='residuals'`` for residual palettes, or append ``_r`` to reverse.
+    """
     reverse = observable.endswith('_r')
     if reverse:
         observable = observable[:-2]
@@ -212,6 +217,37 @@ def get_discminer_cmap(observable, kind='attribute'):
         cmap = get_continuous_cmap(colors, float_list=cranges)
         
     return cmap.reversed() if reverse else cmap
+
+
+def register_discminer_cmaps():
+    """Register DiscMiner palettes as Matplotlib ``discminer.*`` colormaps.
+
+    Attribute palettes use names such as ``discminer.velocity`` and
+    ``discminer.intensity`` (the current palette) and ``discminer.intensity2023``
+    (the terrain-based palette). Residual palettes use
+    ``discminer.residuals.velocity``. Every palette also has an ``_r`` variant.
+    Importing this module registers the names; repeated calls leave existing
+    registrations alone.
+    """
+    registry = getattr(matplotlib, 'colormaps', None)
+    registered = set(plt.colormaps())
+    for kind, palettes, prefix in (
+            ('attribute', _attribute_colors, 'discminer.'),
+            ('residuals', _residuals_colors, 'discminer.residuals.')):
+        for observable in palettes:
+            for suffix in ('', '_r'):
+                name = prefix + observable + suffix
+                if name in registered:
+                    continue
+                cmap = get_discminer_cmap(observable + suffix, kind=kind)
+                if registry is not None:
+                    registry.register(cmap, name=name)
+                else:  # Matplotlib < 3.5.
+                    matplotlib.cm.register_cmap(name=name, cmap=cmap)
+                registered.add(name)
+
+
+register_discminer_cmaps()
         
 #**************
 #COLORBAR STUFF

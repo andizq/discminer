@@ -295,7 +295,7 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         fclim = float(clim)
         clabel = r'Peak Intensity %s'%unit
         cmap_mom = matplotlib.pyplot.get_cmap('pink_r')    
-        cmap_res = get_discminer_cmap('intensity_2', kind='residuals')
+        cmap_res = get_discminer_cmap('intensity', kind='residuals')
         levels_im = np.linspace(0.0, I_res2abs*fclim, 64)
         levels_cc = np.linspace(10, 50, 5)
     
@@ -306,7 +306,7 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         if unit_simple: unit = ''        
         clabel = moment.capitalize()
         cmap_mom = matplotlib.pyplot.get_cmap('nipy_spectral')
-        cmap_res = get_discminer_cmap('intensity_2', kind='residuals') 
+        cmap_res = get_discminer_cmap('intensity', kind='residuals')
         levels_im = np.linspace(0.2*fclim, fclim, 64)
         levels_cc = np.linspace(0.2*fclim, fclim, 4)
         
@@ -336,8 +336,8 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         clim = custom['Ilim']
         fclim = float(clim)
         clabel = r'$\Delta$ Peak Intensity %s'%unit
-        cmap_mom = matplotlib.pyplot.get_cmap('magma') #get_discminer_cmap('intensity_2')
-        cmap_res = cmap_mom #get_discminer_cmap('intensity_2', kind='residuals')
+        cmap_mom = matplotlib.pyplot.get_cmap('magma') #get_discminer_cmap('intensity')
+        cmap_res = cmap_mom #get_discminer_cmap('intensity', kind='residuals')
         levels_im = np.linspace(0.0, fclim, 64)
         levels_cc = np.linspace(0.2*fclim, fclim, 4)
         
@@ -387,8 +387,8 @@ def get_2d_plot_decorators(moment, parfile='parfile.json', unit_simple=False, fm
         clim = custom['Ilim']
         fclim = float(clim)
         clabel = r'Peak Intensity %s'%unit
-        cmap_mom = get_discminer_cmap('intensity_2')    
-        cmap_res = get_discminer_cmap('intensity_2', kind='residuals')
+        cmap_mom = get_discminer_cmap('intensity')
+        cmap_res = get_discminer_cmap('intensity', kind='residuals')
         levels_im = np.linspace(0.0, I_res2abs*fclim, 64)
         levels_cc = np.linspace(10, 50, 5)
 

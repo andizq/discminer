@@ -90,8 +90,9 @@ datacube.convert_to_tb(writefits=args.writefits, planck=args.planck)
 #VISUALISE CHANNEL MAPS
 #**********************
 if args.show_output:
-    modelcube.show(compare_cubes=[datacube], extent=extent, int_unit='Intensity [K]', show_beam=True, surface_from=model, kwargs_surface={'R_lev': R_lev})
-    modelcube.show_side_by_side(datacube, extent=extent, int_unit='Intensity [K]', show_beam=True,  surface_from=model, kwargs_surface={'R_lev': R_lev})
+    velocity2d = model.get_projected_map('velocity')
+    modelcube.show(compare_cubes=[datacube], extent=extent, int_unit='Intensity [K]', show_beam=True, surface_from=model, velocity2d=velocity2d, kwargs_surface={'R_lev': R_lev})
+    modelcube.show_side_by_side(datacube, extent=extent, int_unit='Intensity [K]', show_beam=True,  surface_from=model, velocity2d=velocity2d, kwargs_surface={'R_lev': R_lev})
 
 #*****************
 #PLOT CHANNEL MAPS

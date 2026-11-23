@@ -38,6 +38,7 @@ from .cube import Cube
 from .rail import Contours
 from .grid import GridTools
 from . import cart
+from .tools.projected_maps import PROJECTED_ATTRIBUTES, get_projected_map
 
 from .diff_interp import get_griddata_sparse as get_griddata
 from .noise import get_fast_log_likelihood, validate_finite, validate_inv_psd
@@ -1728,6 +1729,22 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         attribute_func = self._get_attribute_func(attribute)
         return attribute_func(coords, **self.params[attribute])
     
+    def get_projected_map(self, attribute='velocity'):
+        """Return copies of a cached field on the sky grid, for both surfaces.
+
+        Run ``make_model()`` on a prototype model first. ``attribute`` is one
+        of velocity, intensity, linewidth or lineslope. The result maps
+        ``upper`` and ``lower`` to 2D arrays. Velocity includes the line-of-sight
+        projection and systemic velocity; velocity and linewidth use km/s.
+
+        With subpixels, combine fields using ``sum(field) * sub_dA / pix_dA``,
+        retaining NaNs as in the existing channel-map contours. An averaged
+        linewidth parameter is not a linewidth measured from the combined
+        spectrum. This accessor leaves ``props`` and cube synthesis unchanged;
+        fields are neither beam convolved nor recomputed from edited parameters.
+        """
+        return get_projected_map(self, attribute)
+
     def get_projected_coords(self, z_mirror=False, writebinaries=True, 
                              R_nan_val=0, phi_nan_val=10*np.pi, z_nan_val=0):
             
@@ -2088,6 +2105,8 @@ class Model(Height, Velocity, Intensity, Linewidth, Lineslope, GridTools, Mcmc):
         if self.prototype:
             self.get_projected_coords(z_mirror=z_mirror) #TODO: enable kwargs for this method
             self.props = props
+            self._projected_attributes = tuple(name for name, active in zip(PROJECTED_ATTRIBUTES, true_kwargs)
+                                               if active)
             return self.get_cube(self.vchannels, *props, header=self.header, dpc=self.dpc, disc=self.datacube.disc, mol=self.datacube.mol, kind=self.datacube.kind, **kwargs_line_profile)
         else:
             return props
